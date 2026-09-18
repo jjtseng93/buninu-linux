@@ -48,7 +48,6 @@
 - cd ~/buninu-linux
 - bun ./index.js -r
   * boot it
-```
 
 `index.js` runs under bun or node. A successful boot ends like this, with a
 REPL on the serial console:
