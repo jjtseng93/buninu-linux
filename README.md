@@ -57,12 +57,15 @@ Run /bin/bun as init process
 init.js: Bun runtime entered JavaScript
 init.js: loading physical musl libc for FFI
 init.js: mounted /proc, /sys, /dev, /tmp
-init.js: node:repl imported
-Buninu Linux: Bun 1.4.2 is PID 1
+network: lo 127.0.0.1/8
 network: eth0 10.0.2.15/24 via 10.0.2.2
 fetch example.com: HTTP 200, text/html
-Type bunmsh() to install and enter the bunmsh shell.
-bun-init>
+
+Welcome to Buninu Linux!
+Bun 1.4.2 is now PID 1
+
+Type start() to run buninu --local
+bun-repl>
 ```
 
 Ctrl-C stops QEMU. After editing `initramfs/init.js`, `bun ./index.js -b` in
@@ -288,6 +291,35 @@ chain is OVMF → the stub's `.text` → the stub loading its own
 
 Ctrl-C quits QEMU. Leaving the REPL does not end the session: `init.js`
 restarts it, because a PID 1 that exits panics the kernel.
+
+#### Networking
+
+The NIC is QEMU user-mode networking (SLIRP): the guest is `10.0.2.15/24`
+behind a NAT with `10.0.2.2` as gateway and `10.0.2.3` as DNS, so it can reach
+out — `fetch example.com` at boot proves it — but nothing reaches in unless a
+port is forwarded. `PORTS` does that, space-separated, as `host[:guest]` with
+`guest` defaulting to `host`:
+
+```sh
+PORTS="18080" bun ./index.js -r           # host 127.0.0.1:18080 → guest :18080
+PORTS="18080 2222:22" bun ./index.js -r   # …plus host 127.0.0.1:2222 → guest :22
+```
+
+`run-qemu.sh` turns each entry into `hostfwd=tcp:127.0.0.1:H-:G`. Two things
+follow from how SLIRP forwards:
+
+* The host side binds `127.0.0.1` only, so nothing is exposed on the device's
+  own network interfaces. Drop the address (`hostfwd=tcp::H-:G`) to change
+  that.
+* A forwarded connection arrives at the guest's `eth0` address, so the service
+  inside has to listen on `0.0.0.0` (or `10.0.2.15`). One bound to the guest's
+  own `127.0.0.1` gets no traffic from outside; verified with two servers on
+  forwarded ports, one on each address.
+
+The guest's `127.0.0.1` still works for anything inside the guest: `init.js`
+brings `lo` up right after mounting, which is when the kernel assigns
+`127.0.0.1/8`. Without that step every bind to `127.0.0.1` fails with
+`EADDRNOTAVAIL`.
 
 Two things to expect:
 

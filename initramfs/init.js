@@ -114,6 +114,31 @@ const writeSockaddrIpv4 = (buffer, offset, address) => {
   buffer.set(address.split(".").map(Number), offset + 4); // network byte order
 };
 
+// Sets IFF_UP on an interface: read its flags, or in the bit, write them back.
+const bringUp = (ioctl, name) => {
+  const flags = new Uint8Array(40);
+  const flagsView = new DataView(flags.buffer);
+  writeInterfaceName(flags, name);
+  ioctl(0x8913, flags, "SIOCGIFFLAGS");
+  flagsView.setUint16(16, flagsView.getUint16(16, true) | 1, true); // IFF_UP
+  ioctl(0x8914, flags, "SIOCSIFFLAGS");
+};
+
+// The kernel creates `lo` down, and only assigns 127.0.0.1/8 once it comes
+// up. Normally an init system does that; here that is us, and until it is
+// done every bind to 127.0.0.1 fails with EADDRNOTAVAIL. Kept apart from the
+// virtio/QEMU setup so loopback works even when that part fails.
+const bringUpLoopback = () => {
+  const fd = check("socket(AF_INET, SOCK_DGRAM)", libc.symbols.socket(2, 2, 0));
+  try {
+    const ioctl = (request, value, operation) =>
+      check(operation, libc.symbols.ioctl(fd, request, ptr(value)));
+    bringUp(ioctl, "lo");
+  } finally {
+    libc.symbols.close(fd);
+  }
+};
+
 const configureQemuNetwork = () => {
   const release = "6.18.52-0-virt";
   for (const module of [
@@ -137,12 +162,7 @@ const configureQemuNetwork = () => {
     writeSockaddrIpv4(netmask, 16, "255.255.255.0");
     ioctl(0x891c, netmask, "SIOCSIFNETMASK");
 
-    const flags = new Uint8Array(40);
-    const flagsView = new DataView(flags.buffer);
-    writeInterfaceName(flags);
-    ioctl(0x8913, flags, "SIOCGIFFLAGS");
-    flagsView.setUint16(16, flagsView.getUint16(16, true) | 1, true); // IFF_UP
-    ioctl(0x8914, flags, "SIOCSIFFLAGS");
+    bringUp(ioctl, "eth0");
 
     // struct rtentry on Linux x86_64. Only gateway and flags are needed for
     // the default route; rt_dst and rt_genmask remain 0.0.0.0.
@@ -170,6 +190,13 @@ process.on("SIGCHLD", reapChildren);
 process.on("SIGTERM", () => console.log("PID 1 received SIGTERM"));
 process.on("SIGINT", () => console.log("PID 1 received SIGINT"));
 
+
+try {
+  bringUpLoopback();
+  console.log("network: lo 127.0.0.1/8");
+} catch (error) {
+  console.error("loopback setup failed:", error);
+}
 
 try {
   configureQemuNetwork();
