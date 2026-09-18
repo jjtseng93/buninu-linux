@@ -1,0 +1,58 @@
+Terms and Conditions - micro syntax rules and colour scheme
+===========================================================
+
+bunmsh does not bundle any file from micro, the Go terminal editor at
+https://github.com/zyedidia/micro. What it derives from micro is:
+
+  * The shell-syntax highlighting rules `pspac` applies to the COMMAND column
+    of its process listing. The patterns and word lists of micro's
+    `runtime/syntax/sh.yaml` — keywords, command names, flags, variables,
+    strings, comments — and the order they resolve in were transcribed into
+    `src/shell.js`.
+
+  * The colours those classes are painted in, which are the colour-links of
+    micro's `runtime/colorschemes/monokai.micro`, transcribed into the same
+    file. `src/cat-fancy.js` takes five of the same colour-links for the
+    JSON it colours.
+
+Both come from micro's own tree — `runtime/syntax/sh.yaml` and
+`runtime/colorschemes/monokai.micro` — and that is where to trace this
+licence from: `runtime/syntax/LICENSE` and `LICENSE` in
+https://github.com/zyedidia/micro.
+
+Micro's syntax files are licensed under the MIT "Expat" License:
+
+Copyright (c) 2020: Zachary Yedidia, et al.
+
+Micro itself, which its colour schemes are part of, carries the same licence:
+
+Copyright (c) 2016-2020: Zachary Yedidia, et al.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Further attribution
+-------------------
+
+micro's `runtime/syntax/README.md` records that its syntax files originate
+from Nano's `nanorc` collection (https://github.com/scopatz/nanorc), converted
+to micro's own format.
+
+The Monokai palette that `monokai.micro` renders was created by Wimer
+Hazenberg.

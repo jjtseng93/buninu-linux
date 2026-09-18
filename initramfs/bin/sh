@@ -1,0 +1,3 @@
+#!/bin/bun
+
+import "../buninu/apps/bunmsh/src/main.js";

@@ -1,0 +1,8 @@
+{
+  "name": "native-bridge",
+  "version": "0.1.0",
+  "description": "Call the Android host app (toast, clipboard, ...) from a Buninu Bun back script, over the unix socket minapk exposes as PKG_BRIDGE_SOCK",
+  "type": "module",
+  "main": "./native-bridge.js",
+  "license": "MIT"
+}

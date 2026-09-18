@@ -1,0 +1,60 @@
+filetype: c
+
+detect:
+    filename: "(\\.(c|C)$|\\.(h|H)$|\\.ii?$|\\.(def)$)"
+
+rules:
+    - identifier: "\\b[A-Z_][0-9A-Z_]+\\b"
+    - type: "\\b(_Atomic|_BitInt|float|double|_Decimal32|_Decimal64|_Decimal128|_Complex|complex|_Imaginary|imaginary|_Bool|bool|char|int|short|long|enum|void|struct|union|typedef|typeof|typeof_unqual|(un)?signed|inline|_Noreturn)\\b"
+    - type: "\\b((s?size)|((u_?)?int(8|16|32|64|ptr))|char(8|16|32)|wchar)_t\\b"
+      # GCC float/decimal/fixed types
+    - type: "\\b(_Float16|__fp16|_Float32|_Float32x|_Float64|_Float64x|__float80|_Float128|_Float128x|__float128|__ibm128|__int128|_Fract|_Sat|_Accum)\\b"
+    - type: "\\b[a-z_][0-9a-z_]+(_t|_T)\\b"
+    - statement: "\\b(auto|volatile|register|restrict|_Alignas|alignas|_Alignof|alignof|static|const|constexpr|extern|_Thread_local|thread_local)\\b"
+    - statement: "\\b(for|if|while|do|else|case|default|switch|_Generic|_Static_assert|static_assert)\\b"
+    - statement: "\\b(goto|continue|break|return)\\b"
+    - statement: "\\b(asm|fortran)\\b"
+    - preproc: "^[[:space:]]*#[[:space:]]*(define|embed|pragma|include|(un|ifn?)def|endif|el(if|ifdef|ifndef|se)|if|line|warning|error|__has_include|__has_embed|__has_c_attribute)"
+    - preproc: "^[[:space:]]*_Pragma\\b"
+      # GCC builtins
+    - statement: "__attribute__[[:space:]]*\\(\\([^)]*\\)\\)"
+    - statement: "__(aligned|asm|builtin|extension|hidden|inline|packed|restrict|section|typeof|weak)__"
+      # Operator Color
+    - symbol.operator: "[-+*/%=<>.:;,~&|^!?]|\\b(offsetof|sizeof)\\b"
+    - symbol.brackets: "[(){}]|\\[|\\]"
+      # Integer Constants
+    - constant.number: "(\\b([1-9][0-9]*|0[0-7]*|0[Xx][0-9A-Fa-f]+|0[Bb][01]+)([Uu][Ll]?[Ll]?|[Ll][Ll]?[Uu]?)?\\b)"
+      # Decimal Floating Constants
+    - constant.number: "(\\b(([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)([Ee][+-]?[0-9]+)?|[0-9]+[Ee][+-]?[0-9]+)[FfLl]?\\b)"
+      # Hexadecimal Floating Constants
+    - constant.number: "(\\b0[Xx]([0-9A-Za-z]*[.][0-9A-Za-z]+|[0-9A-Za-z]+[.][0-9A-Za-z]*)[Pp][+-]?[0-9]+[FfLl]?\\b)"
+    - constant.bool: "(\\b(true|false|NULL|nullptr|TRUE|FALSE)\\b)"
+
+    - constant.string:
+        start: "\""
+        end: "\""
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\([\"'abfnrtv\\\\]|[0-3]?[0-7]{1,2}|x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})"
+
+    - constant.string:
+        start: "'"
+        end: "'"
+        skip: "\\\\."
+        rules:
+              # TODO: Revert back to - error: "..+" once #3127 is merged
+            - error: "[[:graph:]]{2,}'"
+            - constant.specialChar: "\\\\([\"'abfnrtv\\\\]|[0-3]?[0-7]{1,2}|x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})"
+
+    - comment:
+        start: "//"
+        end: "$"
+        rules:
+            - todo: "(TODO|XXX|FIXME):?"
+
+    - comment:
+        start: "/\\*"
+        end: "\\*/"
+        rules:
+            - todo: "(TODO|XXX|FIXME):?"
+

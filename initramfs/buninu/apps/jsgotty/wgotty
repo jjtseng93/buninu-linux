@@ -1,0 +1,62 @@
+#!/bin/sh
+
+sd=$(dirname "$(realpath "$0")")
+
+if [ -z "$shr" ] ; then
+  shr=$sd/env.sh
+fi
+
+print_install_script() {
+  echo "Install Bun by the official script:"
+  echo "Linux:"
+  echo "  curl -fsSL https://bun.sh/install | bash"
+  echo "  (won't work in native Termux, proot ok)"
+  echo "Windows:"
+  echo '  powershell -c "irm bun.sh/install.ps1 | iex"'
+}
+
+if [ -f "$(command -v bun)" ] ||
+   ! [ -z "$PKG_RDIR" ] ; then
+  runtime=bun
+elif [ -f "$HOME/.bun/bin/bun" ] ; then
+  runtime="$HOME/.bun/bin/bun"
+elif [ -f "$(command -v node)" ] ; then
+  runtime=node
+else
+  No node/bun binaries found!
+
+  print_install_script
+  
+  exit 127
+fi
+
+
+if [ "$1" = "upload" ] ; then
+  shift 1
+  exec sh "$shr" "$runtime" "$sd"/rz.js "$@"
+elif [ "$1" = "download" ] ; then
+  shift 1
+  exec sh "$shr" "$runtime" "$sd"/sz.js "$@"
+elif [ "$1" = "showimg" ] ; then
+  shift 1
+  exec sh "$shr" "$runtime" "$sd"/viu.mjs "$@"
+fi
+
+
+if ! [ -z "$PKG_RDIR" ] ; then
+  exec sh "$shr" bun "$sd"/gotty.js "$@"
+
+elif basename "$runtime" | grep -q bun ||
+   [ -d "$WINDIR" ] ; then
+
+  echo Using "$runtime" 1>&2
+  exec "$runtime" "$sd"/gotty.js "$@"
+  
+else
+  echo No bun binary found! 
+  echo This project requires Bun runtime to run
+
+  print_install_script
+
+  exit 127
+fi

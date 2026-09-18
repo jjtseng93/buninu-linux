@@ -1,0 +1,7 @@
+#!/bin/bun
+
+process.argv.splice(2,0,"-cc","builtin","env");
+
+await import(
+  "../buninu/apps/bunmsh/src/main.js"
+);

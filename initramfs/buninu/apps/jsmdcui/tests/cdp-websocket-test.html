@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>jsmdcui CDP WebSocket test</title>
+
+<button id="test">Try CDP connection</button>
+<pre id="status">Ready.</pre>
+
+<script>
+  const status = document.querySelector("#status");
+  const endpoint = "ws://127.0.0.1:9222/devtools/browser/cdp-server";
+
+  function log(message) {
+    status.textContent += `\n${message}`;
+  }
+
+  function testCdp() {
+    status.textContent = `Connecting to ${endpoint}`;
+    const socket = new WebSocket(endpoint);
+
+    socket.addEventListener("open", () => {
+      log("WebSocket connected. Sending Input.insertText...");
+
+      socket.send(JSON.stringify({
+        id: 1,
+        method: "Input.insertText",
+        params: { text: "hello from web page" },
+      }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      log(`CDP response: ${event.data}`);
+      socket.close();
+    });
+
+    socket.addEventListener("error", () => {
+      log("WebSocket error or browser blocked the connection.");
+    });
+
+    socket.addEventListener("close", (event) => {
+      log(`WebSocket closed (code ${event.code}).`);
+    });
+  }
+
+  document.querySelector("#test").addEventListener("click", testCdp);
+  testCdp();
+</script>

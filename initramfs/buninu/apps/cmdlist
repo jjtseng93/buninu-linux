@@ -1,0 +1,48 @@
+# syntax: markdown
+
+### glow — Render files with jsmdcui syntax highlighting
+glow
+
+### jmi — Open files in the js micro editor
+jmi
+
+### jsgotty — Run a browser-accessible terminal
+jsgotty
+
+### jsmdcui — Edit and run interactive Markdown applications
+jsmdcui
+
+### musl-la — Launch AArch64 ELF programs with the bundled musl loader
+musl-la
+
+### buninu-help — Render README.md with glow, then show icon.png with jsgotty --viu
+buninu-help
+
+### bunx — Globally install a package with bun, then exec its matching binary
+bunx
+
+### native-bridge — Call the Android host app (toast, clipboard) over PKG_BRIDGE_SOCK; bare invocation lists what the host implements
+native-bridge
+
+### xclip — X11-style clipboard tool; -selection clipboard/-clip bridges to the real Android clipboard via native-bridge
+xclip
+
+### tts — Speak text through the Android host and wait for it to finish (-a to not wait)
+tts
+
+### showimg — Shorthand for jsgotty --viu
+showimg
+
+### rz — Upload a file over ZMODEM (bun apps/jsgotty/rz.js)
+rz
+
+### sz — Download a file over ZMODEM (bun apps/jsgotty/sz.js)
+sz
+
+### xdg-open — Open a file or URL with the platform's default handler (native bridge on Android, open/start/xdg-open elsewhere) '
+xdg-open
+
+
+### bunmsh – Bun Modern Shell
+
+bunmsh

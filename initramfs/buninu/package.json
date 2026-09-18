@@ -1,0 +1,59 @@
+{
+  "name": "buninu",
+  "version": "0.4.9",
+  "description": "Buninu is a portable, self-bootstrapping Unix-like userspace built on Bun that runs across operating systems",
+  "type": "module",
+  "main": "./bin/init.js",
+  "license": "MIT",
+  "author": "Dr. John (醫者小智)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jjtseng93/buninu.git"
+  },
+  "homepage": "https://github.com/jjtseng93/buninu#readme",
+  "bugs": {
+    "url": "https://github.com/jjtseng93/buninu/issues"
+  },
+  "keywords": [
+    "bun",
+    "terminal",
+    "web-terminal",
+    "browser-terminal",
+    "shell",
+    "userspace",
+    "portable",
+    "cross-platform",
+    "android",
+    "termux",
+    "pty",
+    "self-bootstrapping"
+  ],
+  "bin": {
+    "buninu": "bin/init.js"
+  },
+  "buninu": {
+    "shell": {
+      "default": null,
+      "android": null,
+      "linux": null,
+      "macos": null,
+      "windows": null
+    },
+    "command": {
+      "default": "echo Welcome to Buninu, Try: glow apps/cmdlist, Help: buninu-help",
+      "android": "if command -v libmain.so >/dev/null 2>&1; then libmain.so; else printf '%s\\n' '# Welcome to Buninu Android' '- Try: glow apps/cmdlist' '- Help: buninu-help'; fi",
+      "linux": null,
+      "macos": null,
+      "windows": null
+    },
+    "exitAfterCmd": false,
+    "backToConsole": true,
+    "xdgDataHome": null,
+    "hideExtraKeys": false
+  },
+  "scripts": {
+    "start": "bun ./apps/jsgotty/gotty.js --reconnect -r -w --webgl -a 127.0.0.1",
+    "local": "bun ./apps/bunmsh/bunmsh -c 'exec bunmsh'",
+    "check": "node --check ./bin/init.js"
+  }
+}

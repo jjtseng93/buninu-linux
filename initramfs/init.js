@@ -90,7 +90,6 @@ const { mkdirSync, writeFileSync } = await import("node:fs");
 
 global.repl = repl;
 
-console.log("init.js: node:repl imported");
 
 const loadModule = (path) => {
   const name = cString(path);
@@ -171,7 +170,6 @@ process.on("SIGCHLD", reapChildren);
 process.on("SIGTERM", () => console.log("PID 1 received SIGTERM"));
 process.on("SIGINT", () => console.log("PID 1 received SIGINT"));
 
-console.log("Buninu Linux: Bun 1.4.2 is PID 1");
 
 try {
   configureQemuNetwork();
@@ -225,12 +223,52 @@ const launchBunmsh = () => {
   return shell.exitCode;
 };
 
+
+
+const launchBuninu = () => {
+
+  const entry = `/buninu/bin/init.js`;
+  console.log(`buninu: Starting ${entry} --local`);
+  const shell = Bun.spawnSync([
+    "/bin/bun", entry, "--local"
+  ], {
+    env: { 
+      PATH:"/bin:/usr/bin:/buninu/bin",
+      HOME:"/buninu"
+    },
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  console.log(`buninu exited with status ${shell.exitCode}; returning to Bun REPL.`);
+  return shell.exitCode;
+  
+}
+
+
+
+
+
+//  Configuration complete
+
+
+
+
+
+console.log(`
+Welcome to Buninu Linux!
+Bun ${Bun.version} is now PID ${process.pid}
+`);
+
 globalThis.bunmsh = launchBunmsh;
-console.log("Type bunmsh() to install and enter the bunmsh shell.");
+//console.log("Type bunmsh() to install and enter the bunmsh shell.");
+
+globalThis.start = launchBuninu;
+console.log("Type start() to run buninu --local");
 
 const startRepl = () => {
   const server = repl.start({
-    prompt: "bun-init> ",
+    prompt: "bun-repl> ",
     input: process.stdin,
     output: process.stdout,
     terminal: true,

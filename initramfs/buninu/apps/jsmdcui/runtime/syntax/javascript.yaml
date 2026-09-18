@@ -1,0 +1,124 @@
+filetype: javascript
+
+detect:
+    filename: "(\\.(m|c)?js$|\\.es[5678]?$)"
+    header: "^#!.*/(env +)?(bun|node)( |$)"
+# console
+rules:
+    - constant.number: "\\b[-+]?([1-9][0-9]*|0[0-7]*|0x[0-9a-fA-F]+)([uU][lL]?|[lL][uU]?)?\\b"
+    - constant.number: "\\b[-+]?([0-9]+\\.[0-9]*|[0-9]*\\.[0-9]+)([EePp][+-]?[0-9]+)?[fFlL]?"
+    - constant.number: "\\b[-+]?([0-9]+[EePp][+-]?[0-9]+)[fFlL]?"
+    #- identifier: "[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[(]"
+    # ^ this is not correct usage of the identifier color
+    - symbol.brackets: "[(){}]|\\[|\\]"
+    - symbol.operator: "([-+/*=<>!~%?:&|]|[.]{3})"
+    - statement: "\\b(async|await|break|case|catch|const|continue|debugger|default)\\b"
+    - statement: "\\b(delete|do|else|export|finally|for|function\\*?|class|extends)\\b"
+    - statement: "\\b(get|if|import|from|in|of|instanceof|let|new|reject|resolve|return)\\b"
+    - statement: "\\b(set|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\\b"
+    # reserved but unassigned
+    - error: "\\b(enum|implements|interface|package|private|protected|public)\\b"
+    - constant: "\\b(globalThis|Infinity|null|undefined|NaN)\\b"
+    - constant: "\\b(null|undefined|NaN)\\b"
+    - constant: "\\b(true|false)\\b"
+    - type: "\\b(Array|Boolean|Date|Enumerator|Error|Function|Generator|Map|Math)\\b"
+    - type: "\\b(Number|Object|Promise|Proxy|Reflect|RegExp|Set|String|Symbol|WeakMap|WeakSet)\\b"
+    - type: "\\b(BigInt64Array|BigUint64Array|Float32Array|Float64Array|Int16Array)\\b"
+
+    # - constant: "/[^*]([^/]|(\\\\/))*[^\\\\]/[gim]*"
+    - constant: "\\\\[0-7][0-7]?[0-7]?|\\\\x[0-9a-fA-F]+|\\\\[bfnrt'\"\\?\\\\]"
+    - comment: "^#!.*/(env +)?(bun|node)( |$)"
+
+    - identifier: "\\b(alert|decodeURI|decodeURIComponent|document|encodeURI|encodeURIComponent|escape|eval|isFinite|isNaN|parseFloat|parseInt|unescape|uneval|window)\\b"
+    - identifier: "\\b(Intl|WebAssembly)\\b"
+    - identifier: "\\b(Arguments)\\b"
+
+
+    - constant.string:
+        start: "\""
+        end: "\""
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    - constant.string:
+        start: "'"
+        end: "'"
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    - constant.string:
+        start: "`"
+        end: "`"
+        rules:
+            - constant.specialChar: "\\\\."
+            - identifier: "\\x24\\{.*?\\}"
+
+    - constant.bool: "\\b(true|false)\\b"
+    - constant.bool.false: "\\b(false)\\b"
+    - constant.bool.true: "\\b(true)\\b"
+
+    - comment:
+        start: "//"
+        end: "$"
+        rules:
+            - todo: "(TODO|XXX|FIXME)"
+
+    - comment:
+        start: "/\\*"
+        end: "\\*/"
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+            # function documentation
+            - identifier: "\\s\\*\\s.*"
+            - todo: "(TODO|XXX|FIXME)"
+            
+# autocomplete-reference: Object constructor/static properties and methods (MDN Object)
+# Object.length Object.name Object.prototype Object.assign Object.create Object.defineProperties Object.defineProperty Object.entries Object.freeze Object.fromEntries Object.getOwnPropertyDescriptor Object.getOwnPropertyDescriptors Object.getOwnPropertyNames Object.getOwnPropertySymbols Object.getPrototypeOf Object.groupBy Object.hasOwn Object.is Object.isExtensible Object.isFrozen Object.isSealed Object.keys Object.preventExtensions Object.seal Object.setPrototypeOf Object.values
+# autocomplete-reference: Object.prototype properties and methods (MDN Object)
+# Object.prototype.__proto__ Object.prototype.constructor Object.prototype.__defineGetter__ Object.prototype.__defineSetter__ Object.prototype.__lookupGetter__ Object.prototype.__lookupSetter__ Object.prototype.hasOwnProperty Object.prototype.isPrototypeOf Object.prototype.propertyIsEnumerable Object.prototype.toLocaleString Object.prototype.toString Object.prototype.valueOf
+
+            
+# autocomplete-reference: ECMAScript standard built-ins (MDN Global_Objects)
+# globalThis Infinity NaN undefined eval isFinite isNaN parseFloat parseInt decodeURI decodeURIComponent encodeURI encodeURIComponent escape unescape
+# Object Function Boolean Symbol Error AggregateError EvalError RangeError ReferenceError SuppressedError SyntaxError TypeError URIError InternalError
+# Number BigInt Math Date Temporal String RegExp
+# Array TypedArray Int8Array Uint8Array Uint8ClampedArray Int16Array Uint16Array Int32Array Uint32Array BigInt64Array BigUint64Array Float16Array Float32Array Float64Array
+# Map Set WeakMap WeakSet ArrayBuffer SharedArrayBuffer DataView Atomics JSON stringify parse WeakRef FinalizationRegistry
+# Iterator AsyncIterator Promise GeneratorFunction AsyncGeneratorFunction Generator AsyncGenerator AsyncFunction DisposableStack AsyncDisposableStack
+# Reflect Proxy Intl Collator DateTimeFormat DisplayNames DurationFormat ListFormat Locale NumberFormat PluralRules RelativeTimeFormat Segmenter
+# autocomplete-reference: Browser globals and Web API interfaces (MDN Web/API)
+# window self globalThis document navigator location history screen frames parent top opener origin name status closed crossOriginIsolated isSecureContext customElements visualViewport
+# localStorage sessionStorage indexedDB caches cookieStore scheduler trustedTypes performance crypto console
+# alert confirm prompt print open close focus blur stop find scroll scrollTo scrollBy scrollX scrollY moveTo moveBy resizeTo resizeBy
+# getComputedStyle matchMedia requestAnimationFrame cancelAnimationFrame requestIdleCallback cancelIdleCallback structuredClone postMessage dispatchEvent addEventListener removeEventListener
+# fetch setTimeout clearTimeout setInterval clearInterval queueMicrotask atob btoa createImageBitmap reportError
+# AbortController AbortSignal AbstractRange AnalyserNode Animation AnimationEffect AnimationEvent AnimationPlaybackEvent AnimationTimeline Attr Audio AudioBuffer AudioBufferSourceNode AudioContext AudioData AudioDecoder AudioDestinationNode AudioEncoder AudioListener AudioNode AudioParam AudioParamMap AudioProcessingEvent AudioScheduledSourceNode AudioSinkInfo AudioWorklet AudioWorkletGlobalScope AudioWorkletNode AudioWorkletProcessor AuthenticatorAssertionResponse AuthenticatorAttestationResponse AuthenticatorResponse
+# BarcodeDetector BatteryManager BeforeUnloadEvent BiquadFilterNode Blob BlobEvent Bluetooth BluetoothAdvertisingEvent BluetoothCharacteristicProperties BluetoothDevice BluetoothRemoteGATTCharacteristic BluetoothRemoteGATTDescriptor BluetoothRemoteGATTServer BluetoothRemoteGATTService BluetoothUUID BroadcastChannel BrowserCaptureMediaStreamTrack ByteLengthQueuingStrategy
+# CSS CSSAnimation CSSConditionRule CSSContainerRule CSSCounterStyleRule CSSFontFaceRule CSSFontFeatureValuesRule CSSFontPaletteValuesRule CSSGroupingRule CSSImageValue CSSImportRule CSSKeyframeRule CSSKeyframesRule CSSKeywordValue CSSLayerBlockRule CSSLayerStatementRule CSSMathClamp CSSMathInvert CSSMathMax CSSMathMin CSSMathNegate CSSMathProduct CSSMathSum CSSMathValue CSSMatrixComponent CSSMediaRule CSSNamespaceRule CSSNumericArray CSSNumericValue CSSPageRule CSSPerspective CSSPositionValue CSSPropertyRule CSSRotate CSSRule CSSRuleList CSSScale CSSScopeRule CSSSkew CSSSkewX CSSSkewY CSSStartingStyleRule CSSStyleDeclaration CSSStyleRule CSSStyleSheet CSSStyleValue CSSSupportsRule CSSTransformComponent CSSTransformValue CSSTransition CSSTranslate CSSUnitValue CSSUnparsedValue CSSVariableReferenceValue
+# Cache CacheStorage CanvasCaptureMediaStreamTrack CanvasGradient CanvasPattern CanvasRenderingContext2D CaptureController CaretPosition ChannelMergerNode ChannelSplitterNode CharacterData Clipboard ClipboardEvent ClipboardItem CloseEvent Comment CompositionEvent CompressionStream ConstantSourceNode ContentVisibilityAutoStateChangeEvent ConvolverNode CountQueuingStrategy Credential CredentialsContainer Crypto CryptoKey CustomElementRegistry CustomEvent
+# DOMError DOMException DOMImplementation DOMMatrix DOMMatrixReadOnly DOMParser DOMPoint DOMPointReadOnly DOMQuad DOMRect DOMRectReadOnly DOMStringList DOMStringMap DOMTokenList DataTransfer DataTransferItem DataTransferItemList DecompressionStream DelayNode DeviceMotionEvent DeviceOrientationEvent DevicePosture DirectoryEntry DirectoryReader Document DocumentFragment DocumentPictureInPicture DocumentPictureInPictureEvent DocumentType DragEvent DynamicsCompressorNode
+# EditContext Element ElementInternals EncodedAudioChunk EncodedVideoChunk ErrorEvent Event EventCounts EventSource EventTarget ExtendableCookieChangeEvent ExtendableEvent EyeDropper
+# FeaturePolicy FederatedCredential Fence File FileList FileReader FileSystem FileSystemDirectoryEntry FileSystemDirectoryHandle FileSystemDirectoryReader FileSystemEntry FileSystemFileEntry FileSystemFileHandle FileSystemHandle FileSystemObserver FileSystemSyncAccessHandle FileSystemWritableFileStream FocusEvent FontData FontFace FontFaceSet FontFaceSetLoadEvent FormData FormDataEvent
+# GPU GPUAdapter GPUAdapterInfo GPUBindGroup GPUBindGroupLayout GPUBuffer GPUCanvasContext GPUCommandBuffer GPUCommandEncoder GPUCompilationInfo GPUCompilationMessage GPUComputePassEncoder GPUComputePipeline GPUDevice GPUDeviceLostInfo GPUError GPUExternalTexture GPUInternalError GPUMapMode GPUOutOfMemoryError GPUPipelineError GPUPipelineLayout GPUQuerySet GPUQueue GPURenderBundle GPURenderBundleEncoder GPURenderPassEncoder GPURenderPipeline GPUSampler GPUShaderModule GPUSupportedFeatures GPUSupportedLimits GPUTexture GPUTextureView GPUUncapturedErrorEvent GPUValidationError Gamepad GamepadButton GamepadEvent GamepadHapticActuator Geolocation GeolocationCoordinates GeolocationPosition GeolocationPositionError GravitySensor Gyroscope
+# HTMLAllCollection HTMLAnchorElement HTMLAreaElement HTMLAudioElement HTMLBRElement HTMLBaseElement HTMLBodyElement HTMLButtonElement HTMLCanvasElement HTMLCollection HTMLDListElement HTMLDataElement HTMLDataListElement HTMLDetailsElement HTMLDialogElement HTMLDivElement HTMLDocument HTMLElement HTMLEmbedElement HTMLFencedFrameElement HTMLFieldSetElement HTMLFontElement HTMLFormControlsCollection HTMLFormElement HTMLFrameElement HTMLFrameSetElement HTMLHRElement HTMLHeadElement HTMLHeadingElement HTMLHtmlElement HTMLIFrameElement HTMLImageElement HTMLInputElement HTMLLIElement HTMLLabelElement HTMLLegendElement HTMLLinkElement HTMLMapElement HTMLMarqueeElement HTMLMediaElement HTMLMenuElement HTMLMetaElement HTMLMeterElement HTMLModElement HTMLOListElement HTMLObjectElement HTMLOptGroupElement HTMLOptionElement HTMLOptionsCollection HTMLOutputElement HTMLParagraphElement HTMLParamElement HTMLPictureElement HTMLPreElement HTMLProgressElement HTMLQuoteElement HTMLScriptElement HTMLSelectElement HTMLSelectedContentElement HTMLSlotElement HTMLSourceElement HTMLSpanElement HTMLStyleElement HTMLTableCaptionElement HTMLTableCellElement HTMLTableColElement HTMLTableElement HTMLTableRowElement HTMLTableSectionElement HTMLTemplateElement HTMLTextAreaElement HTMLTimeElement HTMLTitleElement HTMLTrackElement HTMLUListElement HTMLUnknownElement HTMLVideoElement Headers Highlight HighlightRegistry History IDBCursor IDBCursorWithValue IDBDatabase IDBFactory IDBIndex IDBKeyRange IDBObjectStore IDBOpenDBRequest IDBRequest IDBTransaction IDBVersionChangeEvent IdleDeadline ImageBitmap ImageBitmapRenderingContext ImageCapture ImageData ImageDecoder ImageTrack ImageTrackList Ink InputDeviceCapabilities InputDeviceInfo InputEvent InstallEvent IntersectionObserver IntersectionObserverEntry
+# Keyboard KeyboardEvent KeyboardLayoutMap KeyframeEffect LanguageDetector LargestContentfulPaint LaunchParams LaunchQueue LayoutShift LayoutShiftAttribution LinearAccelerationSensor Location Lock LockManager Magnetometer ManagedMediaSource ManagedSourceBuffer MathMLElement MediaCapabilities MediaDeviceInfo MediaDevices MediaElementAudioSourceNode MediaEncryptedEvent MediaError MediaKeyMessageEvent MediaKeys MediaKeySession MediaKeyStatusMap MediaKeySystemAccess MediaList MediaMetadata MediaQueryList MediaQueryListEvent MediaRecorder MediaRecorderErrorEvent MediaSession MediaSource MediaSourceHandle MediaStream MediaStreamAudioDestinationNode MediaStreamAudioSourceNode MediaStreamEvent MediaStreamTrack MediaStreamTrackAudioSourceNode MediaStreamTrackEvent MediaStreamTrackGenerator MediaStreamTrackProcessor MediaTrackConstraints MediaTrackSettings MediaTrackSupportedConstraints MessageChannel MessageEvent MessagePort MIDIAccess MIDIConnectionEvent MIDIInput MIDIInputMap MIDIMessageEvent MIDIOutput MIDIOutputMap MIDIPort MimeType MimeTypeArray MouseEvent MutationEvent MutationObserver MutationRecord
+# NamedNodeMap NavigateEvent Navigation NavigationActivation NavigationCurrentEntryChangeEvent NavigationDestination NavigationHistoryEntry NavigationPrecommitController NavigationPreloadManager NavigationTransition Navigator NavigatorLogin NavigatorUAData NDEFMessage NDEFReader NDEFReadingEvent NDEFRecord NetworkInformation Node NodeIterator NodeList Notification NotificationEvent OffscreenCanvas OfflineAudioCompletionEvent OfflineAudioContext OrientationSensor OscillatorNode OverconstrainedError PageRevealEvent PageSwapEvent PageTransitionEvent PannerNode PasswordCredential Path2D PaymentAddress PaymentMethodChangeEvent PaymentRequest PaymentRequestUpdateEvent PaymentResponse Performance PerformanceElementTiming PerformanceEntry PerformanceEventTiming PerformanceLongAnimationFrameTiming PerformanceLongTaskTiming PerformanceMark PerformanceMeasure PerformanceNavigationTiming PerformanceObserver PerformanceObserverEntryList PerformancePaintTiming PerformanceResourceTiming PerformanceScriptTiming PerformanceServerTiming PerformanceTiming PeriodicSyncManager Permissions PermissionStatus PictureInPictureEvent PictureInPictureWindow Plugin PluginArray PointerEvent PopStateEvent Presentation PresentationAvailability PresentationConnection PresentationConnectionAvailableEvent PresentationConnectionCloseEvent PresentationConnectionList PresentationReceiver PresentationRequest PressureObserver PressureRecord ProcessingInstruction ProgressEvent PromiseRejectionEvent PublicKeyCredential PushEvent PushManager PushMessageData PushSubscription PushSubscriptionOptions
+# RTCCertificate RTCDTMFSender RTCDTMFToneChangeEvent RTCDataChannel RTCDataChannelEvent RTCDtlsTransport RTCEncodedAudioFrame RTCEncodedVideoFrame RTCError RTCErrorEvent RTCIceCandidate RTCIceTransport RTCPeerConnection RTCPeerConnectionIceErrorEvent RTCPeerConnectionIceEvent RTCRtpReceiver RTCRtpScriptTransformer RTCRtpSender RTCRtpTransceiver RTCSctpTransport RTCSessionDescription RTCStatsReport RTCTrackEvent RadioNodeList Range ReadableByteStreamController ReadableStream ReadableStreamBYOBReader ReadableStreamBYOBRequest ReadableStreamDefaultController ReadableStreamDefaultReader RelativeOrientationSensor RemotePlayback Report ReportBody ReportingObserver Request ResizeObserver ResizeObserverEntry ResizeObserverSize Response SVGAElement SVGAngle SVGAnimateElement SVGAnimateMotionElement SVGAnimateTransformElement SVGAnimatedAngle SVGAnimatedBoolean SVGAnimatedEnumeration SVGAnimatedInteger SVGAnimatedLength SVGAnimatedLengthList SVGAnimatedNumber SVGAnimatedNumberList SVGAnimatedPreserveAspectRatio SVGAnimatedRect SVGAnimatedString SVGAnimatedTransformList SVGAnimationElement SVGCircleElement SVGClipPathElement SVGComponentTransferFunctionElement SVGDefsElement SVGDescElement SVGElement SVGEllipseElement SVGFEBlendElement SVGFEColorMatrixElement SVGFEComponentTransferElement SVGFECompositeElement SVGFEConvolveMatrixElement SVGFEDiffuseLightingElement SVGFEDisplacementMapElement SVGFEDistantLightElement SVGFEDropShadowElement SVGFEFloodElement SVGFEFuncAElement SVGFEFuncBElement SVGFEFuncGElement SVGFEFuncRElement SVGFEGaussianBlurElement SVGFEImageElement SVGFEMergeElement SVGFEMergeNodeElement SVGFEMorphologyElement SVGFEOffsetElement SVGFEPointLightElement SVGFESpecularLightingElement SVGFESpotLightElement SVGFETileElement SVGFETurbulenceElement SVGFilterElement SVGForeignObjectElement SVGGElement SVGGeometryElement SVGGradientElement SVGGraphicsElement SVGImageElement SVGLength SVGLengthList SVGLineElement SVGLinearGradientElement SVGMPathElement SVGMarkerElement SVGMaskElement SVGMatrix SVGMetadataElement SVGNumber SVGNumberList SVGPathElement SVGPatternElement SVGPoint SVGPointList SVGPolygonElement SVGPolylineElement SVGPreserveAspectRatio SVGRadialGradientElement SVGRect SVGRectElement SVGSVGElement SVGScriptElement SVGSetElement SVGStopElement SVGStringList SVGStyleElement SVGSwitchElement SVGSymbolElement SVGTSpanElement SVGTextContentElement SVGTextElement SVGTextPathElement SVGTextPositioningElement SVGTitleElement SVGTransform SVGTransformList SVGUnitTypes SVGUseElement SVGViewElement Screen ScreenDetailed ScreenDetails ScreenOrientation ScriptProcessorNode SecurityPolicyViolationEvent Selection Sensor SensorErrorEvent Serial SerialPort ServiceWorker ServiceWorkerContainer ServiceWorkerGlobalScope ServiceWorkerRegistration ShadowRoot SharedWorker SourceBuffer SourceBufferList SpeechRecognition SpeechRecognitionAlternative SpeechRecognitionErrorEvent SpeechRecognitionEvent SpeechRecognitionResult SpeechRecognitionResultList SpeechSynthesis SpeechSynthesisErrorEvent SpeechSynthesisEvent SpeechSynthesisUtterance SpeechSynthesisVoice StaticRange StereoPannerNode Storage StorageEvent StorageManager StylePropertyMap StylePropertyMapReadOnly StyleSheet StyleSheetList SubmitEvent SubtleCrypto SyncManager
+# TaskAttributionTiming TaskController TaskPriorityChangeEvent TaskSignal Text TextDecoder TextEncoder TextDecoderStream TextEncoderStream TextEvent TextFormat TextFormatUpdateEvent TextMetrics TextTrack TextTrackCue TextTrackCueList TextTrackList TimeRanges ToggleEvent Touch TouchEvent TouchList TrackEvent TransformStream TransformStreamDefaultController TransitionEvent TreeWalker TrustedHTML TrustedScript TrustedScriptURL TrustedTypePolicy TrustedTypePolicyFactory UIEvent URL URLPattern URLSearchParams USB USBAlternateInterface USBConfiguration USBConnectionEvent USBDevice USBEndpoint USBInTransferResult USBInterface USBIsochronousInTransferPacket USBIsochronousInTransferResult USBIsochronousOutTransferPacket USBOutTransferResult UserActivation VTTCue VTTRegion ValidityState VideoColorSpace VideoDecoder VideoEncoder VideoFrame VideoPlaybackQuality ViewTransition VirtualKeyboard VisualViewport WakeLock WakeLockSentinel WebAssembly WebGL2RenderingContext WebGLActiveInfo WebGLBuffer WebGLContextEvent WebGLFramebuffer WebGLProgram WebGLQuery WebGLRenderbuffer WebGLRenderingContext WebGLSampler WebGLShader WebGLShaderPrecisionFormat WebGLSync WebGLTexture WebGLTransformFeedback WebGLUniformLocation WebGLVertexArrayObject WebSocket WebSocketStream WebTransport WebTransportBidirectionalStream WebTransportDatagramDuplexStream WebTransportError WheelEvent Window WindowClient WindowControlsOverlay Worker WorkerGlobalScope WorkerLocation WorkerNavigator Worklet WorkletGlobalScope WritableStream WritableStreamDefaultController WritableStreamDefaultWriter XMLDocument XMLHttpRequest XMLHttpRequestEventTarget XMLHttpRequestUpload XMLSerializer XPathEvaluator XPathExpression XPathResult XRAnchor XRAnchorSet XRBoundedReferenceSpace XRCPUDepthInformation XRCamera XRDOMOverlayState XRDepthInformation XRFrame XRHand XRHitTestResult XRHitTestSource XRInputSource XRInputSourceArray XRInputSourceEvent XRInputSourcesChangeEvent XRJointPose XRJointSpace XRLayer XRLightEstimate XRLightProbe XRPose XRRay XRReferenceSpace XRReferenceSpaceEvent XRRenderState XRRigidTransform XRSession XRSessionEvent XRSpace XRSystem XRTransientInputHitTestResult XRTransientInputHitTestSource XRView XRViewerPose XRViewport XRWebGLBinding XRWebGLDepthInformation XRWebGLLayer XSLTProcessor
+# autocomplete-reference: Node.js globals and builtin modules (Node.js API)
+# __dirname __filename exports module require process console Buffer
+# AbortController AbortSignal Blob BroadcastChannel ByteLengthQueuingStrategy CloseEvent CompressionStream CountQueuingStrategy Crypto CryptoKey CustomEvent DecompressionStream DOMException ErrorEvent Event EventSource EventTarget File FormData Headers localStorage MessageChannel MessageEvent MessagePort navigator PerformanceEntry PerformanceMark PerformanceMeasure PerformanceObserver PerformanceObserverEntryList PerformanceResourceTiming performance Request Response sessionStorage Storage structuredClone SubtleCrypto TextDecoder TextDecoderStream TextEncoder TextEncoderStream TransformStream URL URLPattern URLSearchParams WebAssembly WebSocket WritableStream WritableStreamDefaultController WritableStreamDefaultWriter ReadableStream ReadableStreamBYOBReader ReadableStreamBYOBRequest ReadableStreamDefaultController ReadableStreamDefaultReader
+# node assert assert/strict async_hooks buffer child_process cluster console constants crypto dgram diagnostics_channel dns dns/promises domain events fs fs/promises http http2 https inspector inspector/promises module net os path path/posix path/win32 perf_hooks process punycode querystring readline readline/promises repl sea sqlite stream stream/consumers stream/promises stream/web string_decoder test test/reporters timers timers/promises tls trace_events tty url util util/types v8 vm wasi worker_threads zlib
+# autocomplete-reference: Bun globals and Bun native APIs (Bun docs)
+# Bun bun jsc gc CryptoHasher FileSink HTMLBundle Shell ShellError ShellOutput ShellPromise Subprocess Transpiler UnsafeCallback build color console depth dns file gc gzip hash indexOfLine lineColumn listen main mmap nanoseconds openInEditor origin peek readableStreamToArray readableStreamToBlob readableStreamToBytes readableStreamToFormData readableStreamToJSON readableStreamToText resolve resolveSync revision semver serve shell sleep sleepSync spawn spawnSync stderr stdin stdout stringWidth stripANSI udp unzip version which write
+# BunFile S3File ArrayBufferSink BlobPart BodyInit BunPlugin BuildConfig BuildMessage BuildOutput BuildArtifact CompileBuildConfig Cookie CookieMap Env FileBlob FileSystemRouter Glob GlobScanOptions HTTPResponseSink ImportMeta InspectOptions Mock ModuleMock NetworkSink PathLike PluginBuilder Server ServerWebSocket Socket TCPSocketListener TLSOptions TranspilerOptions UDPConnectedSocket UDPSocket WebSocketHandler WebSocketServeOptions
+# fetch Request Response Headers FormData Blob File URL URLSearchParams TextEncoder TextDecoder ReadableStream WritableStream TransformStream WebSocket Event EventTarget MessageEvent CloseEvent ErrorEvent CustomEvent DOMException AbortController AbortSignal crypto Crypto CryptoKey SubtleCrypto performance structuredClone queueMicrotask setTimeout clearTimeout setInterval clearInterval setImmediate clearImmediate
+# bun:test describe test it expect beforeAll beforeEach afterAll afterEach mock spyOn jest setSystemTime restore clearAllMocks restoreAllMocks
+# bun:sqlite Database Statement SQLQueryBindings SQLQueryResult
+# bun:jsc serialize deserialize
+# bun:ffi dlopen suffix ptr CString JSCallback FFIType
+# bun:wrap wrap
+# bun:main bun:internal bun:macro bun:plugin bun:embedded bun:generated

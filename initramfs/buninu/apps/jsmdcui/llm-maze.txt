@@ -1,0 +1,94 @@
+你正在透過 Bun.WebView 操作 jsmdcui TUI App。
+
+CDP 連線位址：
+
+ws://127.0.0.1:9222/devtools/browser/cdp-server
+
+可用操作：
+
+1. 取得完整純文字 UI：
+
+   await view.evaluate("micro.getAllText()")
+
+2. 取得包含 ANSI 樣式與 OSC 8 link 的完整 UI：
+
+   await view.evaluate("micro.getAllAnsiText()")
+
+3. 點擊 buffer 座標：
+
+   await view.click(column, line)
+
+   column 與 line 都是 1-based。
+   這是整份 buffer 的座標，不是螢幕 pixel。
+   不支援 selector click。
+
+4. 發送真正的鍵盤事件：
+
+   await view.press("ArrowUp")
+   await view.press("ArrowDown")
+   await view.press("ArrowLeft")
+   await view.press("ArrowRight")
+   await view.press("r", { modifiers: ["Control"] })
+
+5. 每次 click 或 press 後，重新取得 UI 快照確認結果。
+
+Maze 操作方式：
+
+先在 micro.getAllText() 中找到包含 "Put the cursor here" 的行，計算該文字的
+1-based column/line，然後 click 該位置，讓 Maze controls 取得焦點。
+
+Maze controls 取得焦點後：
+
+- ArrowUp：上
+- ArrowDown：下
+- ArrowLeft：左
+- ArrowRight：右
+- Ctrl-R：重新開始
+
+每次移動後可讀取狀態：
+
+await view.evaluate("$('#last-key').val()")
+
+取得完整迷宮畫面：
+
+await view.evaluate("$('#character').val()")
+
+看到狀態包含 "Escaped the maze" 代表成功。抵達終點時不會呼叫 alert；大型
+慶祝內容會直接顯示在 character 區域，並提示使用 Ctrl-R 重新開始。
+
+初始化與聚焦 controls 的範例：
+
+const view = new Bun.WebView({
+  backend: {
+    type: "chrome",
+    url: "ws://127.0.0.1:9222/devtools/browser/cdp-server",
+  },
+});
+
+const cell = await view.evaluate(`
+  (() => {
+    const lines = micro.getAllText().split("\\n");
+    const y = lines.findIndex(line =>
+      line.includes("Put the cursor here")
+    );
+
+    return {
+      x: lines[y].indexOf("Put the cursor here") + 1,
+      y: y + 1,
+    };
+  })()
+`);
+
+await view.click(cell.x, cell.y);
+await view.press("r", { modifiers: ["Control"] });
+
+alert 注意事項：
+
+Maze 抵達終點不會觸發 alert。不過 jsmdcui 其他操作若呼叫同步 alert()，CDP
+operation 會等待使用者直接在實際 terminal 按 Enter 關閉；alert 阻塞期間，無法
+再透過 view.press("Enter") 關閉它。無人值守自動化應避免觸發同步 alert，或預先
+提供替代的 dialog handling。
+
+操作完成後呼叫：
+
+view.close();

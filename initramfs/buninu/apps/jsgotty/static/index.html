@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+
+<head>
+
+  <style>
+  html, body {
+    overscroll-behavior-y: none;
+  }
+  </style>
+  
+  <title>{{ .title }}</title>
+  <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+  <link rel="icon" href="favicon.ico">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/index.css" />
+  <link rel="stylesheet" href="./css/xterm.css" />
+  <link rel="stylesheet" href="./css/xterm_customize.css" />
+  <link rel="stylesheet" href="./css/kitty.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+  <div id="terminal"></div>
+  <div id="kitty-overlay"></div>
+  <!-- See static/help.md for script load order and internal page hooks. -->
+  <script src="./auth_token.js"></script>
+  <script src="./config.js"></script>
+  <script src="./js/kitty.js"></script>
+  <script src="./js/windows_bridge.js"></script>
+  <script src="./js/zmodem.js"></script>
+  <script src="./js/xterm-addon-unicode11.js"></script>
+  <script src="./js/gotty.js"></script>
+
+
+<script>
+// Page-local helpers below use the same window-scoped hooks created by gotty.js.
+// Keep them here so the terminal page can show dialogs and redirect link handling
+// without pulling in another framework layer.
+// The declarations below intentionally leak a few globals for other scripts on this page:
+// alert_advanced, noWinOpenUseFetch, realConfirm, realWinOpen, fetchText, and the
+// window.open override installed by noWinOpenUseFetch().
+
+function alert_advanced(text,asHtml,closeOnClick) {
+// 若已有舊 dialog，先移除
+const old = document.getElementById("alert-advanced-dialog");
+if (old) old.remove();
+
+// 建立外層遮罩（透明 + 可點擊關閉）
+const overlay = document.createElement("div");
+overlay.id = "alert-advanced-dialog";
+overlay.style.position = "fixed";
+overlay.style.top = "0";
+overlay.style.left = "0";
+overlay.style.width = "100vw";
+overlay.style.height = "100vh";
+overlay.style.background = "rgba(0,0,0,0.35)";
+overlay.style.backdropFilter = "blur(2px)";
+overlay.style.display = "flex";
+overlay.style.alignItems = "center";
+overlay.style.justifyContent = "center";
+overlay.style.zIndex = "99999";
+
+// 建立對話框內容
+const box = document.createElement("div");
+box.style.maxWidth = "80vw"; // 隨螢幕自適應
+box.style.maxHeight = "70vh"; // 可捲動高度
+box.style.padding = "2vh 2vw";
+box.style.background = "#fff";
+box.style.borderRadius = "1.5vh";
+box.style.boxShadow = "0 0 2vh rgba(0,0,0,0.3)";
+box.style.overflowY = "auto"; // 內容可捲動
+//box.style.fontSize = "14px";
+
+box.style.wordBreak = "break-all";
+box.style.whiteSpace = "pre-wrap";
+
+
+if(asHtml)
+  box.innerHTML = text ;
+else
+  box.innerText = text;
+  
+
+// 點擊任意區域關閉
+overlay.addEventListener("click", () => overlay.remove());
+
+//  Default: no close on clicking content
+if(!closeOnClick)
+  box.addEventListener("click", (e) => e.stopPropagation());
+
+overlay.appendChild(box);
+document.body.appendChild(overlay);
+}  //  alert_advanced
+
+
+
+function noWinOpenUseFetch(){
+
+let lang = (navigator.language||"")+""
+
+let chi = lang.toLowerCase().includes("zh")
+
+if(chi)
+  alert("從現在起，按下終端機內的連結會直接觸發fetch(url)。請小心別誤點可疑連結，重新整理頁面即可回復");
+else
+  alert("From now on, clicking on links in the terminal directly fetch(url). Please be careful not to click on suspicious links. Refreshing the page reverts this effect.");
+
+if(confirm.toString().includes("native"))
+{
+  window.realConfirm = confirm ;
+  confirm = ()=>true ;
+}
+
+if(window.open.toString().includes("native"))
+{
+  window.realWinOpen=window.open;
+
+  window.fetchText = async (url)=>{
+        let txt = await new Promise(res=>{
+          fetch(url).then(r=>r.text())
+          .then(res).catch(res)
+        });
+        
+        return txt ;
+  }
+
+  window.open = (url)=>{
+  
+    if(url)  
+    {
+      (async ()=>{
+
+        let txt = await window.fetchText(url);
+        if(txt) alert(txt);
+
+        return {location:{}};
+      })()
+
+      return null
+    }
+
+    return {location:{
+      set href(url){
+        (async ()=>{
+
+        let txt = await window.fetchText(url);
+        if(txt) alert(txt);
+
+        })()
+      }
+    }}
+  }
+}
+
+}  // noWinOpenUseFetch
+
+
+</script>
+
+
+</body>
+
+</html>

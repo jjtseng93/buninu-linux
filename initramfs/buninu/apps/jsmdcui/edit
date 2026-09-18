@@ -1,0 +1,9 @@
+#!/bin/sh
+
+':' //; sd=$(dirname "$(realpath "$0")")
+
+':' //; exec bun "$sd"/src/index.js --edit "$@"
+
+process.argv.splice(2,0,'--edit')
+
+await import('./src/index.js')

@@ -1,0 +1,19 @@
+{
+  "name": "jsgotty",
+  "version": "1.1.11",
+  "description": "Share your terminal as a web application: A JavaScript rewrite of GoTTY",
+  "license": "MIT",
+  "bin": {
+    "jsgotty": "./gotty.js"
+  },
+  "type": "commonjs",
+  "assets": [
+    "static",
+    "README.md",
+    "README.en.md"
+  ],
+  "dependencies": {
+    "node-addon-api": "^7.1.1",
+    "ws": "^8.18.3"
+  }
+}

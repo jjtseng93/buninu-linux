@@ -1,0 +1,7 @@
+#!/bin/sh
+
+':' //; sd=$(dirname "$(realpath "$0")")
+
+':' //; exec bun "$sd"/src/index.js "$@"
+
+await import('./src/index.js')

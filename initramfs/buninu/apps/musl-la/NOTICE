@@ -1,0 +1,41 @@
+This product includes third-party components:
+
+- ld-musl-aarch64.so.1
+  License: MIT
+  See: ./LICENSE_musl.txt
+
+  The musl dynamic loader, version 1.2.5, as packaged by Alpine Linux
+  (package musl, version 1.2.5-r10, aarch64).
+
+  Upstream musl source:
+  https://musl.libc.org/releases/musl-1.2.5.tar.gz
+
+  Alpine's CDN serves only the current pkgrel of each branch, and 1.2.5-r10
+  has since been superseded, so it is no longer downloadable there. An
+  archived copy of that exact build ships in the Alpine aarch64 rootfs
+  published by Termux proot-distro, which reports Alpine 3.22.2 and
+  musl 1.2.5-r10 in its apk database:
+  https://github.com/termux/proot-distro/releases/download/v4.30.1/alpine-aarch64-pd-v4.30.1.tar.xz
+
+  SHA-256 (verified byte-for-byte identical to lib/ld-musl-aarch64.so.1 in
+  that rootfs):
+    ld-musl-aarch64.so.1: da9c2d18642cf67ade0947b88b6859385c085fdbc6a022f5a8b518d7677e55df
+
+- libgcc_s.so.1 / libstdc++.so.6
+  License: GPL-3.0 + GCC Runtime Library Exception
+  See: ./LICENSES/GPL-3.0.txt and ./LICENSES/gcc_runtime_exception.txt
+
+  Built from GCC 14.2.0, as packaged by Alpine Linux 3.22
+  (packages libgcc and libstdc++, version 14.2.0-r6, aarch64).
+
+  Upstream GCC source:
+  https://gcc.gnu.org/pub/gcc/releases/gcc-14.2.0/gcc-14.2.0.tar.xz
+
+  Alpine's build recipe and patches (Corresponding Source for this exact
+  build), pinned to the commit matching pkgrel=6:
+  https://gitlab.alpinelinux.org/alpine/aports/-/blob/fbf60319be3bbaf6dd32ef55cc6fb7189e05c266/main/gcc/APKBUILD
+
+  SHA-256 (verified byte-for-byte identical to the official Alpine 3.22
+  aarch64 packages):
+    libgcc_s.so.1:  2d945d6ce360769b41fbffc652c2440014bbd69416f13fe206fbac19d32c9431
+    libstdc++.so.6: 85f2cd6db79578ab58be4d12b7df7482ebc003a37496c7544956d9157f8a2b3f

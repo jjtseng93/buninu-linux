@@ -1,0 +1,80 @@
+filetype: python
+
+detect:
+    filename: "\\.py(3|w)?$"
+    header: "^#!.*/(env +)?python(3)?$"
+
+rules:
+    # built-in objects
+    - constant: "\\b(Ellipsis|None|self|cls|True|False)\\b"
+      # built-in attributes
+    - constant: "\\b(__bases__|__builtin__|__class__|__debug__|__dict__|__doc__|__file__|__members__|__methods__|__name__|__self__)\\b"
+      # built-in functions
+    - identifier: "\\b(abs|all|any|ascii|bin|bool|breakpoint|bytearray|bytes|callable|chr|classmethod|compile|complex|delattr|dir|divmod|eval|exec|format|getattr|globals|hasattr|hash|help|hex|id|input|isinstance|issubclass|iter|len|locals|max|min|next|nonlocal|oct|open|ord|pow|print|repr|round|setattr|sorted|sum|vars|__import__)\\b"
+      # special method names
+    - identifier: "\\b__(abs|add|and|call|cmp|coerce|complex|concat|contains|delattr|delitem|delslice|del|dict|divmod|div|float|getattr|getitem|getslice|hash|hex|iadd|iand|iconcat|ifloordiv|ilshift|imatmul|imod|imul|init|int|invert|inv|ior|ipow|irshift|isub|iter|itruediv|ixor|len|long|lshift|mod|mul|neg|next|nonzero|oct|or|pos|pow|radd|rand|rcmp|rdivmod|rdiv|repeat|repr|rlshift|rmod|rmul|ror|rpow|rrshift|rshift|rsub|rxor|setattr|setitem|setslice|str|sub|xor)__\\b"
+      # types
+    - type: "\\b(bool|bytearray|bytes|classmethod|complex|dict|enumerate|filter|float|frozenset|int|list|map|memoryview|object|property|range|reversed|set|slice|staticmethod|str|super|tuple|type|zip)\\b"
+      # definitions
+    - identifier: "def [a-zA-Z_0-9]+"
+      # keywords
+    - statement: "\\b(and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b"
+      # decorators
+    - preproc: "^\\s*@[^(]*"
+      # operators
+    - symbol.operator: "([~^.:;,+*|=!\\%@]|<|>|/|-|&)"
+      # parentheses
+    - symbol.brackets: "([(){}]|\\[|\\])"
+      # numbers
+    - constant.number: "\\b[0-9](_?[0-9])*(\\.([0-9](_?[0-9])*)?)?(e[0-9](_?[0-9])*)?\\b" # decimal
+    - constant.number: "\\b0b(_?[01])+\\b"     # bin
+    - constant.number: "\\b0o(_?[0-7])+\\b"    # oct
+    - constant.number: "\\b0x(_?[0-9a-fA-F])+\\b" # hex
+
+    - constant.string:
+        start: "\"\"\""
+        end: "\"\"\""
+        rules: []
+
+    - constant.string:
+        start: "'''"
+        end: "'''"
+        rules: []
+
+    - constant.string:
+        start: "\""
+        end: "(\"|$)"
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    - constant.string:
+        start: "'"
+        end: "('|$)"
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    - comment:
+        start: "#"
+        end: "$"
+        rules:  # AKA Code tags (PEP 350)
+            - todo: "(TODO|FIXME|HACK|BUG|NOTE|FAQ|MNEMONIC|REQ|RFE|IDEA|PORT|\\?\\?\\?|!!!|GLOSS|SEE|TODOC|STAT|RVD|CRED):?"
+
+# autocomplete-reference: Python built-in constants, functions, and types (Python docs)
+# None True False Ellipsis NotImplemented __debug__ abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex delattr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash help hex id input int isinstance issubclass iter len list locals map max memoryview min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip __import__
+# ArithmeticError AssertionError AttributeError BaseException BaseExceptionGroup BlockingIOError BrokenPipeError BufferError BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError ConnectionResetError DeprecationWarning EOFError EncodingWarning EnvironmentError Exception ExceptionGroup FileExistsError FileNotFoundError FloatingPointError FutureWarning GeneratorExit IOError ImportError ImportWarning IndentationError IndexError InterruptedError IsADirectoryError KeyError KeyboardInterrupt LookupError MemoryError ModuleNotFoundError NameError NotADirectoryError NotImplementedError OSError OverflowError PendingDeprecationWarning PermissionError ProcessLookupError RecursionError ReferenceError ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError SyntaxWarning SystemError SystemExit TabError TimeoutError TypeError UnboundLocalError UnicodeDecodeError UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning ZeroDivisionError
+# autocomplete-reference: Python common object and data model methods
+# __abs__ __add__ __aiter__ __all__ __and__ __annotations__ __anext__ __await__ __bases__ __bool__ __buffer__ __builtins__ __bytes__ __cached__ __call__ __ceil__ __class__ __class_getitem__ __closure__ __code__ __complex__ __contains__ __context__ __debug__ __defaults__ __del__ __delattr__ __delete__ __delitem__ __dict__ __dir__ __divmod__ __doc__ __enter__ __eq__ __exit__ __file__ __float__ __floor__ __floordiv__ __format__ __fspath__ __ge__ __get__ __getattr__ __getattribute__ __getitem__ __getnewargs__ __getstate__ __globals__ __gt__ __hash__ __iadd__ __iand__ __ifloordiv__ __ilshift__ __imatmul__ __imod__ __imul__ __index__ __init__ __init_subclass__ __instancecheck__ __int__ __invert__ __ior__ __ipow__ __irshift__ __isub__ __iter__ __itruediv__ __ixor__ __kwdefaults__ __le__ __len__ __length_hint__ __loader__ __lshift__ __lt__ __matmul__ __missing__ __mod__ __module__ __mro__ __mul__ __name__ __ne__ __neg__ __new__ __next__ __or__ __package__ __path__ __pos__ __pow__ __qualname__ __radd__ __rand__ __rdivmod__ __reduce__ __reduce_ex__ __repr__ __reversed__ __rfloordiv__ __rlshift__ __rmatmul__ __rmod__ __rmul__ __ror__ __round__ __rpow__ __rrshift__ __rshift__ __rsub__ __rtruediv__ __rxor__ __set__ __set_name__ __setattr__ __setitem__ __slots__ __spec__ __str__ __sub__ __subclasscheck__ __subclasses__ __traceback__ __truediv__ __trunc__ __weakref__ __xor__
+# autocomplete-reference: Python str, bytes, list, tuple, dict, set, file/path methods
+# capitalize casefold center count encode endswith expandtabs find format format_map index isalnum isalpha isascii isdecimal isdigit isidentifier islower isnumeric isprintable isspace istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill
+# append clear copy count extend index insert pop remove reverse sort
+# clear copy fromkeys get items keys pop popitem setdefault update values
+# add clear copy difference difference_update discard intersection intersection_update isdisjoint issubset issuperset pop remove symmetric_difference symmetric_difference_update union update
+# close closed detach fileno flush isatty read readable readline readlines seek seekable tell truncate writable write writelines exists is_file is_dir iterdir glob rglob mkdir rename replace resolve absolute parent parents name stem suffix suffixes with_name with_stem with_suffix open read_text read_bytes write_text write_bytes
+# autocomplete-reference: Python standard-library module names (Python module index)
+# abc aifc argparse array ast asyncio atexit audioop base64 bdb binascii bisect builtins bz2 calendar cgi cgitb chunk cmath cmd code codecs codeop collections colorsys compileall concurrent configparser contextlib contextvars copy copyreg crypt csv ctypes curses dataclasses datetime dbm decimal difflib dis doctest email encodings ensurepip enum errno faulthandler fcntl filecmp fileinput fnmatch fractions ftplib functools gc getopt getpass gettext glob graphlib grp gzip hashlib heapq hmac html http idlelib imaplib imghdr importlib inspect io ipaddress itertools json keyword linecache locale logging lzma mailbox mailcap marshal math mimetypes mmap modulefinder multiprocessing netrc nis nntplib numbers operator optparse os pathlib pdb pickle pickletools pipes pkgutil platform plistlib poplib posix pprint profile pstats pty pwd py_compile pyclbr pydoc queue quopri random re readline reprlib resource rlcompleter runpy sched secrets select selectors shelve shlex shutil signal site smtpd smtplib sndhdr socket socketserver sqlite3 ssl stat statistics string stringprep struct subprocess sunau symtable sys sysconfig syslog tabnanny tarfile telnetlib tempfile termios textwrap threading time timeit tkinter token tokenize tomllib trace traceback tracemalloc tty turtle types typing unicodedata unittest urllib uuid venv warnings wave weakref webbrowser wsgiref xdrlib xml xmlrpc zipapp zipfile zipimport zlib zoneinfo
+# autocomplete-reference: famous third-party Python packages and common aliases
+# numpy np pandas pd scipy sklearn scikit_learn matplotlib plt seaborn sns plotly bokeh altair statsmodels sympy numba cython polars pyarrow dask xarray networkx requests httpx aiohttp urllib3 beautifulsoup4 bs4 lxml scrapy selenium playwright flask django fastapi starlette pydantic sqlalchemy alembic psycopg2 pymongo redis celery typer click rich textual tqdm pytest hypothesis tox nox black ruff flake8 mypy pyright isort poetry pip setuptools wheel virtualenv ipython jupyter notebook jupyterlab ipykernel ipywidgets traitlets pillow PIL opencv cv2 imageio skimage scikit_image torch torchvision torchaudio tensorflow keras jax flax transformers tokenizers datasets accelerate diffusers sentence_transformers spacy nltk gensim langchain openai anthropic google genai boto3 botocore s3fs fsspec cryptography paramiko fabric pendulum arrow dateutil pyyaml yaml toml tomli tomlkit orjson ujson msgpack pydantic_settings python_dotenv dotenv sqlalchemy_utils flask_sqlalchemy django_rest_framework drf pytest_asyncio pytest_cov coverage
+# autocomplete-reference: common package submodules and method words
+# ndarray array arange linspace zeros ones empty full eye reshape transpose astype dtype shape ndim size mean median std var sum min max argmin argmax argsort sort clip concatenate stack hstack vstack dot matmul einsum where unique random DataFrame Series read_csv read_excel read_json read_parquet read_sql to_csv to_excel to_json to_parquet groupby merge join concat pivot pivot_table drop dropna fillna assign apply map iloc loc values columns index describe head tail info query sort_values reset_index set_index fit transform fit_transform predict predict_proba score train_test_split Pipeline GridSearchCV StandardScaler OneHotEncoder RandomForestClassifier RandomForestRegressor LinearRegression LogisticRegression
