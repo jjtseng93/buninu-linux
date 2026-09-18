@@ -21,7 +21,7 @@
 - Buninu userspace source: [github.com/jjtseng93/buninu](https://github.com/jjtseng93/buninu)
   + **BUNinu Is Not Unix** 🐮
   + **幫你牛** 🐂 ・ **Bunに入魂** 🔥
-
+- <img src="https://raw.githubusercontent.com/jjtseng93/buninu/main/icon.png" width="256">
 - Still in the early stages
   * Built & tested on Android Termux QEMU (PRoot+Native)
   * Built & booted in a cloud VM provided by ChatGPT Work mode, running Ubuntu 24.04.3 LTS on x86-64 with QEMU 8.2.2, TCG, and OVMF. Bun 1.4.2 was verified running as PID 1, and the Buninu userspace and bunmsh started successfully.
