@@ -1,5 +1,5 @@
-#!/data/data/com.termux/files/usr/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 cd "$(dirname "$0")"
 

@@ -21,7 +21,7 @@ cp -a --reflink=auto initramfs/. "$staging/"
 #
 # The rest are cheap to include and keep /dev usable if the devtmpfs mount in
 # init.js ever fails.
-fakeroot -- sh -c '
+fakeroot-tcp -- sh -c '
     mknod -m 0600 "$1/dev/console" c 5 1
     mknod -m 0620 "$1/dev/ttyS0" c 4 64
     mknod -m 0666 "$1/dev/null" c 1 3
