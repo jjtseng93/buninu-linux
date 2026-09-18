@@ -1,0 +1,42 @@
+{
+  "name": "buninu-linux",
+  "version": "0.1.0",
+  "description": "A Linux distribution running Bun as PID 1 with the Buninu userspace.",
+  "type": "module",
+  "main": "./index.js",
+  "bin": {
+    "buninu-linux": "./index.js"
+  },
+  "license": "MIT",
+  "author": "Dr. John (醫者小智)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jjtseng93/buninu-linux.git"
+  },
+  "homepage": "https://github.com/jjtseng93/buninu-linux#readme",
+  "bugs": {
+    "url": "https://github.com/jjtseng93/buninu-linux/issues"
+  },
+  "keywords": [
+    "bun",
+    "linux",
+    "distribution",
+    "pid1",
+    "init",
+    "initramfs",
+    "uki",
+    "uefi",
+    "alpine",
+    "musl",
+    "qemu",
+    "buninu",
+    "userspace"
+  ],
+  "scripts": {
+    "fb": "./index.js -fb",
+    "fetch": "./index.js -f",
+    "pack": "./index.js -b",
+    "start": "./index.js -r",
+    "check": "node --check ./index.js && node --check ./initramfs/init.js"
+  }
+}

@@ -1,0 +1,32 @@
+# Everything here is produced by the
+# build; `./fetch-plus-build.sh`
+# recreates all of it from the tracked
+# scripts and the pinned downloads.
+
+
+# Downloaded archives and the files
+# extracted from them. scripts/fetch.sh
+# re-fetches anything missing and
+# verifies the pinned SHA-256.
+/downloads/
+/kernel/
+/initramfs/bin/bun
+/initramfs/lib/modules/
+
+
+# Build output. vda.img changes on
+# every boot: the read-only OVMF
+# firmware writes its NV variables
+# to /NvVars on the ESP.
+/build/
+/vda/
+/vda.img
+/hello/hello.obj
+
+
+# Left behind only by interrupted
+# runs of scripts/pack-initramfs.sh
+# and build-image.sh; a completed
+# run removes them itself.
+/.initramfs.*
+/.esp.*
