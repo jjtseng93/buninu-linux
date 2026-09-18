@@ -13,10 +13,10 @@ test -f vda.img || ./build-image.sh
 # 0.0.0.0 or 10.0.2.15 — one bound to the guest's 127.0.0.1 is not reachable.
 nic="user,model=virtio-net-pci"
 for port in ${PORTS:-}; do
-    case "$port" in
-        *:*) host="${port%%:*}"; guest="${port#*:}" ;;
-        *)   host="$port"; guest="$port" ;;
-    esac
+    # Both expansions return the whole word when there is no colon, so a bare
+    # "8080" maps to itself without a case statement.
+    host="${port%%:*}"
+    guest="${port#*:}"
     nic="$nic,hostfwd=tcp:127.0.0.1:$host-:$guest"
 done
 
