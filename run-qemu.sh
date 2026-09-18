@@ -5,6 +5,18 @@ cd "$(dirname "$0")"
 
 test -f vda.img || ./build-image.sh
 
+if [ -z "$PREFIX" ] ; then
+  PREFIX=/usr
+fi
+
+ovmf_filepath="$PREFIX"/share/qemu/edk2-x86_64-code.fd
+
+if [ -f /usr/share/OVMF/OVMF_CODE_4M.fd ] ; then
+  ovmf_filepath=/usr/share/OVMF/OVMF_CODE_4M.fd
+elif [ -f "$OVMF_FILE" ] ; then
+  ovmf_filepath=$OVMF_FILE
+fi
+
 # User-mode networking is NAT: the guest can reach out, nothing reaches in
 # unless a port is forwarded. PORTS lists them, space-separated, as
 # host[:guest] with guest defaulting to host, e.g. PORTS="8080 2222:22".
@@ -24,7 +36,7 @@ exec qemu-system-x86_64 \
     -machine q35,accel=tcg \
     -cpu max \
     -m 512M \
-    -drive if=pflash,format=raw,readonly=on,file="${PREFIX}/share/qemu/edk2-x86_64-code.fd" \
+    -drive if=pflash,format=raw,readonly=on,file="$ovmf_filepath" \
     -drive if=virtio,format=raw,file=vda.img \
     -nic "$nic" \
     -display none \

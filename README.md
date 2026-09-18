@@ -17,8 +17,14 @@
   * happens in JavaScript through `bun:ffi`
   * There is no BusyBox and no C bootstrap.
 
-> Still early, tested on Android Termux QEMU
-> built in PRoot Debian 13
+- Souce: [github.com/jjtseng93/buninu-linux](https://github.com/jjtseng93/buninu-linux)
+- Buninu userspace source: [github.com/jjtseng93/buninu](https://github.com/jjtseng93/buninu)
+  + **BUNinu Is Not Unix** 🐮
+  + **幫你牛** 🐂 ・ **Bunに入魂** 🔥
+
+- Still in the early stages
+  * Built & tested on Android Termux QEMU (PRoot+Native)
+  * Built & booted in a cloud VM provided by ChatGPT Work mode, running Ubuntu 24.04.3 LTS on x86-64 with QEMU 8.2.2, TCG, and OVMF. Bun 1.4.2 was verified running as PID 1, and the Buninu userspace and bunmsh started successfully.
 
 - The hello-world EFI application in Section 1 is the starting point that the UKI replaces
 - It still builds, and it is the quickest way to check whether the disk image and firmware path work at all.
