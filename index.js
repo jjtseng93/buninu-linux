@@ -8,11 +8,12 @@
 
 import pkg from "./package.json" with { type: "json" };
 import { spawnSync } from "node:child_process";
-import { accessSync, constants, readFileSync } from "node:fs";
+import { accessSync, constants, copyFileSync, readFileSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
+const invocationDir = process.cwd();
 
 // Pipeline order. Flags select stages; this array fixes the order they run in.
 const stages = [
@@ -49,7 +50,7 @@ function usage() {
   return `${pkg.name} - ${pkg.description}
 
 Usage:
-  ${pkg.name} [-f] [-b] [-r] [--linux-lts] [--real] [-- qemu arguments]
+  ${pkg.name} [-f] [-b] [-r] [--export] [--linux-lts] [--real] [-- qemu arguments]
 
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
@@ -57,6 +58,9 @@ Stages (always run in this order, whichever you pick):
   -b, --build   pack the initramfs, assemble the UKI, write vda.img
                                        (build-uki.sh, build-image.sh)
   -r, --run     boot vda.img under QEMU (run-qemu.sh)
+
+  --export      after -b/--build, copy the image to
+                ./buninu-linux-${pkg.version}.img
 
   --linux-lts   use Alpine's general-purpose linux-lts kernel for fetch/build
                 (the default is the smaller linux-virt kernel)
@@ -82,6 +86,7 @@ function parse(argv) {
   const passthrough = [];
   let linuxLts = false;
   let real = false;
+  let exportImage = false;
   let sawSeparator = false;
 
   for (const argument of argv) {
@@ -102,6 +107,8 @@ function parse(argv) {
       linuxLts = true;
     } else if (argument === "--real") {
       real = true;
+    } else if (argument === "--export") {
+      exportImage = true;
     } else if (argument.startsWith("--")) {
       const stage = stages.find((s) => `--${s.flag}` === argument);
       if (!stage) fail(`unknown option ${argument}\n\n${usage()}`);
@@ -127,7 +134,10 @@ function parse(argv) {
   if ((linuxLts || real) && !selected.has(stages[0]) && !selected.has(stages[1])) {
     fail("--linux-lts/--real only make sense with -f/--fetch or -b/--build");
   }
-  return { selected, passthrough, linuxLts, real };
+  if (exportImage && !selected.has(stages[1])) {
+    fail("--export requires -b/--build (use -fb --export for a clean build)");
+  }
+  return { selected, passthrough, linuxLts, real, exportImage };
 }
 
 // Same shape as Buninu's --version. The runtime line tells you whether this
@@ -195,7 +205,7 @@ function runScript(stage, script, args = [], env = process.env) {
   }
 }
 
-const { selected, passthrough, linuxLts, real } = parse(process.argv.slice(2));
+const { selected, passthrough, linuxLts, real, exportImage } = parse(process.argv.slice(2));
 const ordered = stages.filter((stage) => selected.has(stage));
 checkTools(ordered);
 
@@ -210,4 +220,16 @@ for (const stage of ordered) {
         : process.env,
     );
   }
+}
+
+if (exportImage) {
+  const source = resolve(rootDir, "vda.img");
+  const destination = resolve(invocationDir, `buninu-linux-${pkg.version}.img`);
+  try {
+    accessSync(source, constants.R_OK);
+    copyFileSync(source, destination);
+  } catch (error) {
+    fail(`could not export image to ${destination}: ${error.message}`);
+  }
+  console.log(`\nExported ${destination}`);
 }

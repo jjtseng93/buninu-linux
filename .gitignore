@@ -21,6 +21,8 @@
 /build/
 /vda/
 /vda.img
+/buninu-linux-*.img
+/buninu-linux-*.tgz
 /hello/hello.obj
 
 
