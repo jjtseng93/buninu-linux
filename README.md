@@ -344,6 +344,10 @@ example, open a new `hlw.js` from the Buninu shell:
 jmi hlw.js
 ```
 
+The recommended colour theme for `jmi` is `cmc-tc`. Once inside the editor,
+press `Ctrl-E`, type `theme ` (including the trailing space), press `Tab`, then
+use the `Up` and `Down` arrow keys to select `cmc-tc` and press `Enter`.
+
 Enter and save this content:
 
 ```js
