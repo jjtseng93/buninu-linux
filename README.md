@@ -24,7 +24,7 @@
 - <img src="https://raw.githubusercontent.com/jjtseng93/buninu/main/icon.png" width="256">
 - Still in the early stages
   * Built & tested on Android Termux QEMU (PRoot+Native)
-  * Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
+  * [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
     its interactive REPL on the local display and keyboard. Physical networking
     is not implemented yet, but the bundled `jmi` editor and local JavaScript
     execution work.
