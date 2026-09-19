@@ -2,7 +2,18 @@
 
 if [ -f /proc/$$/cmdline ] ; then
   args=$(tr '\0' '\n' < /proc/$$/cmdline)
-  caller=$(echo "$args" | head -n 1)
+  caller=$(printf '%s\n' "$args" | head -n 1)
+
+  # Buninu Linux implements /bin/sh in Bun. Its interpreter chain makes the
+  # first three cmdline entries /bin/bun, /bin/sh, and the invoked launcher;
+  # Android's native loader instead keeps the launcher in the first entry.
+  # Match only the exact Buninu chain so the existing Android and conventional
+  # Linux paths retain their current behaviour.
+  second=$(printf '%s\n' "$args" | head -n 2 | tail -n 1)
+  if [ "$caller" = /bin/bun ] && [ "$second" = /bin/sh ] ; then
+    caller=$(printf '%s\n' "$args" | head -n 3 | tail -n 1)
+  fi
+
   callerb=$(basename "$caller")
 else
   callerb=$(basename "$0")

@@ -2,4 +2,4 @@
 
 sd=$(dirname "$(realpath "$0")")
 
-exec bun "$sd"/../apps/bunmsh/bunmsh "$@"
+exec bun "$sd"/../apps/bunmsh/index.js "$@"

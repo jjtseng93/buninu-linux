@@ -1,6 +1,6 @@
 {
   "name": "buninu",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "description": "Buninu is a portable, self-bootstrapping Unix-like userspace built on Bun that runs across operating systems",
   "type": "module",
   "main": "./bin/init.js",
@@ -53,7 +53,7 @@
   },
   "scripts": {
     "start": "bun ./apps/jsgotty/gotty.js --reconnect -r -w --webgl -a 127.0.0.1",
-    "local": "bun ./apps/bunmsh/bunmsh -c 'exec bunmsh'",
+    "local": "bun ./apps/bunmsh/index.js -c 'exec bunmsh'",
     "check": "node --check ./bin/init.js"
   }
 }
