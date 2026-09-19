@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.12 - 2026-09-20
+
+### Fixed
+
+- Make Buninu's shell scripts parse and run under bunmsh as well as a POSIX
+  shell. The jsmdcui and musl-la launchers now use the `for name; do` form
+  accepted by bunmsh, and jsmdcui avoids bracket expressions in parameter
+  trimming while preserving case-insensitive Markdown suffix detection
+- Make `make-bunBin.sh` bunmsh-compatible by replacing its `case`, shell-option,
+  command-scoped `CDPATH`, `cd --` and `trap` usage with portable conditionals,
+  explicit failure handling and temporary-directory cleanup
+- Use explicit `1>&2` stderr redirection in `bun.sh` and `make-bunBin.sh`.
+  bunmsh interpreted the abbreviated `>&2` form as an output file named `&2`
+
 ## 0.4.11 - 2026-09-20
 
 - Emergency fix: multicall.sh on Buninu Linux
