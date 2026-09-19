@@ -381,6 +381,29 @@ describe("execution", () => {
     expect(await run("builtin sleep 1ms")).toMatchObject({ status: 0, stdout: "", stderr: "" });
   });
 
+  test("tr translates and deletes NUL bytes", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-tr-"));
+    const cmdline = join(directory, "cmdline");
+    try {
+      await Bun.write(cmdline, new Uint8Array([
+        ...new TextEncoder().encode("/buninu/bin/jmi"), 0,
+        ...new TextEncoder().encode("hlw.js"), 0,
+      ]));
+      expect(await run(`builtin tr '\\0' '\\n' < '${cmdline}'`)).toMatchObject({
+        status: 0,
+        stdout: "/buninu/bin/jmi\nhlw.js\n",
+        stderr: "",
+      });
+      expect(await run(`builtin tr -d '\\000' < '${cmdline}'`)).toMatchObject({
+        status: 0,
+        stdout: "/buninu/bin/jmihlw.js",
+        stderr: "",
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("renders asset-backed Markdown help for every documented builtin", async () => {
     const excluded = new Set([".", "..", "//", "-", "~"]);
     const titles = { "[": "test", __builtin: "builtin", chdir: "cd" };
@@ -1062,4 +1085,3 @@ fi
     } finally { rmSync(home, { recursive: true, force: true }); }
   });
 });
-

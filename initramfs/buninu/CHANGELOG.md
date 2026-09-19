@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.10 - 2026-09-20
+
+### Fixed
+
+- Sync bunmsh to 0.3.7. Its fallback `tr` builtin now decodes NUL, octal and
+  common backslash escapes in character sets, so commands such as
+  `tr '\0' '\n' < /proc/$$/cmdline` correctly split NUL-delimited process
+  arguments. Previously the NUL bytes passed through unchanged; the Buninu
+  multicall launcher could then misidentify a command invoked with arguments
+  and exit with status 127 before reaching its shell wrapper, for example
+  `jmi hlw.js` even though plain `jmi` worked.
+
 ## 0.4.9 - 2026-09-16
 
 ### Changed

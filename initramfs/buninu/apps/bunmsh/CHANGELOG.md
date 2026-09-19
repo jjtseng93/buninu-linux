@@ -2,6 +2,18 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.3.7] - 2026-09-20
+
+### Fixed
+
+- Teach the fallback `tr` builtin to decode NUL, octal, and the common
+  backslash escapes in its character sets. Commands such as
+  `tr '\0' '\n' < /proc/$$/cmdline` now translate NUL-delimited input instead
+  of passing the NUL bytes through unchanged; `tr -d '\000'` works as well.
+  Range expansion such as `tr a-z A-Z` remains supported, and regression
+  tests cover both translating and deleting NUL bytes from general binary
+  input.
+
 ## [0.3.6] - 2026-09-15
 
 ### Added

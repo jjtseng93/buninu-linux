@@ -1,6 +1,6 @@
 {
   "name": "buninu",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Buninu is a portable, self-bootstrapping Unix-like userspace built on Bun that runs across operating systems",
   "type": "module",
   "main": "./bin/init.js",

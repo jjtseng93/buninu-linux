@@ -1898,11 +1898,37 @@ async function runWcFallback(argv, state, input) {
 }
 
 function expandTrSet(value) {
-  return value.replace(/(.)-(.)/g, (_, a, b) => {
-    let output = "";
-    for (let code = a.charCodeAt(0); code <= b.charCodeAt(0); code++) output += String.fromCharCode(code);
-    return output;
-  });
+  const escapes = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\" };
+  const characters = [];
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] !== "\\") {
+      characters.push(value[i]);
+      continue;
+    }
+    const octal = value.slice(i + 1).match(/^[0-7]{1,3}/)?.[0];
+    if (octal) {
+      characters.push(String.fromCharCode(Number.parseInt(octal, 8)));
+      i += octal.length;
+      continue;
+    }
+    const escaped = value[++i];
+    characters.push(escapes[escaped] ?? escaped ?? "\\");
+  }
+
+  let output = "";
+  for (let i = 0; i < characters.length; i++) {
+    if (i + 2 < characters.length && characters[i + 1] === "-") {
+      const first = characters[i].charCodeAt(0);
+      const last = characters[i + 2].charCodeAt(0);
+      if (first <= last) {
+        for (let code = first; code <= last; code++) output += String.fromCharCode(code);
+        i += 2;
+        continue;
+      }
+    }
+    output += characters[i];
+  }
+  return output;
 }
 
 async function runTrFallback(argv, _state, input) {

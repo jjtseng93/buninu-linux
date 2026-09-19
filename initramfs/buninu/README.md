@@ -336,6 +336,8 @@ for how it works):
 - **Editing and viewing**
   * `jmi` — Edit files in the js micro editor
   * `glow` — View file contents with syntax highlighting
+  * `bun pm diff ./dir1 ./dir2` — diff 2 folders
+    + Can also diff against npm registry packages
 
 ---
 
@@ -564,6 +566,8 @@ Neither is distributed with Buninu.
 
 - `bunproot --git clone` should be cross-platform
   * Tested on Android, Linux, and Windows
+  * If git clone fails, try `bun pm cache rm`
+  * This `bunproot --git` also supports many other subcommands. Show them by `--git --help`
 - The container example below is Android-only.
 
 ```sh
