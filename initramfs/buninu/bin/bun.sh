@@ -53,5 +53,5 @@ for pathDir in ${PATH:-} ; do
 done
 IFS=$oldIFS
 
-echo "Bun Binary not found: $bunBin (and no external Bun found in PATH)" >&2
+echo "Bun Binary not found: $bunBin (and no external Bun found in PATH)" 1>&2
 exit 127

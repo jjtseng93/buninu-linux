@@ -2,10 +2,15 @@
 
 sd=$(dirname "$(realpath "$0")")
 
-for arg do
-  case "$arg" in
-    *.[mM][dD]|--demo*|--cdp-maze) exec bun "$sd"/src/index.js --mdcui "$@" ;;
-  esac
+for arg; do
+  if [ "${arg%.md}" != "$arg" ] ||
+    [ "${arg%.mD}" != "$arg" ] ||
+    [ "${arg%.Md}" != "$arg" ] ||
+    [ "${arg%.MD}" != "$arg" ] ||
+    [ "${arg#--demo}" != "$arg" ] ||
+    [ "$arg" = --cdp-maze ]; then
+    exec bun "$sd"/src/index.js --mdcui "$@"
+  fi
 done
 
 exec bun "$sd"/src/index.js "$@"

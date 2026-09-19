@@ -1,8 +1,6 @@
 #!/bin/sh
 
-set -eu
-
-sd=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+sd=$(cd "$(dirname "$0")" && pwd)
 
 show_help() {
   cat <<EOF
@@ -28,15 +26,13 @@ no_backup/bin when it is newer than the selected Bun executable.
 EOF
 }
 
-case ${1-} in
-  -h|--help)
-    show_help
-    exit 0
-    ;;
-esac
+if [ "${1-}" = -h ] || [ "${1-}" = --help ]; then
+  show_help
+  exit 0
+fi
 
 if [ "$#" -ne 1 ]; then
-  show_help >&2
+  show_help 1>&2
   exit 2
 fi
 
@@ -52,13 +48,16 @@ output=$sd/bunBin.tgz
 
 for command in curl unzip tar mktemp; do
   if ! command -v "$command" >/dev/null 2>&1; then
-    echo "Required command not found: $command" >&2
+    echo "Required command not found: $command" 1>&2
     exit 127
   fi
 done
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/make-bunBin.XXXXXX")
-trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+cleanup() {
+  rm -rf "$tmp"
+}
 
 download_bun() {
   asset=$1
@@ -67,9 +66,18 @@ download_bun() {
   archive=$tmp/$asset.zip
 
   echo "Downloading $asset for Bun $tag..."
-  curl --fail --location --retry 3 --output "$archive" "$base_url/$asset.zip"
-  unzip -p "$archive" "$asset/$member" >"$tmp/$destination"
-  chmod 755 "$tmp/$destination"
+  if ! curl --fail --location --retry 3 --output "$archive" "$base_url/$asset.zip"; then
+    cleanup
+    exit 1
+  fi
+  if ! unzip -p "$archive" "$asset/$member" >"$tmp/$destination"; then
+    cleanup
+    exit 1
+  fi
+  if ! chmod 755 "$tmp/$destination"; then
+    cleanup
+    exit 1
+  fi
 }
 
 download_bun bun-linux-aarch64 bun bun-la
@@ -77,8 +85,15 @@ download_bun bun-linux-x64 bun bun-lx
 download_bun bun-windows-x64 bun.exe bun-wx.exe
 
 # bun.sh extracts this archive directly into no_backup/bin.
-tar -czf "$tmp/bunBin.tgz" -C "$tmp" bun-la bun-lx bun-wx.exe
-mv "$tmp/bunBin.tgz" "$output"
+if ! tar -czf "$tmp/bunBin.tgz" -C "$tmp" bun-la bun-lx bun-wx.exe; then
+  cleanup
+  exit 1
+fi
+if ! mv "$tmp/bunBin.tgz" "$output"; then
+  cleanup
+  exit 1
+fi
+cleanup
 
 echo "Created $output"
 tar -tzvf "$output"

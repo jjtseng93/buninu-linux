@@ -15,7 +15,7 @@ if [ "$1" = -e ] ; then
 fi
 
 elfdir=
-for arg do
+for arg; do
   if [ -f "$arg" ] ; then
     elf_magic=$(od -A n -t x1 -N 4 "$arg" 2>/dev/null | tr -d '[:space:]')
     if [ "$elf_magic" = 7f454c46 ] ; then
