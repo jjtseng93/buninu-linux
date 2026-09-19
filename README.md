@@ -24,6 +24,10 @@
 - <img src="https://raw.githubusercontent.com/jjtseng93/buninu/main/icon.png" width="256">
 - Still in the early stages
   * Built & tested on Android Termux QEMU (PRoot+Native)
+  * Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
+    its interactive REPL on the local display and keyboard. Physical networking
+    is not implemented yet, but the bundled `jmi` editor and local JavaScript
+    execution work.
   * Built & booted in a cloud VM provided by ChatGPT Work mode, running Ubuntu 24.04.3 LTS on x86-64 with QEMU 8.2.2, TCG, and OVMF. Bun 1.4.2 was verified running as PID 1, and the Buninu userspace and bunmsh started successfully.
 
 - The hello-world EFI application in Section 1 is the starting point that the UKI replaces
@@ -189,6 +193,10 @@ and always run as fetch → build → run:
 | `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
 | `-r`, `--run` | `run-qemu.sh` | to boot what is there |
 
+`--linux-lts` selects Alpine's general-purpose LTS kernel. `--real` implies
+`--linux-lts` and builds for physical hardware: it makes `tty0` the primary
+console and includes the xHCI/USB HID modules needed by a typical USB keyboard.
+
 `-fbr` is the whole pipeline, `-br` is the edit-and-boot loop, and anything
 after `--` is handed to `qemu-system-x86_64` verbatim (`-r -- -m 1G`). Before
 starting, it checks that every tool the chosen stages need is on `PATH` and
@@ -197,8 +205,8 @@ PRoot toolchain from Section 0, run wants Termux's QEMU. The shell scripts are
 what actually does the work and each still runs on its own.
 
 ```text
-index.js                  entry point: -f / -b / -r
-fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, virtio_net modules
+index.js                  entry point: -f / -b / -r / --linux-lts / --real
+fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with Section 1
@@ -298,6 +306,63 @@ chain is OVMF → the stub's `.text` → the stub loading its own
 Ctrl-C quits QEMU. Leaving the REPL does not end the session: `init.js`
 restarts it, because a PID 1 that exits panics the kernel.
 
+#### Real hardware
+
+Build the physical-machine image in PRoot, then write the complete `vda.img`
+(not its inner FAT partition) to a USB drive and boot it as x86-64 UEFI media:
+
+```sh
+bun ./index.js -fb --real
+```
+
+`--real` uses Alpine `linux-lts`, adds the xHCI and USB HID module chain, and
+changes the embedded console order to:
+
+```text
+console=ttyS0,115200 console=tty0
+```
+
+Serial kernel logging is retained, while `/dev/console` and the Bun REPL use
+the physical display and keyboard. The UKI is unsigned, so Secure Boot must be
+disabled unless the image is signed separately.
+
+This path has been tested successfully on real hardware: the machine entered
+the interactive `bun-repl>` with working local keyboard input. Physical NIC
+drivers and configuration are not included yet, so networking is currently
+expected to fail there; that failure is caught and does not prevent local use.
+
+From the Bun REPL, start the bundled Buninu userspace:
+
+```text
+bun-repl> start()
+```
+
+The bundled `jmi` terminal editor works without a network connection. For
+example, open a new `hlw.js` from the Buninu shell:
+
+```sh
+jmi hlw.js
+```
+
+Enter and save this content:
+
+```js
+console.log("Hello world from real hardware");
+```
+
+After leaving the editor, execute it locally:
+
+```sh
+bun hlw.js
+```
+
+The normal QEMU image should still be built without `--real`, because QEMU's
+default runner uses `-display none` and expects the Bun REPL on `ttyS0`:
+
+```sh
+bun ./index.js -fb --linux-lts
+```
+
 #### Networking
 
 The NIC is QEMU user-mode networking (SLIRP): the guest is `10.0.2.15/24`
@@ -355,7 +420,7 @@ end, since it is the only thing that exercises the stub and the GPT.
 
 ### Reaching JavaScript with nothing mounted
 
-The kernel command line is
+The default QEMU kernel command line is
 
 ```text
 console=tty0 console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e import('/init.js')
