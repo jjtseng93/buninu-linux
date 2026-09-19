@@ -520,7 +520,7 @@ terms, with the full texts in [`LICENSES/`](LICENSES/):
 |---|---|---|
 | musl (`ld-musl-x86_64.so.1`, `libc.musl-x86_64.so.1`) | MIT | committed |
 | GCC runtime (`libgcc_s.so.1`, `libstdc++.so.6`) | GPL-3.0-or-later with the GCC Runtime Library Exception | committed |
-| Linux kernel and `virtio_net` modules | GPL-2.0-only with the Linux syscall note | image only |
+| Linux `virt`/`lts` kernels and VirtIO, networking, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
 

@@ -80,29 +80,62 @@ one, verifies the SHA-256 pinned in `fetch-alpine.sh` / `fetch-bun.sh`,
 and packs it into the UKI and the disk image. They are listed here because
 the built image redistributes them.
 
-### Linux kernel: vmlinuz-virt, failover.ko, net_failover.ko, virtio_net.ko
+### Linux kernels and modules
 
 - License: GPL-2.0-only WITH Linux-syscall-note
 - See: `LICENSES/GPL-2.0.txt` and `LICENSES/Linux-syscall-note.txt`
 
-Linux 6.18.52 with Alpine's `virt` configuration, as packaged by Alpine Linux
-3.24 (package `linux-virt`, version 6.18.52-r0, x86_64, from the `linux-lts`
-aport). The three modules are the package's `.ko.gz` files decompressed.
+Linux 6.18.52 as packaged by Alpine Linux 3.24 from the `linux-lts` aport.
+The default build uses package `linux-virt`, version 6.18.52-r0, x86_64.
+`--linux-lts` and `--real` use package `linux-lts`, version 6.18.52-r0,
+x86_64. All listed modules are the selected package's `.ko.gz` files
+decompressed without modification.
 
 - Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.52.tar.xz
 - Alpine build recipe, configuration and patches (Corresponding Source),
   pinned to the commit shipping 6.18.52-r0:
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/09a165f4c951edf370eddde03b2d1d5fd71805ed/main/linux-lts/APKBUILD
-- Package: https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.52-r0.apk
+- Packages:
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.52-r0.apk
   SHA-256 `dff0c365a6d6c0fd015175af08dca0c39048fa39df6ef3150a7ea88d2cfdfa4f`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-lts-6.18.52-r0.apk
+  SHA-256 `bd81f00522a7c7deb96886811a087c453d48530c0c8f742412ad73e24236037c`
 
-SHA-256 of the shipped files:
+SHA-256 of files in the default `linux-virt` image:
 
 ```text
 kernel/vmlinuz-virt   40f620bc8c93d952e57dd8dfc0f94fca1759d192a4fc4a260705d50ca378559c
 failover.ko           9637a7ce60a3d8369fa0aabff4dd365c6864d8b81cb85eb6d4fcfef799fe1532
 net_failover.ko       9fe81eb66429aebb33c7cb2f177dcfcd1e3084b466b715e58f131411954948e3
 virtio_net.ko         913a0d5baf407a5d8fe4a97ccc5f1ef40f27d458a1947b562961aeabe6906397
+```
+
+SHA-256 of files in a `--linux-lts` image:
+
+```text
+kernel/vmlinuz-lts          9a52d8cfe1c2d03a550405d1024de213376e1cacfc93081beeb8250456ca2c1f
+failover.ko                 e1c82e9e63d5d402cadcf8fe94541919edeaf5987357675d0a33c07f6625d8e0
+net_failover.ko             821bc61da636ffe0f7f0a89a1c63c5c9bbf732c744fcddd3354988849034c14f
+virtio_net.ko               f207df3fe605c763def3a8a01117d5f5f122117aa552a24c2df9a01259fb2a4b
+virtio_ring.ko              5c086ab5cc80ed21daea85d053e9cca969f024cb40e9a515d75a601be4593433
+virtio.ko                   09f27668ca0e0a0405843cdfa8a9f395e5150f56447fe5f00957081a2b5c2f1e
+virtio_pci_legacy_dev.ko    eff57bee4697f7212bc1535802daefeec450adaaad6400dede197d14ef463fdc
+virtio_pci_modern_dev.ko    556a99dde723a42fd6ab23a99e43d2ffd956432ada960ad24d7122d33d4b0f72
+virtio_pci.ko               3597dd05819e027402b2efe0b1c1d3bba80dca6116692ae78819768f212704f1
+```
+
+`--real` additionally includes the following modules from that same
+`linux-lts` package for physical xHCI controllers and USB HID keyboards:
+
+```text
+usb-common.ko               cc121fdf8efb9d9db4e15717745fe09248f903d4948f9df806b913177e0e3c66
+usbcore.ko                  1959bb44e32c8e1c071012a0e61e94c3d30db7e66c225f5adbe2987fff693105
+xhci-hcd.ko                 cc4b561dda02a23bd4c6d11a58ba973bcaf6719c3771f4ee948a232fe2d8f5bf
+xhci-pci.ko                 5911a1368deadf9b02e75c9e5d3549e0bd17f8f364e9e54c4b03a66b77c03361
+xhci-pci-renesas.ko         2182381b58e5e2eba8cf7d305f4db7af31582c3c13826e70c7afcf2394a076e7
+hid.ko                      d1a79b51bb1a7e77548985d4e6ad3d9c36d2718bb9f394ebbeeb5267d484f788
+hid-generic.ko              c9933c253b4870bb9578f3950e2daf7cdcb6808837a1b351c3bdd6dde26fd649
+usbhid.ko                   330d5355437e3bf8bf63ccae0692859b05edc66d991e2d2d6bac22e0e39f79da
 ```
 
 ### linuxx64.efi.stub
