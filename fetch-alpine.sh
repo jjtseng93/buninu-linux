@@ -13,6 +13,7 @@ if [ "$linux_flavor" = lts ]; then
 else
     linux_sha256=dff0c365a6d6c0fd015175af08dca0c39048fa39df6ef3150a7ea88d2cfdfa4f
 fi
+
 musl_sha256=573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71
 stub_sha256=8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9
 
@@ -50,6 +51,27 @@ if [ "$linux_flavor" = lts ]; then
         tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
             "lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko.gz" \
             | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko"
+    done
+fi
+
+if [ "${REAL_MACHINE:-}" = 1 ]; then
+    mkdir -p \
+        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/common" \
+        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/core" \
+        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/host" \
+        "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid"
+    for module in \
+        drivers/usb/common/usb-common \
+        drivers/usb/core/usbcore \
+        drivers/usb/host/xhci-hcd \
+        drivers/usb/host/xhci-pci \
+        drivers/usb/host/xhci-pci-renesas \
+        drivers/hid/hid \
+        drivers/hid/hid-generic \
+        drivers/hid/usbhid/usbhid; do
+        tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
+            "lib/modules/$kernel_release/kernel/$module.ko.gz" \
+            | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/$module.ko"
     done
 fi
 

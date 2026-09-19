@@ -188,6 +188,21 @@ const configureQemuNetwork = () => {
   }
 };
 
+const configureRealKeyboard = () => {
+  if (process.env.REAL_MACHINE !== "1") return;
+  const release = process.env.KERNEL_RELEASE;
+  for (const module of [
+    "drivers/usb/common/usb-common.ko",
+    "drivers/usb/core/usbcore.ko",
+    "drivers/usb/host/xhci-hcd.ko",
+    "drivers/usb/host/xhci-pci.ko",
+    "drivers/usb/host/xhci-pci-renesas.ko",
+    "drivers/hid/hid.ko",
+    "drivers/hid/hid-generic.ko",
+    "drivers/hid/usbhid/usbhid.ko",
+  ]) loadModule(`/lib/modules/${release}/kernel/${module}`);
+};
+
 const reapChildren = () => {
   const status = new Int32Array(1);
   while (libc.symbols.waitpid(-1, ptr(status), 1) > 0) {}
@@ -204,6 +219,13 @@ try {
   console.log("network: lo 127.0.0.1/8");
 } catch (error) {
   console.error("loopback setup failed:", error);
+}
+
+try {
+  configureRealKeyboard();
+  if (process.env.REAL_MACHINE === "1") console.log("input: USB xHCI/HID enabled");
+} catch (error) {
+  console.error("USB keyboard setup failed:", error);
 }
 
 try {

@@ -49,7 +49,7 @@ function usage() {
   return `${pkg.name} - ${pkg.description}
 
 Usage:
-  ${pkg.name} [-f] [-b] [-r] [--linux-lts] [-- qemu arguments]
+  ${pkg.name} [-f] [-b] [-r] [--linux-lts] [--real] [-- qemu arguments]
 
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
@@ -60,6 +60,8 @@ Stages (always run in this order, whichever you pick):
 
   --linux-lts   use Alpine's general-purpose linux-lts kernel for fetch/build
                 (the default is the smaller linux-virt kernel)
+  --real        build for a physical machine: use linux-lts, make tty0 the
+                primary console, and include USB xHCI/HID keyboard modules
 
   -h, --help    show this
   -V, --version show name, version, runtime and platform
@@ -79,6 +81,7 @@ function parse(argv) {
   const selected = new Set();
   const passthrough = [];
   let linuxLts = false;
+  let real = false;
   let sawSeparator = false;
 
   for (const argument of argv) {
@@ -97,6 +100,8 @@ function parse(argv) {
       process.exit(0);
     } else if (argument === "--linux-lts") {
       linuxLts = true;
+    } else if (argument === "--real") {
+      real = true;
     } else if (argument.startsWith("--")) {
       const stage = stages.find((s) => `--${s.flag}` === argument);
       if (!stage) fail(`unknown option ${argument}\n\n${usage()}`);
@@ -119,10 +124,10 @@ function parse(argv) {
   if (passthrough.length > 0 && !selected.has(stages[2])) {
     fail("arguments after -- only make sense with -r/--run");
   }
-  if (linuxLts && !selected.has(stages[0]) && !selected.has(stages[1])) {
-    fail("--linux-lts only makes sense with -f/--fetch or -b/--build");
+  if ((linuxLts || real) && !selected.has(stages[0]) && !selected.has(stages[1])) {
+    fail("--linux-lts/--real only make sense with -f/--fetch or -b/--build");
   }
-  return { selected, passthrough, linuxLts };
+  return { selected, passthrough, linuxLts, real };
 }
 
 // Same shape as Buninu's --version. The runtime line tells you whether this
@@ -190,7 +195,7 @@ function runScript(stage, script, args = [], env = process.env) {
   }
 }
 
-const { selected, passthrough, linuxLts } = parse(process.argv.slice(2));
+const { selected, passthrough, linuxLts, real } = parse(process.argv.slice(2));
 const ordered = stages.filter((stage) => selected.has(stage));
 checkTools(ordered);
 
@@ -200,7 +205,9 @@ for (const stage of ordered) {
       stage,
       script,
       stage.flag === "run" ? passthrough : [],
-      linuxLts ? { ...process.env, LINUX_FLAVOR: "lts" } : process.env,
+      linuxLts || real
+        ? { ...process.env, LINUX_FLAVOR: "lts", ...(real && { REAL_MACHINE: "1" }) }
+        : process.env,
     );
   }
 }

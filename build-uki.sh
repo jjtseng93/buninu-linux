@@ -7,7 +7,8 @@ linux_flavor=${LINUX_FLAVOR:-virt}
 kernel_release="6.18.52-0-$linux_flavor"
 kernel_image="kernel/vmlinuz-$linux_flavor"
 
-if [ ! -s "$kernel_image" ]; then
+if [ ! -s "$kernel_image" ] || { [ "${REAL_MACHINE:-}" = 1 ] && \
+    [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid/usbhid.ko" ]; }; then
     ./fetch-alpine.sh
 fi
 ./scripts/pack-initramfs.sh
@@ -30,7 +31,12 @@ printf '%s\n' \
 #
 # ttyS0 is listed last so it, not tty0, is the console the kernel opens as the
 # init process's fd 0/1/2. `-display none` leaves tty0 with nowhere to go.
-printf '%s' "console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=$kernel_release rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
+if [ "${REAL_MACHINE:-}" = 1 ]; then
+    consoles="console=ttyS0,115200 console=tty0 REAL_MACHINE=1"
+else
+    consoles="console=tty0 console=ttyS0,115200"
+fi
+printf '%s' "$consoles panic=0 PATH=/bin KERNEL_RELEASE=$kernel_release rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
 
 if command -v x86_64-w64-mingw32-objcopy >/dev/null; then
     objcopy_command=x86_64-w64-mingw32-objcopy
