@@ -7,6 +7,10 @@ The full license texts are in `LICENSES/`. Every SHA-256 here was checked
 byte-for-byte against the official Alpine Linux v3.24 x86_64 package (or the
 official Bun release) it came from.
 
+The sections below cover the platform: the kernel, the C library, the GCC
+runtime, the UEFI stub and Bun. The Buninu userspace under `initramfs/buninu/`
+carries its own third-party notices; see the last section.
+
 Alpine's CDN serves only the current pkgrel of each branch, so the package
 URLs below stop working once a build is superseded. The pinned aports commits
 are permanent and are the Corresponding Source for each exact build.
@@ -58,8 +62,9 @@ libraries' own sources.
 
 - Upstream source: https://gcc.gnu.org/pub/gcc/releases/gcc-15.2.0/gcc-15.2.0.tar.xz
 - Alpine build recipe and patches (Corresponding Source), pinned to the commit
-  shipping pkgrel=5:
-  https://gitlab.alpinelinux.org/alpine/aports/-/blob/fd4fecacbfd0cd40be42efa3c9d72bc03a88428c/main/gcc/APKBUILD
+  the packages record in their `.PKGINFO` (`commit = 423a8ad…`; the follow-up
+  `fd4fecac…` keeps pkgrel=5 and changes only packaging metadata):
+  https://gitlab.alpinelinux.org/alpine/aports/-/blob/423a8ad043d07f2c7546c8ec3e2b0384cda360ae/main/gcc/APKBUILD
 - Packages:
   https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libgcc-15.2.0-r5.apk
   SHA-256 `393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637`
@@ -182,3 +187,18 @@ SHA-256 of the shipped file:
 ```text
 initramfs/bin/bun   16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d
 ```
+
+## Buninu userspace
+
+`initramfs/buninu/` is the Buninu userspace (version 0.4.12, MIT; see
+`initramfs/buninu/LICENSE`), copied verbatim from
+https://github.com/jjtseng93/buninu and packed whole into the initramfs. It
+bundles third-party material that is documented next to the files that use
+it rather than repeated here:
+
+| Path | What it covers |
+|---|---|
+| `initramfs/buninu/apps/musl-la/NOTICE` | Three aarch64 binaries committed in this repository and shipped in the image: `ld-musl-aarch64.so.1` (musl 1.2.5, MIT) and `libgcc_s.so.1` / `libstdc++.so.6` (GCC 14.2.0, GPL-3.0-or-later WITH GCC-exception-3.1), with SHA-256 and Corresponding Source. License texts in `LICENSE_musl.txt` and `LICENSES/`. |
+| `initramfs/buninu/apps/jsgotty/NOTICE` and `LICENSE` | js-gotty, an MIT derivative of gotty (Iwasaki Yudai, Søren L. Hansen); bundles `zmodem.js` (Apache-2.0, `LICENSES/Apache-2.0-zmodem.js.txt`). `static/js/gotty.licenses.txt` lists the licenses of everything in the browser bundle (xterm.js and its addons, preact, bootstrap, …), `node_modules/*/LICENSE*` cover `ws` and `node-addon-api`, and `patches/` carries patched files from `node-pty` (MIT, headers kept). |
+| `initramfs/buninu/apps/jsmdcui/LICENSE` and `runtime/syntax/LICENSE` | jsmdcui, an MIT derivative of the micro editor (Zachary Yedidia et al.); the syntax and colorscheme files are micro's, MIT. |
+| `initramfs/buninu/apps/bunmsh/LICENSE`, `LICENSE-MICRO`, `LICENSE-MKSH` | bunmsh (MIT) and the terms for what it derives from micro's syntax rules and from the MirBSD Korn Shell. |

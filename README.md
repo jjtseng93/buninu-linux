@@ -511,14 +511,15 @@ the exact version, package and SHA-256 that ships here.
 
 ## License
 
-Everything in this repository that is not listed in the table below — the
-build scripts, `hello/hello.c`, `init.js`, the retired bootstrap, and the
-configuration and metadata files — is Buninu Linux's own work under the MIT
-License; see [LICENSE](LICENSE).
+Buninu Linux's own work — the build scripts, `hello/hello.c`, `init.js`, the
+retired bootstrap, and the configuration and metadata files — is under the
+MIT License; see [LICENSE](LICENSE). The Buninu userspace under
+`initramfs/buninu/` is also MIT (`initramfs/buninu/LICENSE`) and carries its
+own third-party notices, listed at the end of [NOTICE.md](NOTICE.md).
 
-The repository also commits four third-party binaries under `initramfs/lib/`,
-and the built image redistributes several more. Each stays under its own
-terms, with the full texts in [`LICENSES/`](LICENSES/):
+The repository also commits four third-party platform binaries under
+`initramfs/lib/`, and the built image redistributes several more. Each stays
+under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
 
 | Component | License | Where |
 |---|---|---|
@@ -529,9 +530,11 @@ terms, with the full texts in [`LICENSES/`](LICENSES/):
 | Bun | MIT, plus the licenses of what it statically links | image only |
 
 One component is worth naming here rather than leaving to be found: the two
-GCC runtime libraries are **GPL-3.0 with the GCC Runtime Library Exception**.
-That exception is what lets them ship next to MIT-licensed code, so nothing
-here changes Buninu Linux's own terms — but if your organisation screens for
-GPL, this is the component it will find. [NOTICE.md](NOTICE.md) records the
+GCC runtime libraries are **GPL-3.0 with the GCC Runtime Library Exception**
+(as are the aarch64 `libgcc_s.so.1` / `libstdc++.so.6` that Buninu's
+`apps/musl-la/` commits and the image carries along). That exception is what
+lets them ship next to MIT-licensed code, so nothing here changes Buninu
+Linux's own terms — but if your organisation screens for GPL, these are the
+components it will find. [NOTICE.md](NOTICE.md) records the
 exact Alpine build of every component, the pinned aports commit that is its
 Corresponding Source, and SHA-256 sums for every binary.
