@@ -20,7 +20,8 @@ kernel_release="6.18.52-0-$linux_flavor"
 
 mkdir -p downloads kernel initramfs/lib \
     "initramfs/lib/modules/$kernel_release/kernel/net/core" \
-    "initramfs/lib/modules/$kernel_release/kernel/drivers/net"
+    "initramfs/lib/modules/$kernel_release/kernel/drivers/net" \
+    "initramfs/lib/modules/$kernel_release/kernel/drivers/virtio"
 
 . ./scripts/fetch.sh
 
@@ -43,6 +44,14 @@ tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
 tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
     "lib/modules/$kernel_release/kernel/drivers/net/virtio_net.ko.gz" \
     | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/net/virtio_net.ko"
+
+if [ "$linux_flavor" = lts ]; then
+    for module in virtio_ring virtio virtio_pci_legacy_dev virtio_pci_modern_dev virtio_pci; do
+        tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
+            "lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko.gz" \
+            | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko"
+    done
+fi
 
 chmod 0755 initramfs/lib/ld-musl-x86_64.so.1
 

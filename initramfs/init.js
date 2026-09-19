@@ -141,11 +141,19 @@ const bringUpLoopback = () => {
 
 const configureQemuNetwork = () => {
   const release = process.env.KERNEL_RELEASE ?? "6.18.52-0-virt";
-  for (const module of [
+  const modules = [
     `lib/modules/${release}/kernel/net/core/failover.ko`,
     `lib/modules/${release}/kernel/drivers/net/net_failover.ko`,
     `lib/modules/${release}/kernel/drivers/net/virtio_net.ko`,
-  ]) loadModule(`/${module}`);
+  ];
+  if (release.endsWith("-lts")) modules.unshift(
+    `lib/modules/${release}/kernel/drivers/virtio/virtio_ring.ko`,
+    `lib/modules/${release}/kernel/drivers/virtio/virtio.ko`,
+    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci_legacy_dev.ko`,
+    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci_modern_dev.ko`,
+    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci.ko`,
+  );
+  for (const module of modules) loadModule(`/${module}`);
 
   const fd = check("socket(AF_INET, SOCK_DGRAM)", libc.symbols.socket(2, 2, 0));
   const ioctl = (request, value, operation) =>
