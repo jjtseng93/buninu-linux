@@ -49,7 +49,7 @@ function usage() {
   return `${pkg.name} - ${pkg.description}
 
 Usage:
-  ${pkg.name} [-f] [-b] [-r] [-- qemu arguments]
+  ${pkg.name} [-f] [-b] [-r] [--linux-lts] [-- qemu arguments]
 
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
@@ -57,6 +57,9 @@ Stages (always run in this order, whichever you pick):
   -b, --build   pack the initramfs, assemble the UKI, write vda.img
                                        (build-uki.sh, build-image.sh)
   -r, --run     boot vda.img under QEMU (run-qemu.sh)
+
+  --linux-lts   use Alpine's general-purpose linux-lts kernel for fetch/build
+                (the default is the smaller linux-virt kernel)
 
   -h, --help    show this
   -V, --version show name, version, runtime and platform
@@ -75,6 +78,7 @@ picked are reported before anything starts.
 function parse(argv) {
   const selected = new Set();
   const passthrough = [];
+  let linuxLts = false;
   let sawSeparator = false;
 
   for (const argument of argv) {
@@ -91,6 +95,8 @@ function parse(argv) {
     } else if (argument === "--readme") {
       printReadme();
       process.exit(0);
+    } else if (argument === "--linux-lts") {
+      linuxLts = true;
     } else if (argument.startsWith("--")) {
       const stage = stages.find((s) => `--${s.flag}` === argument);
       if (!stage) fail(`unknown option ${argument}\n\n${usage()}`);
@@ -113,7 +119,10 @@ function parse(argv) {
   if (passthrough.length > 0 && !selected.has(stages[2])) {
     fail("arguments after -- only make sense with -r/--run");
   }
-  return { selected, passthrough };
+  if (linuxLts && !selected.has(stages[0]) && !selected.has(stages[1])) {
+    fail("--linux-lts only makes sense with -f/--fetch or -b/--build");
+  }
+  return { selected, passthrough, linuxLts };
 }
 
 // Same shape as Buninu's --version. The runtime line tells you whether this
@@ -171,22 +180,27 @@ function checkTools(selectedStages) {
   }
 }
 
-function runScript(stage, script, args = []) {
+function runScript(stage, script, args = [], env = process.env) {
   const path = resolve(rootDir, script);
   console.log(`\n==> [${stage.flag}] ${script}${args.length ? " " + args.join(" ") : ""}`);
-  const result = spawnSync(path, args, { cwd: rootDir, stdio: "inherit" });
+  const result = spawnSync(path, args, { cwd: rootDir, stdio: "inherit", env });
   if (result.error) fail(`could not start ${script}: ${result.error.message}`);
   if (result.status !== 0) {
     fail(`${script} exited with status ${result.status ?? "signal " + result.signal}`);
   }
 }
 
-const { selected, passthrough } = parse(process.argv.slice(2));
+const { selected, passthrough, linuxLts } = parse(process.argv.slice(2));
 const ordered = stages.filter((stage) => selected.has(stage));
 checkTools(ordered);
 
 for (const stage of ordered) {
   for (const script of stage.scripts) {
-    runScript(stage, script, stage.flag === "run" ? passthrough : []);
+    runScript(
+      stage,
+      script,
+      stage.flag === "run" ? passthrough : [],
+      linuxLts ? { ...process.env, LINUX_FLAVOR: "lts" } : process.env,
+    );
   }
 }

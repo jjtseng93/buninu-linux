@@ -140,7 +140,7 @@ const bringUpLoopback = () => {
 };
 
 const configureQemuNetwork = () => {
-  const release = "6.18.52-0-virt";
+  const release = process.env.KERNEL_RELEASE ?? "6.18.52-0-virt";
   for (const module of [
     `lib/modules/${release}/kernel/net/core/failover.ko`,
     `lib/modules/${release}/kernel/drivers/net/net_failover.ko`,

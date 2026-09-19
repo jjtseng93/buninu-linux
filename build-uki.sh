@@ -3,7 +3,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-test -s kernel/vmlinuz-virt || ./fetch-alpine.sh
+linux_flavor=${LINUX_FLAVOR:-virt}
+kernel_release="6.18.52-0-$linux_flavor"
+kernel_image="kernel/vmlinuz-$linux_flavor"
+
+if [ ! -s "$kernel_image" ]; then
+    ./fetch-alpine.sh
+fi
 ./scripts/pack-initramfs.sh
 
 mkdir -p build vda/EFI/BOOT
@@ -24,7 +30,7 @@ printf '%s\n' \
 #
 # ttyS0 is listed last so it, not tty0, is the console the kernel opens as the
 # init process's fd 0/1/2. `-display none` leaves tty0 with nowhere to go.
-printf '%s' "console=tty0 console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
+printf '%s' "console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=$kernel_release rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
 
 if command -v x86_64-w64-mingw32-objcopy >/dev/null; then
     objcopy_command=x86_64-w64-mingw32-objcopy
@@ -44,7 +50,7 @@ linux_vma=$((image_base + 0x2000000))
 initrd_vma=$((image_base + 0x3000000))
 
 # These are the conventional non-overlapping VMAs used for x86-64 UKIs.
-# The Alpine virt kernel is below 16 MiB, so .linux ends before .initrd.
+# Both supported Alpine kernels are below 16 MiB, so .linux ends before .initrd.
 "$objcopy_command" \
     --add-section .osrel=build/os-release \
     --change-section-vma .osrel="$osrel_vma" \
@@ -52,7 +58,7 @@ initrd_vma=$((image_base + 0x3000000))
     --add-section .cmdline=build/cmdline \
     --change-section-vma .cmdline="$cmdline_vma" \
     --set-section-flags .cmdline=contents,alloc,load,readonly,data \
-    --add-section .linux=kernel/vmlinuz-virt \
+    --add-section .linux="$kernel_image" \
     --change-section-vma .linux="$linux_vma" \
     --set-section-flags .linux=contents,alloc,load,readonly,data \
     --add-section .initrd=build/initramfs.cpio.gz \
@@ -60,4 +66,4 @@ initrd_vma=$((image_base + 0x3000000))
     --set-section-flags .initrd=contents,alloc,load,readonly,data \
     kernel/linuxx64.efi.stub vda/EFI/BOOT/BOOTX64.EFI
 
-echo "Built UKI at vda/EFI/BOOT/BOOTX64.EFI"
+echo "Built UKI with Alpine linux-$linux_flavor at vda/EFI/BOOT/BOOTX64.EFI"
