@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.11 - 2026-09-20
+
+- Emergency fix: multicall.sh on Buninu Linux
+  * /proc/$$/cmdline: /bin/bun /bin/sh ...
+
 ## 0.4.10 - 2026-09-20
 
 ### Fixed
