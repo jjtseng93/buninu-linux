@@ -1,6 +1,6 @@
 {
   "name": "buninu-linux",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Linux distribution running Bun as PID 1 with the Buninu userspace.",
   "type": "module",
   "main": "./index.js",
