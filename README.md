@@ -22,91 +22,122 @@
   + **BUNinu Is Not Unix** 🐮
   + **幫你牛** 🐂 ・ **Bunに入魂** 🔥
 - <img src="https://raw.githubusercontent.com/jjtseng93/buninu/main/icon.png" width="256">
+
+---
+
 - Still in the early stages
-  * Built & tested on Android Termux QEMU (PRoot+Native)
   * [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
     its interactive REPL on the local display and keyboard. Common wired NIC
     drivers can be loaded with `cfg.net`; addresses and routes are configured
     manually because the image does not yet include a DHCP client. The bundled
     `jmi` editor and local JavaScript execution also work.
-  * Built & booted in a cloud VM provided by ChatGPT Work mode, running Ubuntu 24.04.3 LTS on x86-64 with QEMU 8.2.2, TCG, and OVMF. Bun 1.4.2 was verified running as PID 1, and the Buninu userspace and bunmsh started successfully.
 
 - The hello-world EFI application in Section 1 is the starting point that the UKI replaces
 - It still builds, and it is the quickest way to check whether the disk image and firmware path work at all.
 
 ## Quick start
 
-- Two shells are involved, sharing one checkout:
-  * Build tools in Debian 13 PRoot,
-  * QEMU in native Termux.
-- Clone into the Termux home
-  * proot-distro exposes that directory inside the guest at the same absolute path
-  * So both shells work on the same files
-  * (`~` differs between them, the full path does not)
+- This guide builds a bootable `buninu-linux-<version>.img`
+- The documented build environment is Debian 13 under Termux PRoot
+- A regular Debian installation works as well.
+- For a source checkout, clone into the Termux home so native Termux and PRoot
+  can share it; `~` differs between them, but the absolute path is the same.
 
 ### Steps
-#### in native Termux
-- pkg install qemu-system-x86-64
+
+Before anything, install Bun in Debian first:
+
+```sh
+apt update
+apt install curl unzip
+curl -fsSL https://bun.sh/install | bash
+```
+
+#### Build directly with bun x
+
+Install the build tools, enter a directory where
+you want to keep the finished image, then run the published package:
+
+```sh
+apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+
+mkdir -p /data/data/com.termux/files/home/buninu-build
+cd /data/data/com.termux/files/home/buninu-build
+
+$HOME/.bun/bin/bun x buninu-linux --version
+
+$HOME/.bun/bin/bun x buninu-linux -fb --real --export
+```
+
+`--export` copies the completed `vda.img` out of bunx's package directory and
+into the directory where the command was invoked, as
+`buninu-linux-<version>.img`. Use the exact exported filename printed by the
+command when writing the USB drive.
+
+#### Or build from a source checkout
+
+In native Termux:
+
 - git clone https://github.com/jjtseng93/buninu-linux.git ~/buninu-linux
 
-#### in PRoot (Debian 13)
+In Debian 13 under PRoot:
+
 - apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
 - cd /data/data/com.termux/files/home/buninu-linux
-- bun ./index.js -fb
-  * fetch ~80 MB from Alpine/Bun & build vda.img
+- bun ./index.js -fb --real --export
+  * Fetches from Alpine/Bun
+  * Selects the physical-hardware modules
+  * Builds `vda.img`
+  * Exports it to `buninu-linux-<version>.img`
 
-#### back in native Termux
-- cd ~/buninu-linux
-- bun ./index.js -r
-  * boot it
+#### Write the image to a USB drive
 
-`index.js` runs under bun or node. A successful boot ends like this, with a
-REPL on the serial console:
+Write the complete exported image (or `vda.img` when not using `--export`), not
+the FAT partition inside it, to a USB drive. The source filename below is an
+example; replace it with the exact name printed by the build. The destination
+is also only an example: identify the correct whole-disk device first, because
+this overwrites it completely.
+
+```sh
+sudo dd if='buninu-linux-<version>.img' of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+#### Booting from the USB drive
+
+Boot that drive as x86-64 UEFI media. The UKI is unsigned, so disable Secure
+Boot unless you sign it yourself. A successful physical boot reaches the local
+display and USB keyboard with a welcome ending like this:
 
 ```text
-Run /bin/bun as init process
-init.js: Bun runtime entered JavaScript
-init.js: loading physical musl libc for FFI
-init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts
-network: lo 127.0.0.1/8
-network: eth0 10.0.2.15/24 via 10.0.2.2
-fetch example.com: HTTP 200, text/html
-
 Welcome to Buninu Linux!
 Bun 1.4.2 is now PID 1
 Type start() to run buninu --local
+Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power
 
 bun-repl>
 ```
 
-With a `--real` image, the same welcome also includes the dynamically generated
-getter list before the blank line and prompt:
+If this welcome is not visible, later kernel messages may simply have scrolled
+over it on the same console. Press Enter at an empty REPL prompt; an empty or
+whitespace-only line prints the welcome and current `cfg.*` getter list again.
 
-```text
-Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power
+Load only the subsystem needed, then enter the Buninu shell:
+
+```js
+cfg.net       // wired NIC drivers
+cfg.disk      // SATA/NVMe/USB storage drivers and detected block devices
+cfg.power     // battery, AC, button and thermal drivers
+start()
 ```
 
-Ctrl-C stops QEMU. After editing `initramfs/init.js`, `bun ./index.js -b` in
-PRoot rebuilds the image; `-h` lists the flags. Section 0 explains each
-dependency, Section 2 the build and how PID 1 works.
+There is no DHCP client yet; configure a detected wired interface with `ip` as
+described under [Real hardware](#real-hardware). Run `poweroff` for a synced
+shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
+image; `-h` lists all flags.
 
-## 0. Install dependencies
+## Environment and dependencies
 
-- Building Buninu Linux (Section 2) — needs no compiler:
-- Bun ships as a prebuilt binary and the UKI is assembled with `objcopy`.
-
-```sh
-apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
-```
-
-- A C toolchain is only needed for:
-  * The hello world .EFI (Section 1)
-    + `hello/hello.c`
-  * The retired bootstrap in `test/build-init-bootstrap.sh`
-
-```sh
-apt install clang lld
-```
+### Build environment
 
 The baseline is the stock Debian 13 (trixie) OCI image, which is also what this
 PRoot is; a dependency is anything that image does not already have.
@@ -118,7 +149,16 @@ locales — so `debian:13-slim` is the better starting point at 105 MB against
 The base image already provides `bash`, GNU `tar`, `gzip`, `sha256sum`,
 `mknod`, `find`, `sort`, `mkdir`, `mktemp`, `cp`, `rm`, `chmod`, `truncate`,
 `dd`, `printf`, `awk` and `dirname`, all used by these scripts as they are.
-Everything else has to be added. For Section 2:
+Everything else has to be added.
+
+### Buninu Linux (Section 2)
+
+Buninu Linux needs no compiler: Bun is downloaded as a prebuilt binary and the
+UKI is assembled with `objcopy`.
+
+```sh
+apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+```
 
 * **`binutils-mingw-w64-x86-64`** — `x86_64-w64-mingw32-objcopy` appends the
   `.osrel`, `.cmdline`, `.linux` and `.initrd` sections to the EFI stub, and
@@ -138,28 +178,31 @@ Everything else has to be added. For Section 2:
 * **`parted`** — writes the protective MBR, the primary and backup GPT, and the
   ESP partition entry with its type GUID.
 * **`unzip`** — extracts the `bun` binary from the release zip.
+* **`bun`** (or **`node`**) — runs `index.js` in the build environment. 
+  + Under bun, `--readme` renders the Markdown; under node it is printed as-is.
 
-To boot, from native Termux rather than PRoot:
+### Hello world (Section 1)
 
-* **`qemu-system-x86_64`** — not an `apt` dependency: `pkg install
-  qemu-system-x86-64` provides it together with the OVMF firmware at
-  `$PREFIX/share/qemu/edk2-x86_64-code.fd`.
-* **`bun`** (or `node`) — runs `index.js`; needed in both shells. Install bun
-  from <https://bun.sh>, or `pkg install nodejs` / `apt install nodejs`. Under
-  bun, `--readme` renders the Markdown; under node it is printed as-is.
+The hello-world EFI application needs the C/PE toolchain plus the shared disk
+image tools:
 
-For Section 1 and the retired bootstrap only:
+```sh
+apt install clang lld dosfstools mtools parted
+```
 
-* **`clang`** *(Section 1 only)* — compiles `hello/hello.c` to a PE32+ object
-  (`--target=x86_64-pc-win32-coff`) and, in `test/build-init-bootstrap.sh`, the
-  freestanding x86-64 `/init`. Nothing in the Bun path compiles anything.
-  Resolves to `clang-19` on trixie.
-* **`lld`** *(Section 1 only)* — `lld-link` links `hello/hello.obj` into an EFI
-  application (`/subsystem:efi_application`), and the same package backs
-  `clang -fuse-ld=lld` for the bootstrap. Resolves to `lld-19`.
+* **`clang`** — compiles `hello/hello.c` to a PE32+ object with
+  `--target=x86_64-pc-win32-coff`. It resolves to `clang-19` on trixie.
+* **`lld`** — provides `lld-link`, which links `hello/hello.obj` into an EFI
+  application with `/subsystem:efi_application`. It resolves to `lld-19` on
+  trixie.
+* **`dosfstools`**, **`mtools`** and **`parted`** — create the FAT ESP and wrap
+  it in the GPT `vda.img` through the shared `build-image.sh`.
 
-`parted`, `dosfstools` and `mtools` back `build-image.sh`, which both sections
-use.
+### Retired native bootstrap
+
+The retired `test/build-init-bootstrap.sh` also needs `clang lld`. It compiles
+the historical freestanding x86-64 `/init`; the current Buninu Linux path does
+not use or compile it.
 
 ## 1. Hello world
 
@@ -170,14 +213,12 @@ use.
 ```sh
 ./hello/build-hello.sh   # in PRoot
 ./build-image.sh         # in PRoot
-bun ./index.js -r        # in native Termux
+sudo dd if=vda.img of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
-It writes `Hello world from x64 UEFI!` to the UEFI console. The included OVMF
-firmware exposes that console over COM1 and `run-qemu.sh` attaches COM1 to the
-current terminal, so the message is visible without a graphical display. The
-application waits after printing; press any key to return to the OVMF
-interface, then Ctrl-C to stop QEMU.
+After verifying `/dev/sdX` is the whole destination USB device, boot it on the
+physical x86-64 UEFI machine. It writes `Hello world from x64 UEFI!` to the
+firmware console and waits; press any key to return to the firmware interface.
 
 `build-image.sh` is shared with Section 2 — see [Disk layout](#disk-layout).
 
@@ -187,39 +228,46 @@ An unsigned x64 Unified Kernel Image assembled from official Alpine packages,
 with Bun as the init process, replaces the hello-world application:
 
 ```sh
-bun ./index.js -fb   # in PRoot
-bun ./index.js -r    # in native Termux
+# physical-machine image, in PRoot Debian
+bun ./index.js -fb --real --export
+
+# bun x buninu-linux -fb --real --export
 ```
 
-`index.js` is the single entry point (`npm run build` / `npm run pack` /
-`npm start` call it too). It has three stage flags that combine in any order
-and always run as fetch → build → run:
+`index.js` is the single entry point (`npm run fetch` and `npm run pack` call
+it too). Its physical-image stages run as fetch → build:
 
 | flag | runs | use it when |
 | --- | --- | --- |
 | `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh` | first clone, or after bumping a pinned version |
 | `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
-| `-r`, `--run` | `run-qemu.sh` | to boot what is there |
+
+`--export` is a post-build option: after `-b` finishes, it copies `vda.img` to
+the directory where the command was invoked as
+`buninu-linux-<version>.img`. It therefore requires `-b`/`--build` and is the
+recommended way to retain an image produced through npx/bunx:
+
+```sh
+bun x buninu-linux -fb --real --export
+```
 
 `--linux-lts` selects Alpine's general-purpose LTS kernel. `--real` implies
 `--linux-lts` and builds for physical hardware: it makes `tty0` the primary
-console and includes the xHCI/USB HID modules needed by a typical USB keyboard.
+console and includes xHCI/USB HID, common wired network, storage and ACPI power
+modules needed by typical laptops and desktops.
 
-`-fbr` is the whole pipeline, `-br` is the edit-and-boot loop, and anything
-after `--` is handed to `qemu-system-x86_64` verbatim (`-r -- -m 1G`). Before
-starting, it checks that every tool the chosen stages need is on `PATH` and
-lists what is missing instead of failing halfway; fetch and build want the
-PRoot toolchain from Section 0, run wants Termux's QEMU. The shell scripts are
-what actually does the work and each still runs on its own.
+For real hardware, `-fb --real` is the complete image pipeline and
+`-b --real` is the edit-and-rebuild loop. Before starting, `index.js` checks
+that every required tool is on `PATH` and lists what is missing instead of
+failing halfway. The shell scripts do the actual work and each still runs on
+its own.
 
 ```text
-index.js                  entry point: -f / -b / -r / --linux-lts / --real
+index.js                  entry point: -f / -b / --export / --linux-lts / --real
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with Section 1
-run-qemu.sh               [run]
-fetch-plus-build.sh       shell-only -fb
 scripts/fetch.sh          hash-checked download helper, sourced by fetch-*.sh
 scripts/pack-initramfs.sh cpio archive with the device nodes
 hello/                    Section 1: hello.c and build-hello.sh
@@ -227,10 +275,10 @@ test/                     the retired C bootstrap and its build script
 initramfs/                init.js and the committed libraries; rest fetched
 ```
 
-The pinned inputs are Alpine v3.24 `linux-virt-6.18.52-r0`, musl `1.2.6-r2`,
+The `--real` inputs are Alpine v3.24 `linux-lts-6.18.52-r0`, musl `1.2.6-r2`,
 `systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
-`linux-x64-musl-baseline` — about 80 MB in total. No BusyBox, and no userland
-beyond Bun itself.
+`linux-x64-musl-baseline`. There is no BusyBox and no userland beyond Bun
+itself.
 
 Every step is idempotent and `-f` re-downloads nothing: `scripts/fetch.sh`
 treats each pinned SHA-256 as the cache key, so a file already in `downloads/`
@@ -241,12 +289,13 @@ it always refetches.
 
 ### Build pipeline
 
-`fetch-plus-build.sh` is only a wrapper, the same as `bun ./index.js -fb`: it
-runs the steps below in order. Each one writes files the next one reads.
+The primary `bun ./index.js -fb --real` pipeline runs the steps below in order;
+each writes files the next one reads. When selected, `--export` runs afterward
+and copies the final `vda.img` to the invocation directory.
 
 | script | reads | writes |
 | --- | --- | --- |
-| `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-virt`, `kernel/linuxx64.efi.stub`, `initramfs/lib/ld-musl-x86_64.so.1`, `initramfs/lib/modules/…/` (virtio_net, virtio_blk, ext4, vfat, exfat, ntfs3, NLS tables, each with its dependencies, plus a trimmed `modules.dep`/`modules.alias`/`modules.builtin`) |
+| `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-lts`, `kernel/linuxx64.efi.stub`, musl, and the selected network, storage, input, power and filesystem modules with trimmed module indexes |
 | `fetch-bun.sh` | GitHub, Alpine CDN | `initramfs/bin/bun`, `initramfs/lib/{libc.musl-x86_64.so.1,libstdc++.so.6,libgcc_s.so.1}` |
 | `scripts/pack-initramfs.sh` | `initramfs/` | `build/initramfs.cpio.gz` |
 | `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` |
@@ -259,7 +308,7 @@ The stages nest — the initramfs is baked into the UKI, and the UKI into the
 disk image — so a one-line edit to `initramfs/init.js` still needs both of:
 
 ```sh
-bun ./index.js -b      # or: ./build-uki.sh && ./build-image.sh
+bun ./index.js -b --real
 ```
 
 The kernel command line works the same way: `build-uki.sh` writes it to
@@ -275,11 +324,11 @@ boot.
 | --- | --- | --- | --- |
 | `.text` | +0x0 | the stub itself | 66 KB |
 | `.osrel` | +0x20000 | `build/os-release` | 78 B |
-| `.cmdline` | +0x30000 | `build/cmdline` | 92 B |
-| `.linux` | +0x2000000 | `kernel/vmlinuz-virt` | 12 MB |
-| `.initrd` | +0x3000000 | `build/initramfs.cpio.gz` | 34 MB |
+| `.cmdline` | +0x30000 | `build/cmdline` | 136 B |
+| `.linux` | +0x2000000 | `kernel/vmlinuz-lts` | 14.5 MB |
+| `.initrd` | +0x3000000 | `build/initramfs.cpio.gz` | 44.6 MB |
 
-The result is a single 46 MB PE32+ file holding kernel, initramfs and command
+The current `--real` result is a single 59.3 MB PE32+ file holding kernel, initramfs and command
 line.
 
 ### Disk layout
@@ -305,23 +354,20 @@ firmware runs it without any NVRAM boot entry.
 
 ### Running
 
-`bun ./index.js -r` runs `run-qemu.sh`, which boots `vda.img` on q35 under
-TCG with 512 MiB, a virtio disk, virtio-net user networking, no display, and
-COM1 on stdio; anything after `--` is appended to the QEMU command line. The
-chain is OVMF → the stub's `.text` → the stub loading its own
-`.linux`/`.initrd`/`.cmdline` → kernel → `rdinit=/bin/bun`.
-
-Ctrl-C quits QEMU. Leaving the REPL does not end the session: `init.js`
-restarts it, because a PID 1 that exits panics the kernel.
-
 #### Real hardware
 
-Build the physical-machine image in PRoot, then write the complete `vda.img`
-(not its inner FAT partition) to a USB drive and boot it as x86-64 UEFI media:
+Real hardware is the primary target. Build the physical-machine image in
+PRoot, then write the complete `vda.img` (not its inner FAT partition) to a
+USB drive and boot it as x86-64 UEFI media:
 
 ```sh
 bun ./index.js -fb --real
+sudo dd if=vda.img of=/dev/sdX bs=4M conv=fsync status=progress
 ```
+
+Replace `/dev/sdX` with the verified whole USB device; this command destroys
+its previous contents. The boot chain is firmware → the UKI stub → its embedded
+`.linux`/`.initrd`/`.cmdline` sections → kernel → `rdinit=/bin/bun`.
 
 `--real` uses Alpine `linux-lts`, adds the xHCI and USB HID module chain, and
 changes the embedded console order to:
@@ -335,15 +381,37 @@ the physical display and keyboard. The UKI is unsigned, so Secure Boot must be
 disabled unless the image is signed separately.
 
 This path has been tested successfully on real hardware: the machine entered
-the interactive `bun-repl>` with working local keyboard input. Physical NIC
-drivers and configuration are not included yet, so networking is currently
-expected to fail there; that failure is caught and does not prevent local use.
+the interactive `bun-repl>` with working local keyboard input. The image ships
+common wired NIC, SATA/PATA/SCSI, NVMe/VMD, USB storage and ACPI power modules.
+Use the getter matching the subsystem instead of loading everything:
+
+```js
+cfg.net
+cfg.disk
+cfg.power
+```
 
 From the Bun REPL, start the bundled Buninu userspace:
 
 ```text
 bun-repl> start()
 ```
+
+`cfg.net` prints the interface name and MAC address. There is no DHCP client,
+so configure the interface in that shell with addresses from your network,
+for example:
+
+```sh
+ip link set eth0 up
+ip addr add 192.168.1.50/24 dev eth0
+ip route add default via 192.168.1.1
+```
+
+The real image initializes `/etc/resolv.conf` with `1.1.1.1` and `8.8.8.8`;
+replace those if the local network requires different DNS. `cfg.disk` makes
+detected disks and partitions appear in `/dev`; `mount -fv /dev/sda1 /mnt`
+can inspect a filesystem without mounting it. Shut down with `poweroff`, which
+syncs pending writes before requesting kernel power-off.
 
 The bundled `jmi` terminal editor works without a network connection. For
 example, open a new `hlw.js` from the Buninu shell:
@@ -368,14 +436,54 @@ After leaving the editor, execute it locally:
 bun hlw.js
 ```
 
-The normal QEMU image should still be built without `--real`, because QEMU's
-default runner uses `-display none` and expects the Bun REPL on `ttyS0`:
+### QEMU development
+
+This optional path has been tested in native Android Termux and in an Ubuntu
+24.04 cloud VM with QEMU 8.2.2, TCG and OVMF. In native Termux, install the
+runner separately from the PRoot build dependencies:
 
 ```sh
-bun ./index.js -fb --linux-lts
+pkg install qemu-system-x86-64
 ```
 
-#### Networking
+That package supplies OVMF at `$PREFIX/share/qemu/edk2-x86_64-code.fd`. Build
+without `--real`; this selects Alpine `linux-virt`, omits the physical-hardware
+module set, and puts `ttyS0` last so serial stdio owns `/dev/console`:
+
+```sh
+bun ./index.js -fb
+bun ./index.js -r
+```
+
+`bun ./index.js -r` runs `run-qemu.sh`, which boots `vda.img` on q35 under TCG
+with 512 MiB, a virtio disk, virtio-net user networking, no display, and COM1
+on stdio. Anything after `--` is appended to the QEMU command line. Ctrl-C
+quits QEMU. Leaving the REPL does not end the session: `init.js` restarts it,
+because a PID 1 that exits panics the kernel.
+
+The QEMU-only CLI stage is `-r`/`--run`; `-fbr` is the full virtual pipeline,
+`-br` is its edit-and-boot loop, and arguments after `--` are passed through
+verbatim, for example `-r -- -m 1G`. The corresponding repository entry is
+`run-qemu.sh`. To smoke-test the Section 1 EFI hello-world image instead, build
+it and run the same `-r` stage; OVMF exposes its console over COM1.
+The legacy `fetch-plus-build.sh` wrapper is equivalent to the virtual `-fb`
+stages and does not select `--real`. `npm start` invokes the run stage.
+
+For an even shorter initramfs loop, bypass the UKI and disk image:
+
+```sh
+qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512M \
+    -kernel kernel/vmlinuz-virt -initrd build/initramfs.cpio.gz \
+    -append "console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e console.log(1+1)" \
+    -nic user,model=virtio-net-pci -display none -serial stdio -no-reboot
+```
+
+Only `./scripts/pack-initramfs.sh` must be rerun between these tests. A panic
+parks the guest because of `panic=0`, so press Ctrl-C. This shortcut does not
+exercise the UKI stub, GPT, physical console or hardware drivers; validate the
+result afterward with `bun ./index.js -b --real` on the real UEFI path.
+
+#### QEMU networking
 
 The NIC is QEMU user-mode networking (SLIRP): the guest is `10.0.2.15/24`
 behind a NAT with `10.0.2.2` as gateway and `10.0.2.3` as DNS, so it can reach
@@ -436,15 +544,15 @@ included. The shared pieces:
   `modules.dep` under `/lib/modules/<release>/` and calls `finit_module`
   for each dependency in order. The kernel has no `/sbin/modprobe` to call
   here, so `mount` preloads `ext4`+`jbd2`, `vfat`+NLS tables, `ntfs3`,
-  `virtio_blk`, and so on itself.
+  `sd_mod`, `nvme`, and so on itself.
 
 ```sh
-mount /dev/vda1 /mnt --mkdir           # the ESP: vfat detected, modules loaded
+mount /dev/sda1 /mnt --mkdir           # type detected and modules loaded
 mount -fv /dev/sda1 /mnt               # detect type/label/UUID without mounting
 mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
 ip -br addr && ip route
-ip addr replace 10.0.2.20/24 dev eth0 && ip route replace default via 10.0.2.2
+ip addr replace 192.168.1.50/24 dev eth0 && ip route replace default via 192.168.1.1
 ```
 
 Which modules the image carries is the list in `fetch-alpine.sh`; the
@@ -455,35 +563,20 @@ the wired NICs and the ACPI power drivers. Alpine's
 kernels build all of these as modules; a self-built kernel with them `=y`
 works the same way, the loaders just find nothing to load.
 
-### Iterating on the boot
-
-Rebuilding the UKI and the disk image for every attempt is slow, and neither is
-needed to exercise the guest: QEMU can boot the kernel and initramfs directly
-and take the command line on the host side, so only
-`./scripts/pack-initramfs.sh` has to be re-run between attempts.
-
-```sh
-qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512M \
-    -kernel kernel/vmlinuz-virt -initrd build/initramfs.cpio.gz \
-    -append "console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e console.log(1+1)" \
-    -nic user,model=virtio-net-pci -display none -serial stdio -no-reboot
-```
-
-A panicking guest does not exit QEMU — `panic=0` parks it rather than rebooting
-into the firmware menu — so press Ctrl-C. Run the real UEFI path once at the
-end, since it is the only thing that exercises the stub and the GPT.
-
 ### Reaching JavaScript with nothing mounted
 
-The default QEMU kernel command line is
+The default `--real` image embeds this kernel command line (shown for the
+currently pinned LTS release):
 
 ```text
-console=tty0 console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
-so the kernel execs `/bin/bun` itself, with nothing native in between, and
-`init.js` mounts `/proc`, `/sys`, `/dev` and `/tmp` through `bun:ffi` as its
-first action. Everything before `--` needs an `=`, because the kernel appends
+The physical display (`tty0`) is the final console and therefore owns PID 1's
+standard streams; serial logging remains available on `ttyS0`. The kernel
+execs `/bin/bun` itself, with nothing native in between, and `init.js` mounts
+`/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` through `bun:ffi` as its first
+action. Everything before `--` needs an `=`, because the kernel appends
 any bare word to the init argv instead of treating it as an environment
 assignment; everything after `--` becomes `argv[1..]` verbatim, with `argv[0]`
 set to the `rdinit=` path. Parameter order is otherwise free, so `rdinit=` is
@@ -514,8 +607,9 @@ Nothing has mounted devtmpfs at that point, so `scripts/pack-initramfs.sh`
 records `urandom` — along with `console`, which the kernel opens as init's
 fd 0/1/2 before the exec, and a few other harmless nodes — directly in the
 cpio archive.
-`ttyS0` is listed last among the `console=` arguments so it, rather than the
-invisible `tty0`, is what `/dev/console` points at.
+For `--real`, `tty0` is listed last among the `console=` arguments so the
+physical display owns `/dev/console`; `ttyS0` remains available for serial
+kernel logs.
 
 The initramfs holds no `/init`; the kernel reaches Bun through `rdinit=` alone.
 The retired native bootstrap is kept in `test/build-init-bootstrap.sh`, which
@@ -545,21 +639,19 @@ deadlocks, while the independent physical libc works. It provides `mount`,
 `waitpid`, networking calls, and the generic `syscall` entry point, so no
 custom `libinit.so` is needed.
 
-The Bun init also loads `virtio_net` and its packaged dependencies through
-musl's generic `syscall`, configures QEMU user networking as `10.0.2.15/24`
-with the standard `10.0.2.2` gateway, writes `nameserver 10.0.2.3`, and fetches
-`http://example.com` before opening the REPL. A `--real` image instead starts
-`/etc/resolv.conf` with `1.1.1.1` and `8.8.8.8`; these are initial public
-resolvers until the user replaces them with DNS appropriate for the local
-network.
+On a `--real` boot, init starts `/etc/resolv.conf` with `1.1.1.1` and
+`8.8.8.8`; these are initial public resolvers until the user replaces them
+with DNS appropriate for the local network. Hardware networking remains down
+until `cfg.net` loads the packaged drivers and the user assigns an address and
+route.
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
 `cfg.net`, `cfg.disk`, `cfg.power` and `cfg.all` run as soon as the property is read, without
 parentheses. `cfg.net` loads every packaged network module (including PHY and bus support),
-then reads the `modalias` of every PCI network device, virtio net device and
-USB device, matches it against the `pci:`/`virtio:`/`usb:` lines
+then reads the `modalias` of every PCI and USB network device, matches it
+against the `pci:`/`usb:` lines
 `fetch-alpine.sh` kept in `modules.alias` and lists the interfaces. `cfg.disk`
-loads the packaged virtio, SATA/PATA/SCSI, NVMe/VMD and USB storage stacks so
+loads the packaged SATA/PATA/SCSI, NVMe/VMD and USB storage stacks so
 their disks and partitions appear in `/dev`, then lists `/sys/class/block`. `cfg.all`
 unconditionally attempts every packaged module and recursively loads its
 declared dependencies. `--real` ships Intel `e1000`/`e1000e`/`igb`/`igc`,
@@ -603,7 +695,7 @@ under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
 |---|---|---|
 | musl (`ld-musl-x86_64.so.1`, `libc.musl-x86_64.so.1`) | MIT | committed |
 | GCC runtime (`libgcc_s.so.1`, `libstdc++.so.6`) | GPL-3.0-or-later with the GCC Runtime Library Exception | committed |
-| Linux `virt`/`lts` kernels and VirtIO, networking, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
+| Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
 

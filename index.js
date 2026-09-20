@@ -190,7 +190,10 @@ function checkTools(selectedStages) {
   if (missing.length > 0) {
     fail(
       `missing tools, nothing was run:\n  ${missing.join("\n  ")}\n` +
-        "See README section 0 for the packages that provide them.",
+        `
+Run this command in Debian first:
+  apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+`,
     );
   }
 }
