@@ -222,9 +222,15 @@ mount /dev/sda1 /mnt --mkdir
 mount -fv /dev/sda1 /mnt
 mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
+
+ip link set eth0 up
+ip addr add 192.168.1.50/24 dev eth0
+ip route add default via 192.168.1.1
+
 ip -br addr && ip route
 ip addr replace 192.168.1.50/24 dev eth0
 ip route replace default via 192.168.1.1
+
 poweroff
 ```
 
@@ -452,10 +458,10 @@ firmware runs it without any NVRAM boot entry.
 The physical boot chain is firmware → the UKI stub → its embedded
 `.linux`/`.initrd`/`.cmdline` sections → kernel → `rdinit=/bin/bun`.
 `--real` uses Alpine `linux-lts`, includes the xHCI and USB HID module chain,
-and embeds this console order:
+and, with the currently pinned kernel, embeds this complete command line:
 
 ```text
-console=ttyS0,115200 console=tty0
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 Serial kernel logging is retained, while the final console makes
@@ -476,10 +482,24 @@ That package supplies OVMF at `$PREFIX/share/qemu/edk2-x86_64-code.fd`. Build
 without `--real`; this selects Alpine `linux-virt`, omits the physical-hardware
 module set, and puts `ttyS0` last so serial stdio owns `/dev/console`:
 
+```text
+console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-virt rdinit=/bin/bun -- -e import('/init.js')
+```
+
+Build and boot it with:
+
 ```sh
 bun ./index.js -fb
+
+# When running inside PRoot with Termux's native qemu-system-x86_64,
+# expose both the native executable and its OVMF path:
+PREFIX=/data/data/com.termux/files/usr \
+PATH="/data/data/com.termux/files/usr/bin:$PATH" \
 bun ./index.js -r
 ```
+
+If QEMU is installed inside the current Debian environment instead, plain
+`bun ./index.js -r` is sufficient; `run-qemu.sh` will use Debian's OVMF path.
 
 `bun ./index.js -r` runs `run-qemu.sh`, which boots `vda.img` on q35 under TCG
 with 512 MiB, a virtio disk, virtio-net user networking, no display, and COM1
