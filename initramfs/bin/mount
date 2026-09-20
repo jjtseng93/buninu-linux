@@ -387,7 +387,8 @@ const main = async () => {
   if (state.flags & MS.BIND && state.flags & MS.RDONLY && !(state.flags & MS.REMOUNT)) {
     doMount("none", target, null, MS.REMOUNT | MS.BIND | MS.RDONLY | (state.flags & MS.REC), "", state);
   }
-  if (state.verbose) console.log(`${source} mounted on ${target}.`);
+  if (state.fake) console.log("(DRY RUN)");
+  else if (state.verbose) console.log(`${source} mounted on ${target}.`);
 };
 
 try {
