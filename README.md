@@ -406,7 +406,7 @@ Two things to expect:
 
 ### Commands in /bin
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` carries three commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` carries four commands
 written as Bun scripts on top of two shared modules in `/lib`:
 
 | command | does | manual |
@@ -414,6 +414,7 @@ written as Bun scripts on top of two shared modules in `/lib`:
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads the filesystem and disk modules it needs | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+| `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 
 `--help` renders the Markdown manual with `Bun.markdown.ansi`, hyperlinks
 included. The shared pieces:
@@ -439,8 +440,9 @@ ip addr replace 10.0.2.20/24 dev eth0 && ip route replace default via 10.0.2.2
 
 Which modules the image carries is the list in `fetch-alpine.sh`; the
 `select_module` helper there pulls in dependencies from Alpine's
-`modules.dep`, and `--real` adds the disk controllers (`sd_mod`, `ahci`,
-`nvme`, `usb-storage`), the wired NICs and the ACPI power drivers. Alpine's
+`modules.dep`, and `--real` adds common storage paths (`sd_mod`, `ahci`,
+`ata_generic`, `pata_acpi`, `nvme`, Intel `vmd`, `usb-storage` and `uas`),
+the wired NICs and the ACPI power drivers. Alpine's
 kernels build all of these as modules; a self-built kernel with them `=y`
 works the same way, the loaders just find nothing to load.
 
@@ -538,15 +540,17 @@ with the standard `10.0.2.2` gateway and `10.0.2.3` DNS proxy, and fetches
 `http://example.com` before opening the REPL.
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
-`cfg.eth`, `cfg.mod` and `cfg.bat` run as soon as the property is read, without
-parentheses. `cfg.eth` loads every packaged network module (including PHY and bus support),
+`cfg.net`, `cfg.disk`, `cfg.power` and `cfg.all` run as soon as the property is read, without
+parentheses. `cfg.net` loads every packaged network module (including PHY and bus support),
 then reads the `modalias` of every PCI network device, virtio net device and
 USB device, matches it against the `pci:`/`virtio:`/`usb:` lines
-`fetch-alpine.sh` kept in `modules.alias` and lists the interfaces. `cfg.mod`
+`fetch-alpine.sh` kept in `modules.alias` and lists the interfaces. `cfg.disk`
+loads the packaged virtio, SATA/PATA/SCSI, NVMe/VMD and USB storage stacks so
+their disks and partitions appear in `/dev`, then lists `/sys/class/block`. `cfg.all`
 unconditionally attempts every packaged module and recursively loads its
 declared dependencies. `--real` ships Intel `e1000`/`e1000e`/`igb`/`igc`,
 Realtek `r8169`, Atheros `alx`, Broadcom `tg3` and the `r8152`/`ax88179_178a`/
-`cdc_ether` USB dongles. `cfg.bat` loads the ACPI
+`cdc_ether` USB dongles. `cfg.power` loads the ACPI
 `battery`, `ac`, `button` and `thermal` modules through `/lib/modprobe.js`
 and lists `/sys/class/power_supply` (a desktop without a battery simply
 reports nothing registered). Nothing loads them at boot. PID 1 also installs

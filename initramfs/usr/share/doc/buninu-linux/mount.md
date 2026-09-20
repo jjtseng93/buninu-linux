@@ -9,7 +9,7 @@ the kernel to ask.
 
 ```sh
 mount                                   # list mounted filesystems
-mount [-t TYPE] [-o OPTIONS] SOURCE TARGET
+mount [-fv] [-t TYPE] [-o OPTIONS] SOURCE TARGET
 mount -L LABEL | -U UUID [-o OPTIONS] TARGET
 mount --bind | --rbind | --move OLD NEW
 mount -o remount[,ro|rw] TARGET
@@ -32,6 +32,9 @@ mount -h | --help                       # this page
 | `--mkdir` | Create TARGET first. |
 | `-v` | Say what is being loaded and mounted. |
 | `-f`, `--fake` | Show the `mount(2)` call and stop. |
+
+`-f` and `-v` may be combined as `-fv` or `-vf`; this probes and reports the
+filesystem without performing the mount.
 
 ### `-o` words
 

@@ -6,7 +6,8 @@
 // drivers and block-device drivers are kernel modules on the Alpine kernels
 // this distro boots, so the command loads them through /lib/modprobe.js:
 // ext4 (with jbd2/mbcache/crc16), vfat/exfat/ntfs3 with their NLS tables,
-// and virtio_blk / sd_mod / nvme when the device node is not there yet.
+// and common virtio / SATA / NVMe / USB storage drivers when the device node
+// is not there yet.
 
 import { existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync, readFileSync } from "node:fs";
 import { libc, cString, ptr, errno, strerror, Errno, SysError, showDocument } from "../lib/dlopen.js";
@@ -74,7 +75,7 @@ const parseOptions = (list, state) => {
 const usage = () => {
   console.error(`Usage:
   mount [-l]
-  mount [-t TYPE] [-o OPTIONS] [-r|-w] [--mkdir] SOURCE TARGET
+  mount [-fv] [-t TYPE] [-o OPTIONS] [-r|-w] [--mkdir] SOURCE TARGET
   mount -L LABEL|-U UUID [-t TYPE] [-o OPTIONS] TARGET
   mount --bind|--rbind|--move OLD NEW
   mount -o remount[,ro|rw] TARGET
@@ -109,6 +110,10 @@ const parseArguments = (argv) => {
     else if (argument === "--make-rshared") state.flags |= MS.SHARED | MS.REC;
     else if (argument === "--make-rprivate") state.flags |= MS.PRIVATE | MS.REC;
     else if (argument === "--mkdir") state.mkdir = true;
+    else if (/^-[fv]{2,}$/.test(argument)) {
+      if (argument.includes("f")) state.fake = true;
+      if (argument.includes("v")) state.verbose = true;
+    }
     else if (argument === "-v" || argument === "--verbose") state.verbose = true;
     else if (argument === "-f" || argument === "--fake") state.fake = true;
     else if (argument === "-l" || argument === "-n" || argument === "--no-mtab" || argument === "-i" || argument === "--no-canonicalize") {}
@@ -240,10 +245,10 @@ const sleep = (milliseconds) => Bun.sleepSync(milliseconds);
 const ensureBlockDrivers = (device) => {
   if (device && existsSync(device)) return;
   const drivers = device === null
-    ? ["virtio_blk", "sd_mod", "nvme"]
+    ? ["virtio_blk", "vmd", "nvme", "ahci", "ata_generic", "pata_acpi", "usb_storage", "uas", "sd_mod"]
     : /^\/dev\/vd/.test(device) ? ["virtio_blk"]
-    : /^\/dev\/sd/.test(device) ? ["sd_mod", "ahci", "usb_storage"]
-    : /^\/dev\/nvme/.test(device) ? ["nvme"]
+    : /^\/dev\/sd/.test(device) ? ["ahci", "ata_generic", "pata_acpi", "usb_storage", "uas", "sd_mod"]
+    : /^\/dev\/nvme/.test(device) ? ["vmd", "nvme"]
     : [];
   let loaded = 0;
   for (const driver of drivers) loaded += tryModprobe(driver)?.length ?? 0;

@@ -106,7 +106,7 @@ from your network (there is no DHCP client yet). If `ip link` shows no
 `eth0`, load the driver first from the Bun REPL:
 
 ```js
-cfg.eth       // loads network modules and matches PCI/USB network devices
+cfg.net       // loads network modules and matches PCI/USB network devices
 ```
 
 It uses `/lib/modprobe.js`'s `autoload()`, which reads each device's

@@ -33,6 +33,14 @@ export const libc = dlopen(libcPath, {
     args: [FFIType.ptr, FFIType.i32],
     returns: FFIType.i32,
   },
+  reboot: {
+    args: [FFIType.i32],
+    returns: FFIType.i32,
+  },
+  sync: {
+    args: [],
+    returns: FFIType.void,
+  },
   __errno_location: {
     args: [],
     returns: FFIType.ptr,

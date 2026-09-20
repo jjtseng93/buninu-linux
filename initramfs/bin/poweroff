@@ -1,0 +1,31 @@
+#!/bin/bun
+// poweroff — sync filesystems and power off through Linux reboot(2).
+
+import { libc, check, showDocument } from "../lib/dlopen.js";
+
+const LINUX_REBOOT_CMD_POWER_OFF = 0x4321fedc;
+const arguments_ = process.argv.slice(2);
+
+if (arguments_.length === 1 && (arguments_[0] === "-h" || arguments_[0] === "--help")) {
+  await showDocument("poweroff");
+  process.exit(0);
+}
+
+if (arguments_.length !== 0) {
+  console.error("Usage: poweroff [-h | --help]");
+  process.exit(1);
+}
+
+console.log("poweroff: syncing filesystems");
+libc.symbols.sync();
+console.log("poweroff: powering off");
+try {
+  check("reboot(LINUX_REBOOT_CMD_POWER_OFF)", libc.symbols.reboot(LINUX_REBOOT_CMD_POWER_OFF));
+} catch (error) {
+  console.error(`poweroff: ${error.message}`);
+  process.exit(1);
+}
+
+// A successful reboot(2) never returns.
+console.error("poweroff: reboot returned without powering off");
+process.exit(1);

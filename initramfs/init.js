@@ -224,7 +224,7 @@ const configureRealKeyboard = () => {
 
 // ACPI battery, AC adapter, power button and thermal zones are modules on
 // Alpine's kernels; until they are loaded /sys/class/power_supply is empty.
-// Loaded on demand from the REPL as cfg.bat, through /lib/modprobe.js (a
+// Loaded on demand from the REPL as cfg.power, through /lib/modprobe.js (a
 // require() is fine here: /proc exists by the time anyone can type it). The
 // modules are only in the image when it was built with --real.
 const configureBattery = () => {
@@ -367,21 +367,12 @@ const launchBuninu = () => {
 //  Configuration complete
 
 
-
-
-
-console.log(`
-Welcome to Buninu Linux!
-Bun ${Bun.version} is now PID ${process.pid}
-`);
-
 globalThis.bunmsh = launchBunmsh;
 //console.log("Type bunmsh() to install and enter the bunmsh shell.");
 
 globalThis.start = launchBuninu;
-console.log("Type start() to run buninu --local");
 
-// cfg.eth loads every packaged network module, including PHY and bus support
+// cfg.net loads every packaged network module, including PHY and bus support
 // that a kernel userspace modprobe helper would normally load on demand. It
 // then reports the device matches and lists the resulting interfaces. The
 // address and route are still yours to set with `ip`.
@@ -438,19 +429,47 @@ const configureModules = () => {
   return report;
 };
 
+// Load the packaged storage stack so devtmpfs can expose disks before the
+// user has a concrete /dev path to pass to mount. This covers virtio block,
+// SATA/PATA/SCSI, NVMe behind VMD, and USB mass-storage/UAS.
+const configureDisks = () => {
+  const { modprobeAll } = require("/lib/modprobe.js");
+  const { readdirSync } = require("node:fs");
+  const storagePath = /^kernel\/drivers\/(?:ata\/|block\/virtio_blk\.ko$|nvme\/|pci\/controller\/vmd\.ko$|scsi\/|usb\/storage\/)/;
+  const report = modprobeAll({ accept: (_module, path) => storagePath.test(path) });
+  console.log(`disk: ${report.inserted.length} newly loaded, ${report.errors.length} failed`);
+  for (const { module, error } of report.errors) console.log(`disk: ${module}: ${error}`);
+  const devices = (() => { try { return readdirSync("/sys/class/block"); } catch { return []; } })();
+  console.log(`disk: ${devices.length ? devices.map((name) => `/dev/${name}`).join(" ") : "no block devices registered"}`);
+  return devices;
+};
+
 globalThis.cfg = Object.freeze(Object.defineProperties({}, {
-  bat: { enumerable: true, get: configureBattery },
-  eth: { enumerable: true, get: configureEthernet },
-  mod: { enumerable: true, get: configureModules },
+  all: { enumerable: true, get: configureModules },
+  disk: { enumerable: true, get: configureDisks },
+  net: { enumerable: true, get: configureEthernet },
+  power: { enumerable: true, get: configureBattery },
 }));
 
 // Compatibility aliases for images and notes that used the original API.
 globalThis.cfgEth = configureEthernet;
+globalThis.cfgNet = configureEthernet;
+globalThis.cfgDisk = configureDisks;
 globalThis.cfgMod = configureModules;
 globalThis.cfgBat = configureBattery;
-if (process.env.REAL_MACHINE === "1") {
-  console.log(`Configuration getters: ${Object.keys(globalThis.cfg).map((name) => `cfg.${name}`).join(", ")}`);
-}
+
+const showWelcome = () => {
+  console.log(`
+Welcome to Buninu Linux!
+Bun ${Bun.version} is now PID ${process.pid}
+Type start() to run buninu --local`);
+  if (process.env.REAL_MACHINE === "1") {
+    console.log(`Configuration getters: ${Object.keys(globalThis.cfg).map((name) => `cfg.${name}`).join(", ")}`);
+  }
+  console.log();
+};
+
+showWelcome();
 
 const startRepl = () => {
   const server = repl.start({
@@ -458,6 +477,11 @@ const startRepl = () => {
     input: process.stdin,
     output: process.stdout,
     terminal: true,
+  });
+  // Run before REPL's own line listener so its next prompt is printed after
+  // the repeated welcome. Empty and whitespace-only lines both trigger it.
+  server.prependListener("line", (line) => {
+    if (line.trim() === "") showWelcome();
   });
   server.on("exit", () => {
     console.log("REPL exited; restarting it to keep PID 1 alive.");

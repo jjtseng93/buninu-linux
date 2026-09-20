@@ -68,17 +68,19 @@ for module in virtio_blk ext4 ext2 vfat exfat ntfs3 nls_utf8 nls_cp437 nls_iso88
 done
 
 if [ "${REAL_MACHINE:-}" = 1 ]; then
-    # USB keyboard for the console, the disk controllers a laptop or desktop
-    # is likely to boot with, and the ACPI drivers behind
+    # USB keyboard for the console; common storage paths (SATA/AHCI HDD and
+    # SSD, NVMe including Intel VMD, legacy PATA, and USB mass-storage/UAS);
+    # and the ACPI drivers behind
     # /sys/class/power_supply (battery, ac), the power button and thermal
     # zones — all modules on Alpine's kernels.
     for module in usb-common usbcore xhci-hcd xhci-pci xhci-pci-renesas hid hid-generic usbhid \
-                  sd_mod ahci nvme usb-storage battery ac button thermal; do
+                  sd_mod ahci ata_generic pata_acpi nvme vmd usb-storage uas \
+                  battery ac button thermal; do
         select_module "$module"
     done
     # Wired NICs: Intel (e1000/e1000e/igb/igc), Realtek (r8169 plus its PHY
     # driver), Qualcomm Atheros (alx), Broadcom (tg3), and USB dongles
-    # (Realtek r8152, ASIX ax88179, CDC Ethernet). cfg.eth in init.js
+    # (Realtek r8152, ASIX ax88179, CDC Ethernet). cfg.net in init.js
     # matches them to hardware through the pci:/usb: lines of modules.alias.
     for module in e1000 e1000e igb igc r8169 realtek alx tg3 r8152 ax88179_178a cdc_ether; do
         select_module "$module"
