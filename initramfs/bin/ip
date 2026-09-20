@@ -1,0 +1,629 @@
+#!/bin/bun
+// ip — show and configure links, addresses, routes and neighbours, with the
+// iproute2 command grammar. `ip --help` renders /usr/share/doc/buninu-linux/ip.md.
+//
+// A Bun script that reads /sys/class/net and /proc/net, and configures the
+// kernel through the classic SIOC* ioctls on an AF_INET socket bound through
+// /lib/dlopen.js — the same calls init.js uses to bring up lo and eth0. That
+// keeps it small at the cost of one IPv4 address per interface; IPv6 is
+// shown but not configured.
+
+import { readdirSync, readFileSync } from "node:fs";
+import { cString, ptr, withInetSocket, Errno, SysError, showDocument } from "../lib/dlopen.js";
+
+const fail = (message, status = 1) => {
+  console.error(`ip: ${message}`);
+  process.exit(status);
+};
+
+// -------------------------------------------------------------- constants --
+
+const SIOC = {
+  ADDRT: 0x890b, DELRT: 0x890c,
+  GIFFLAGS: 0x8913, SIFFLAGS: 0x8914, GIFADDR: 0x8915, SIFADDR: 0x8916,
+  GIFBRDADDR: 0x8919, SIFBRDADDR: 0x891a, GIFNETMASK: 0x891b, SIFNETMASK: 0x891c,
+  SIFMTU: 0x8922, SIFNAME: 0x8923, SIFHWADDR: 0x8924,
+};
+
+// <linux/if.h>. The sysfs `flags` file is the raw dev->flags, so RUNNING and
+// LOWER_UP are derived from the `carrier` file instead (see interfaces()).
+const IFF = {
+  UP: 0x1, BROADCAST: 0x2, DEBUG: 0x4, LOOPBACK: 0x8, POINTOPOINT: 0x10, NOTRAILERS: 0x20,
+  RUNNING: 0x40, NOARP: 0x80, PROMISC: 0x100, ALLMULTI: 0x200, MASTER: 0x400, SLAVE: 0x800,
+  MULTICAST: 0x1000, PORTSEL: 0x2000, AUTOMEDIA: 0x4000, DYNAMIC: 0x8000,
+  LOWER_UP: 0x10000, DORMANT: 0x20000, ECHO: 0x40000,
+};
+
+const RTF = { UP: 0x1, GATEWAY: 0x2, HOST: 0x4 };
+
+const linkTypes = {
+  0: "generic", 1: "ether", 6: "ieee802", 24: "ieee1394", 32: "infiniband", 512: "ppp",
+  768: "ipip", 769: "ip6tnl", 772: "loopback", 776: "sit", 778: "gre", 783: "irda",
+  801: "ieee802.11", 823: "ip6gre", 65534: "none", 65535: "void",
+};
+
+// ------------------------------------------------------------ addresses ---
+
+const parseIpv4 = (text) => {
+  const parts = text.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) {
+    fail(`Error: inet address is expected rather than "${text}".`);
+  }
+  return parts.map(Number);
+};
+
+const formatIpv4 = (bytes) => bytes.join(".");
+
+const prefixToMask = (prefix) => {
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return [mask >>> 24, (mask >>> 16) & 255, (mask >>> 8) & 255, mask & 255];
+};
+
+const maskToPrefix = (bytes) => {
+  let value = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+  let prefix = 0;
+  while (value & 0x80000000) { prefix++; value = (value << 1) >>> 0; }
+  return prefix;
+};
+
+// "10.0.2.15/24" -> { address, prefix }; a bare address is a /32 host.
+const parseCidr = (text, { defaultPrefix = 32 } = {}) => {
+  const [address, prefix = String(defaultPrefix)] = text.split("/");
+  if (!/^\d{1,2}$/.test(prefix) || Number(prefix) > 32) fail(`Error: invalid prefix length "${prefix}".`);
+  return { address: parseIpv4(address), prefix: Number(prefix) };
+};
+
+const scopeOfIpv4 = (bytes) => bytes[0] === 127 ? "host" : bytes[0] === 169 && bytes[1] === 254 ? "link" : "global";
+
+// 32 hex digits from /proc/net/if_inet6 -> RFC 5952 compressed text.
+const formatIpv6 = (hex) => {
+  const groups = [];
+  for (let i = 0; i < 32; i += 4) groups.push(parseInt(hex.slice(i, i + 4), 16));
+  let bestStart = -1, bestLength = 0;
+  for (let i = 0; i < 8; i++) {
+    if (groups[i] !== 0) continue;
+    let j = i;
+    while (j < 8 && groups[j] === 0) j++;
+    if (j - i > bestLength) { bestStart = i; bestLength = j - i; }
+    i = j;
+  }
+  const text = groups.map((group) => group.toString(16));
+  if (bestLength < 2) return text.join(":");
+  const head = text.slice(0, bestStart).join(":");
+  const tail = text.slice(bestStart + bestLength).join(":");
+  return `${head}::${tail}`;
+};
+
+// Little-endian hex words from /proc/net/route ("0F02000A") -> dotted quad.
+const hexToIpv4 = (hex) => [6, 4, 2, 0].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+
+// ------------------------------------------------------------ ioctl glue ---
+
+const IFNAMSIZ = 16;
+
+const ifreq = (name) => {
+  if (name.length >= IFNAMSIZ) fail(`Error: "${name}" is longer than ${IFNAMSIZ - 1} bytes.`);
+  const request = new Uint8Array(40);
+  request.set(new TextEncoder().encode(name), 0);
+  return request;
+};
+
+const view = (buffer) => new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+
+const setSockaddrIn = (buffer, offset, address) => {
+  view(buffer).setUint16(offset, 2, true); // AF_INET
+  buffer.set(address, offset + 4);
+};
+
+const getSockaddrIn = (buffer, offset) => [...buffer.subarray(offset + 4, offset + 8)];
+
+const translate = (error, name) => {
+  if (!(error instanceof SysError)) throw error;
+  if (error.errno === Errno.ENODEV) fail(`Cannot find device "${name}"`);
+  if (error.errno === Errno.EPERM || error.errno === Errno.EACCES) fail(`${error.operation}: ${error.message.split(": ").pop()} (need to be root)`, 2);
+  fail(error.message, 2);
+};
+
+// --------------------------------------------------------------- reading ---
+
+const sysfs = (name, file) => {
+  try {
+    return readFileSync(`/sys/class/net/${name}/${file}`, "utf8").trim();
+  } catch {
+    return null;
+  }
+};
+
+const interfaces = () => {
+  let names;
+  try {
+    names = readdirSync("/sys/class/net");
+  } catch {
+    fail("Cannot open /sys/class/net (is sysfs mounted?)");
+  }
+  return names
+    .map((name) => ({
+      name,
+      index: Number(sysfs(name, "ifindex") ?? 0),
+      type: Number(sysfs(name, "type") ?? 0),
+      mtu: Number(sysfs(name, "mtu") ?? 0),
+      // `carrier` reads 1 with link, 0 without, and EINVAL while the
+      // interface is down; iproute2 shows LOWER_UP / NO-CARRIER from that.
+      flags: parseInt(sysfs(name, "flags") ?? "0", 16)
+        | (sysfs(name, "carrier") === "1" ? IFF.RUNNING | IFF.LOWER_UP : 0),
+      operstate: sysfs(name, "operstate") ?? "unknown",
+      address: sysfs(name, "address") ?? "",
+      broadcast: sysfs(name, "broadcast") ?? "",
+      qlen: Number(sysfs(name, "tx_queue_len") ?? 0),
+    }))
+    .sort((a, b) => a.index - b.index);
+};
+
+const interfaceNamed = (name) => {
+  const found = interfaces().find((link) => link.name === name);
+  if (!found) fail(`Device "${name}" does not exist.`);
+  return found;
+};
+
+// The primary IPv4 address and its mask/broadcast, or null.
+const ipv4Of = (name) => withInetSocket((ioctl) => {
+  const request = ifreq(name);
+  const missing = [Errno.EADDRNOTAVAIL, Errno.ENODEV];
+  if (ioctl(SIOC.GIFADDR, request, "SIOCGIFADDR", missing) < 0) return null;
+  const address = getSockaddrIn(request, 16);
+  ioctl(SIOC.GIFNETMASK, request, "SIOCGIFNETMASK", missing);
+  const prefix = maskToPrefix(getSockaddrIn(request, 16));
+  let broadcast = null;
+  if (ioctl(SIOC.GIFBRDADDR, request, "SIOCGIFBRDADDR", missing) >= 0) {
+    const candidate = getSockaddrIn(request, 16);
+    if (candidate.some(Boolean)) broadcast = candidate;
+  }
+  return { address, prefix, broadcast };
+});
+
+const ipv6Of = (name) => {
+  const list = [];
+  let table;
+  try {
+    table = readFileSync("/proc/net/if_inet6", "utf8");
+  } catch {
+    return list;
+  }
+  const scopes = { 0x00: "global", 0x10: "host", 0x20: "link", 0x40: "site" };
+  for (const line of table.split("\n")) {
+    const [hex, , prefix, scope, flags, device] = line.trim().split(/\s+/);
+    if (device !== name) continue;
+    list.push({
+      address: formatIpv6(hex),
+      prefix: parseInt(prefix, 16),
+      scope: scopes[parseInt(scope, 16)] ?? `scope ${scope}`,
+      flags: parseInt(flags, 16),
+    });
+  }
+  return list;
+};
+
+const routes = () => {
+  let table;
+  try {
+    table = readFileSync("/proc/net/route", "utf8");
+  } catch {
+    fail("Cannot open /proc/net/route");
+  }
+  const list = [];
+  for (const line of table.split("\n").slice(1)) {
+    if (!line.trim()) continue;
+    const [device, destination, gateway, flags, , , metric, mask] = line.trim().split(/\s+/);
+    list.push({
+      device,
+      destination: hexToIpv4(destination),
+      gateway: hexToIpv4(gateway),
+      flags: parseInt(flags, 16),
+      metric: Number(metric),
+      prefix: maskToPrefix(hexToIpv4(mask)),
+    });
+  }
+  return list;
+};
+
+const neighbours = () => {
+  let table;
+  try {
+    table = readFileSync("/proc/net/arp", "utf8");
+  } catch {
+    fail("Cannot open /proc/net/arp");
+  }
+  return table.split("\n").slice(1).filter((line) => line.trim()).map((line) => {
+    const [address, , flags, lladdr, , device] = line.trim().split(/\s+/);
+    return { address, flags: parseInt(flags, 16), lladdr, device };
+  });
+};
+
+// -------------------------------------------------------------- printing ---
+
+const flagNames = (flags) => {
+  const names = [];
+  if (flags & IFF.UP && !(flags & IFF.RUNNING)) names.push("NO-CARRIER");
+  for (const name of ["LOOPBACK", "BROADCAST", "POINTOPOINT", "MULTICAST", "NOARP", "ALLMULTI", "PROMISC",
+    "MASTER", "SLAVE", "DEBUG", "DYNAMIC", "AUTOMEDIA", "PORTSEL", "NOTRAILERS", "UP", "LOWER_UP", "DORMANT", "ECHO"]) {
+    if (flags & IFF[name]) names.push(name);
+  }
+  return `<${names.join(",")}>`;
+};
+
+const printLink = (link) => {
+  const state = link.operstate.toUpperCase();
+  const qlen = link.qlen ? ` qlen ${link.qlen}` : "";
+  console.log(`${link.index}: ${link.name}: ${flagNames(link.flags)} mtu ${link.mtu} state ${state}${qlen}`);
+  const type = linkTypes[link.type] ?? `[${link.type}]`;
+  const broadcast = link.flags & IFF.BROADCAST || link.type === 772 ? ` brd ${link.broadcast}` : "";
+  console.log(`    link/${type} ${link.address}${broadcast}`);
+};
+
+const printAddresses = (link, family) => {
+  if (family !== 6) {
+    const inet = ipv4Of(link.name);
+    if (inet) {
+      const broadcast = inet.broadcast ? ` brd ${formatIpv4(inet.broadcast)}` : "";
+      console.log(`    inet ${formatIpv4(inet.address)}/${inet.prefix}${broadcast} scope ${scopeOfIpv4(inet.address)} ${link.name}`);
+    }
+  }
+  if (family !== 4) {
+    for (const inet6 of ipv6Of(link.name)) {
+      const extra = [inet6.flags & 0x40 ? "tentative" : "", inet6.flags & 0x20 ? "deprecated" : ""].filter(Boolean).join(" ");
+      console.log(`    inet6 ${inet6.address}/${inet6.prefix} scope ${inet6.scope}${extra ? ` ${extra}` : ""}`);
+    }
+  }
+};
+
+const briefState = (link) => {
+  const state = link.operstate.toUpperCase();
+  return state === "UNKNOWN" && !(link.flags & IFF.UP) ? "DOWN" : state;
+};
+
+const printBrief = (link, { addresses, family }) => {
+  const column = (text, width) => text.padEnd(width);
+  let tail;
+  if (addresses) {
+    const list = [];
+    if (family !== 6) {
+      const inet = ipv4Of(link.name);
+      if (inet) list.push(`${formatIpv4(inet.address)}/${inet.prefix}`);
+    }
+    if (family !== 4) for (const inet6 of ipv6Of(link.name)) list.push(`${inet6.address}/${inet6.prefix}`);
+    tail = list.join(" ");
+  } else {
+    tail = `${link.address} ${flagNames(link.flags)}`;
+  }
+  console.log(`${column(link.name, 16)} ${column(briefState(link), 14)} ${tail}`.trimEnd());
+};
+
+const printRoutes = () => {
+  const primaries = new Map();
+  const sourceOf = (device) => {
+    if (!primaries.has(device)) primaries.set(device, ipv4Of(device));
+    return primaries.get(device);
+  };
+  for (const route of routes()) {
+    if (!(route.flags & RTF.UP)) continue;
+    const words = [];
+    const destination = route.prefix === 0 && route.destination.every((byte) => byte === 0)
+      ? "default"
+      : `${formatIpv4(route.destination)}${route.prefix === 32 ? "" : `/${route.prefix}`}`;
+    words.push(destination);
+    if (route.flags & RTF.GATEWAY) words.push("via", formatIpv4(route.gateway));
+    words.push("dev", route.device);
+    if (!(route.flags & RTF.GATEWAY)) {
+      const inet = sourceOf(route.device);
+      words.push("proto kernel scope link");
+      if (inet) words.push("src", formatIpv4(inet.address));
+    }
+    if (route.metric) words.push("metric", String(route.metric));
+    console.log(words.join(" "));
+  }
+};
+
+const printNeighbours = () => {
+  for (const entry of neighbours()) {
+    const state = entry.flags & 0x2 ? `lladdr ${entry.lladdr} REACHABLE` : "FAILED";
+    console.log(`${entry.address} dev ${entry.device} ${state}`);
+  }
+};
+
+// ------------------------------------------------------------- commands ----
+
+// iproute2 accepts any unambiguous prefix: `ip a`, `ip li`, `ip r`, `ip n`.
+// The first match in table order wins, which is how `a` means address.
+const matchWord = (word, table, what) => {
+  const found = table.find((candidate) => candidate.startsWith(word));
+  if (!found) fail(`Object "${word}" is unknown, try "ip help".`.replace("Object", what));
+  return found;
+};
+
+const takeDevice = (words, index) => {
+  const word = words[index] === "dev" ? words[index + 1] : words[index];
+  if (!word) fail('Not enough information: "dev" argument is required.');
+  return [word, words[index] === "dev" ? index + 2 : index + 1];
+};
+
+const commandLink = (words, options) => {
+  const verb = words.length ? matchWord(words[0], ["show", "list", "lst", "ls", "set", "help", "add", "delete", "change"], "Command") : "show";
+  if (verb === "help") return showDocument("ip");
+  if (verb === "add" || verb === "delete" || verb === "change") fail(`"ip link ${verb}" needs rtnetlink, which this ip does not speak yet.`);
+
+  if (verb !== "set") {
+    let list = interfaces();
+    if (words[1]) {
+      const [name] = takeDevice(words, 1);
+      list = [interfaceNamed(name)];
+    }
+    for (const link of list) options.brief ? printBrief(link, { addresses: false, family: options.family }) : printLink(link);
+    return;
+  }
+
+  let [name, index] = takeDevice(words, 1);
+  interfaceNamed(name);
+  withInetSocket((ioctl) => {
+    const request = ifreq(name);
+    const flagsOf = () => { ioctl(SIOC.GIFFLAGS, request, "SIOCGIFFLAGS"); return view(request).getUint16(16, true); };
+    const setFlags = (flags) => { view(request).setUint16(16, flags & 0xffff, true); ioctl(SIOC.SIFFLAGS, request, "SIOCSIFFLAGS"); };
+    const toggle = (bit, value) => setFlags(value === "on" ? flagsOf() | bit : flagsOf() & ~bit);
+    const onOff = (key, value) => {
+      if (value !== "on" && value !== "off") fail(`Error: argument "${value ?? ""}" is wrong: ${key} must be "on" or "off"`);
+      return value;
+    };
+    while (index < words.length) {
+      const key = words[index++];
+      const value = words[index];
+      try {
+        if (key === "up") setFlags(flagsOf() | IFF.UP);
+        else if (key === "down") setFlags(flagsOf() & ~IFF.UP);
+        else if (key === "mtu") {
+          if (!/^\d+$/.test(value ?? "")) fail(`Error: argument "${value ?? ""}" is wrong: Invalid "mtu" value`);
+          view(request).setInt32(16, Number(value), true);
+          ioctl(SIOC.SIFMTU, request, "SIOCSIFMTU");
+          index++;
+        } else if (key === "address" || key === "addr" || key === "lladdr") {
+          const bytes = (value ?? "").split(":").map((part) => parseInt(part, 16));
+          if (bytes.length !== 6 || bytes.some(Number.isNaN)) fail(`Error: argument "${value ?? ""}" is wrong: "address" value is invalid`);
+          const hardware = ifreq(name);
+          view(hardware).setUint16(16, 1, true); // ARPHRD_ETHER
+          hardware.set(bytes, 18);
+          ioctl(SIOC.SIFHWADDR, hardware, "SIOCSIFHWADDR");
+          index++;
+        } else if (key === "name") {
+          if (!value) fail('Error: argument "name" is required');
+          const rename = ifreq(name);
+          rename.set(new TextEncoder().encode(value.slice(0, IFNAMSIZ - 1)), 16);
+          ioctl(SIOC.SIFNAME, rename, "SIOCSIFNAME");
+          name = value;
+          request.fill(0);
+          request.set(new TextEncoder().encode(name), 0);
+          index++;
+        } else if (key === "promisc") toggle(IFF.PROMISC, onOff(key, value)), index++;
+        else if (key === "allmulticast") toggle(IFF.ALLMULTI, onOff(key, value)), index++;
+        else if (key === "multicast") toggle(IFF.MULTICAST, onOff(key, value)), index++;
+        else if (key === "arp") toggle(IFF.NOARP, onOff(key, value) === "on" ? "off" : "on"), index++;
+        else if (key === "dev") {} // `ip link set dev eth0 up` already consumed
+        else fail(`Error: either "dev" is duplicate, or "${key}" is a garbage.`);
+      } catch (error) {
+        translate(error, name);
+      }
+    }
+  });
+};
+
+const commandAddress = (words, options) => {
+  const verb = words.length ? matchWord(words[0], ["show", "list", "lst", "ls", "add", "change", "replace", "delete", "flush", "help"], "Command") : "show";
+  if (verb === "help") return showDocument("ip");
+
+  if (verb === "show" || verb === "list" || verb === "lst" || verb === "ls") {
+    let list = interfaces();
+    let index = 1;
+    while (index < words.length) {
+      if (words[index] === "dev" || index === 1 && !["up", "scope", "to"].includes(words[index])) {
+        const [name, next] = takeDevice(words, index);
+        list = [interfaceNamed(name)];
+        index = next;
+      } else if (words[index] === "up") {
+        list = list.filter((link) => link.flags & IFF.UP);
+        index++;
+      } else fail(`Error: argument "${words[index]}" is not supported here.`);
+    }
+    for (const link of list) {
+      if (options.brief) printBrief(link, { addresses: true, family: options.family });
+      else {
+        printLink(link);
+        printAddresses(link, options.family);
+      }
+    }
+    return;
+  }
+
+  // add | change | replace | delete | flush
+  let cidr = null, broadcast = null, name = null;
+  let index = 1;
+  while (index < words.length) {
+    const word = words[index];
+    if (word === "dev") [name, index] = takeDevice(words, index);
+    else if (word === "brd" || word === "broadcast") { broadcast = words[index + 1] ?? fail('Error: argument "brd" needs a value'); index += 2; }
+    else if (word === "local" || word === "to") { cidr = words[index + 1] ?? fail('Error: argument "local" needs a value'); index += 2; }
+    else if (word === "scope" || word === "label" || word === "valid_lft" || word === "preferred_lft") index += 2; // accepted, ignored
+    else if (!cidr && !word.startsWith("-")) { cidr = word; index++; }
+    else fail(`Error: either "local" is duplicate, or "${word}" is a garbage.`);
+  }
+  if (!name) fail('Not enough information: "dev" argument is required.');
+  interfaceNamed(name);
+  if (verb !== "flush" && !cidr) fail("Not enough information: \"local\" argument is required.");
+  if (cidr?.includes(":")) fail("IPv6 addresses cannot be configured with this ip (ioctl-based); IPv6 is shown only.");
+
+  withInetSocket((ioctl) => {
+    const request = ifreq(name);
+    try {
+      if (verb === "delete" || verb === "flush") {
+        // Writing 0.0.0.0 as the interface address removes the primary
+        // address and, with it, its secondaries. Deleting checks the
+        // argument matches what is configured, the way iproute2 does.
+        if (verb === "delete") {
+          const current = ipv4Of(name);
+          const wanted = parseCidr(cidr, { defaultPrefix: current?.prefix ?? 32 });
+          if (!current || formatIpv4(current.address) !== formatIpv4(wanted.address)) fail("RTNETLINK answers: Cannot assign requested address", 2);
+        }
+        setSockaddrIn(request, 16, [0, 0, 0, 0]);
+        ioctl(SIOC.SIFADDR, request, "SIOCSIFADDR");
+        return;
+      }
+      const { address, prefix } = parseCidr(cidr);
+      if (verb === "add") {
+        const current = ipv4Of(name);
+        if (current && formatIpv4(current.address) === formatIpv4(address)) fail("RTNETLINK answers: File exists", 2);
+        if (current) fail(`${name} already has ${formatIpv4(current.address)}/${current.prefix}; this ioctl-based ip keeps one IPv4 address per interface (use "replace", or "del" first).`, 2);
+      }
+      setSockaddrIn(request, 16, address);
+      ioctl(SIOC.SIFADDR, request, "SIOCSIFADDR");
+      setSockaddrIn(request, 16, prefixToMask(prefix));
+      ioctl(SIOC.SIFNETMASK, request, "SIOCSIFNETMASK");
+      if (broadcast) {
+        const mask = prefixToMask(prefix);
+        const value = broadcast === "+" ? address.map((byte, i) => byte | (~mask[i] & 255))
+          : broadcast === "-" ? address.map((byte, i) => byte & mask[i])
+          : parseIpv4(broadcast);
+        setSockaddrIn(request, 16, value);
+        ioctl(SIOC.SIFBRDADDR, request, "SIOCSIFBRDADDR");
+      }
+    } catch (error) {
+      translate(error, name);
+    }
+  });
+};
+
+// struct rtentry on x86_64: rt_dst @8, rt_gateway @24, rt_genmask @40 (each a
+// 16-byte sockaddr), rt_flags u16 @56, rt_metric i16 @80, rt_dev char* @88.
+const rtentry = ({ destination, prefix, gateway, device, metric }) => {
+  const route = new Uint8Array(120);
+  const routeView = view(route);
+  setSockaddrIn(route, 8, destination);
+  setSockaddrIn(route, 24, gateway ?? [0, 0, 0, 0]);
+  setSockaddrIn(route, 40, prefixToMask(prefix));
+  let flags = RTF.UP;
+  if (gateway) flags |= RTF.GATEWAY;
+  if (prefix === 32) flags |= RTF.HOST;
+  routeView.setUint16(56, flags, true);
+  // The kernel stores rt_metric - 1, so 0 here means "unset".
+  routeView.setInt16(80, metric === null ? 0 : metric + 1, true);
+  const deviceName = device ? cString(device) : null;
+  if (deviceName) routeView.setBigUint64(88, BigInt(ptr(deviceName)), true);
+  return { route, deviceName }; // deviceName kept alive alongside the pointer
+};
+
+const commandRoute = (words, options) => {
+  const verb = words.length ? matchWord(words[0], ["show", "list", "lst", "ls", "add", "delete", "replace", "change", "help", "get", "flush"], "Command") : "show";
+  if (verb === "help") return showDocument("ip");
+  if (options.family === 6) fail("IPv6 routes are not supported by this ip (ioctl-based).");
+  if (verb === "get" || verb === "flush") fail(`"ip route ${verb}" needs rtnetlink, which this ip does not speak yet.`);
+  if (verb === "show" || verb === "list" || verb === "lst" || verb === "ls") return printRoutes();
+
+  let destination = null, prefix = null, gateway = null, device = null, metric = null;
+  let index = 1;
+  while (index < words.length) {
+    const word = words[index];
+    if (word === "via") { gateway = parseIpv4(words[index + 1] ?? fail('Error: argument "via" needs a value')); index += 2; }
+    else if (word === "dev") [device, index] = takeDevice(words, index);
+    else if (word === "metric" || word === "priority" || word === "preference") {
+      if (!/^\d+$/.test(words[index + 1] ?? "")) fail(`Error: argument "${words[index + 1] ?? ""}" is wrong: "metric" value is invalid`);
+      metric = Number(words[index + 1]);
+      index += 2;
+    }
+    else if (word === "to") index++;
+    else if (word === "default" || word === "0/0" || word === "0.0.0.0/0") { destination = [0, 0, 0, 0]; prefix = 0; index++; }
+    else if (word === "proto" || word === "scope" || word === "src" || word === "table" || word === "mtu" || word === "onlink") index += word === "onlink" ? 1 : 2;
+    else if (destination === null && !word.startsWith("-")) {
+      ({ address: destination, prefix } = parseCidr(word));
+      index++;
+    }
+    else fail(`Error: either "to" is duplicate, or "${word}" is a garbage.`);
+  }
+  if (destination === null) fail('Not enough information: "to" argument is required.');
+  // Deleting matches on destination alone; adding needs somewhere to go.
+  if (verb !== "delete" && !gateway && !device) fail('Not enough information: "via" or "dev" argument is required.');
+  if (device) interfaceNamed(device);
+  if (gateway && !device) {
+    // Pick the interface whose subnet contains the gateway, like the kernel would.
+    for (const route of routes()) {
+      const mask = prefixToMask(route.prefix);
+      if (route.flags & RTF.GATEWAY) continue;
+      if (gateway.every((byte, i) => (byte & mask[i]) === (route.destination[i] & mask[i]))) { device = route.device; break; }
+    }
+  }
+  const entry = rtentry({ destination, prefix, gateway, device, metric });
+  withInetSocket((ioctl) => {
+    try {
+      if (verb === "replace" || verb === "change") {
+        // ESRCH when there is nothing to replace; the add below still runs.
+        ioctl(SIOC.DELRT, entry.route, "SIOCDELRT", [Errno.ESRCH, Errno.ENOENT, Errno.EINVAL]);
+      }
+      if (verb === "delete") {
+        const result = ioctl(SIOC.DELRT, entry.route, "SIOCDELRT", [Errno.ESRCH]);
+        if (result < 0) fail("RTNETLINK answers: No such process", 2);
+        return;
+      }
+      const result = ioctl(SIOC.ADDRT, entry.route, "SIOCADDRT", [Errno.EEXIST, Errno.ENETUNREACH]);
+      if (result === -Errno.EEXIST) fail("RTNETLINK answers: File exists", 2);
+      if (result === -Errno.ENETUNREACH) fail("RTNETLINK answers: Network is unreachable", 2);
+    } catch (error) {
+      translate(error, device ?? "");
+    }
+  });
+};
+
+const commandNeighbour = (words) => {
+  const verb = words.length ? matchWord(words[0], ["show", "list", "lst", "ls", "help", "add", "delete", "flush", "replace"], "Command") : "show";
+  if (verb === "help") return showDocument("ip");
+  if (verb !== "show" && verb !== "list" && verb !== "lst" && verb !== "ls") fail(`"ip neigh ${verb}" needs rtnetlink, which this ip does not speak yet.`);
+  return printNeighbours();
+};
+
+// ------------------------------------------------------------------ main ---
+
+const main = async () => {
+  const options = { family: null, brief: false };
+  const words = [];
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const argument = argv[i];
+    if (words.length || !argument.startsWith("-")) { words.push(argument); continue; }
+    if (argument === "-h" || argument === "--help" || argument === "-help") return showDocument("ip");
+    if (argument === "-V" || argument === "-Version" || argument === "--version") return console.log("ip utility, Buninu Linux (ioctl + procfs edition)");
+    if (argument === "-4") options.family = 4;
+    else if (argument === "-6") options.family = 6;
+    else if (argument === "-br" || argument === "-brief") options.brief = true;
+    else if (argument === "-f" || argument === "-family") {
+      const family = argv[++i];
+      options.family = family === "inet" ? 4 : family === "inet6" ? 6 : fail(`Protocol "${family}" is unknown, try "ip help".`);
+    }
+    else if (["-c", "-color", "-s", "-stats", "-statistics", "-d", "-details", "-p", "-pretty", "-o", "-oneline", "-n", "-netns"].includes(argument)) {
+      if (argument === "-n" || argument === "-netns") i++;
+    }
+    else fail(`Option "${argument}" is unknown, try "ip -help".`);
+  }
+  if (words.length === 0) {
+    console.error('Usage: ip [ -4 | -6 | -br ] OBJECT { COMMAND | help }\n       ip --help\nOBJECT := { link | address | route | neighbour }');
+    process.exit(255);
+  }
+  const object = matchWord(words[0], ["address", "link", "route", "neighbour", "neighbor", "neigh", "help"], "Object");
+  const rest = words.slice(1);
+  switch (object) {
+    case "help": return showDocument("ip");
+    case "address": return commandAddress(rest, options);
+    case "link": return commandLink(rest, options);
+    case "route": return commandRoute(rest, options);
+    default: return commandNeighbour(rest, options);
+  }
+};
+
+try {
+  await main();
+} catch (error) {
+  if (error instanceof SysError) fail(error.message, 2);
+  throw error;
+}

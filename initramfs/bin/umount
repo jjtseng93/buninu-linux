@@ -1,0 +1,70 @@
+#!/bin/bun
+// umount — unmount a filesystem. `umount --help` renders
+// /usr/share/doc/buninu-linux/umount.md.
+
+import { libc, cString, ptr, errno, strerror, Errno, showDocument } from "../lib/dlopen.js";
+
+const MNT = { FORCE: 1, DETACH: 2, EXPIRE: 4, NOFOLLOW: 8 };
+
+const usage = () => {
+  console.error(`Usage:
+  umount [-f] [-l] [-R] [-v] TARGET...
+  umount -h | --help`);
+  process.exit(1);
+};
+
+let flags = 0;
+let recursive = false;
+let verbose = false;
+let help = false;
+const targets = [];
+for (const argument of process.argv.slice(2)) {
+  if (argument === "-h" || argument === "--help") help = true;
+  else if (argument === "-f" || argument === "--force") flags |= MNT.FORCE;
+  else if (argument === "-l" || argument === "--lazy") flags |= MNT.DETACH;
+  else if (argument === "-R" || argument === "--recursive") recursive = true;
+  else if (argument === "-v" || argument === "--verbose") verbose = true;
+  else if (argument === "-n" || argument === "-d" || argument === "--no-mtab" || argument === "--detach-loop") {}
+  else if (argument === "-a" || argument === "--all") { console.error("umount: -a is not supported"); process.exit(1); }
+  else if (argument.startsWith("-") && argument.length > 1) { console.error(`umount: unknown option ${argument}`); usage(); }
+  else targets.push(argument);
+}
+
+if (help) await showDocument("umount");
+else if (targets.length === 0) usage();
+
+const mountPoints = () => {
+  const table = Bun.file("/proc/self/mounts");
+  return table.text().then((text) =>
+    text.split("\n").filter(Boolean).map((line) =>
+      line.split(" ")[1].replace(/\\([0-7]{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8))),
+    ),
+  );
+};
+
+const unmount = (target) => {
+  const result = libc.symbols.umount2(ptr(cString(target)), flags);
+  if (result === 0) {
+    if (verbose) console.log(`${target} unmounted`);
+    return true;
+  }
+  const code = errno();
+  const reason = code === Errno.EBUSY ? "target is busy (try -l for a lazy unmount)"
+    : code === Errno.EINVAL ? "not mounted"
+    : code === Errno.EPERM ? "must be superuser to unmount"
+    : strerror(code);
+  console.error(`umount: ${target}: ${reason}.`);
+  return false;
+};
+
+let status = 0;
+for (const target of targets) {
+  const path = target.length > 1 ? target.replace(/\/+$/, "") : target;
+  // -R takes every mount at or below the target, deepest first, so each
+  // umount2 sees an empty subtree.
+  const list = recursive
+    ? (await mountPoints()).filter((point) => point === path || point.startsWith(`${path}/`)).sort((a, b) => b.length - a.length)
+    : [path];
+  for (const point of list) if (!unmount(point)) status = 32;
+}
+process.exit(status);

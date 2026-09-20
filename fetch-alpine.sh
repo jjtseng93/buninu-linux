@@ -19,10 +19,8 @@ stub_sha256=8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9
 
 kernel_release="6.18.52-0-$linux_flavor"
 
-mkdir -p downloads kernel initramfs/lib \
-    "initramfs/lib/modules/$kernel_release/kernel/net/core" \
-    "initramfs/lib/modules/$kernel_release/kernel/drivers/net" \
-    "initramfs/lib/modules/$kernel_release/kernel/drivers/virtio"
+modules_root="initramfs/lib/modules/$kernel_release"
+mkdir -p downloads kernel initramfs/lib "$modules_root"
 
 . ./scripts/fetch.sh
 
@@ -30,51 +28,81 @@ fetch "$base/$linux_package" "$linux_package" "$linux_sha256"
 fetch "$base/$musl_package" "$musl_package" "$musl_sha256"
 fetch "$base/$stub_package" "$stub_package" "$stub_sha256"
 
-tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-    "boot/vmlinuz-$linux_flavor" > "kernel/vmlinuz-$linux_flavor"
-tar --warning=no-unknown-keyword -xOf "downloads/$musl_package" \
-    lib/ld-musl-x86_64.so.1 > initramfs/lib/ld-musl-x86_64.so.1
-tar --warning=no-unknown-keyword -xOf "downloads/$stub_package" \
-    usr/lib/systemd/boot/efi/linuxx64.efi.stub > kernel/linuxx64.efi.stub
-tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-    "lib/modules/$kernel_release/kernel/net/core/failover.ko.gz" \
-    | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/net/core/failover.ko"
-tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-    "lib/modules/$kernel_release/kernel/drivers/net/net_failover.ko.gz" \
-    | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/net/net_failover.ko"
-tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-    "lib/modules/$kernel_release/kernel/drivers/net/virtio_net.ko.gz" \
-    | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/net/virtio_net.ko"
+extract() { tar --warning=no-unknown-keyword -xOf "downloads/$1" "$2"; }
 
-if [ "$linux_flavor" = lts ]; then
-    for module in virtio_ring virtio virtio_pci_legacy_dev virtio_pci_modern_dev virtio_pci; do
-        tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-            "lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko.gz" \
-            | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/drivers/virtio/$module.ko"
+extract "$linux_package" "boot/vmlinuz-$linux_flavor" > "kernel/vmlinuz-$linux_flavor"
+extract "$musl_package" lib/ld-musl-x86_64.so.1 > initramfs/lib/ld-musl-x86_64.so.1
+extract "$stub_package" usr/lib/systemd/boot/efi/linuxx64.efi.stub > kernel/linuxx64.efi.stub
+
+# Kernel modules. The package's modules.dep says what each one needs, so a
+# module is requested by name and its dependencies come along: on linux-lts
+# virtio_net pulls in virtio, virtio_ring and virtio_pci, which linux-virt
+# has built in. The initramfs gets a modules.dep trimmed to the shipped set,
+# the fs-* lines of modules.alias and modules.builtin; /lib/modprobe.js reads
+# those three files.
+depfile="$(mktemp)"
+selected="$(mktemp)"
+trap 'rm -f "$depfile" "$selected" "$selected.names"' EXIT
+extract "$linux_package" "lib/modules/$kernel_release/modules.dep" > "$depfile"
+
+select_module() {
+    local name=$1 line path dep
+    line=$(grep -F -m1 -- "/$name.ko.gz:" "$depfile") \
+        || { echo "error: module $name is not in $linux_package" >&2; exit 1; }
+    path=${line%%:*}
+    grep -qxF -- "$path" "$selected" && return
+    printf '%s\n' "$path" >> "$selected"
+    for dep in ${line#*:}; do
+        dep=${dep##*/}
+        select_module "${dep%.ko.gz}"
     done
-fi
+}
+
+# Network: virtio-net for QEMU (init.js loads these at boot).
+for module in failover net_failover virtio_net; do select_module "$module"; done
+# Storage: what /bin/mount loads on demand. ext4 brings jbd2, mbcache and
+# crc16; FAT, exFAT and NTFS ask the kernel for the NLS tables at mount
+# time, which has no /sbin/modprobe to answer, so mount preloads them.
+for module in virtio_blk ext4 ext2 vfat exfat ntfs3 nls_utf8 nls_cp437 nls_iso8859-1; do
+    select_module "$module"
+done
 
 if [ "${REAL_MACHINE:-}" = 1 ]; then
-    mkdir -p \
-        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/common" \
-        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/core" \
-        "initramfs/lib/modules/$kernel_release/kernel/drivers/usb/host" \
-        "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid"
-    for module in \
-        drivers/usb/common/usb-common \
-        drivers/usb/core/usbcore \
-        drivers/usb/host/xhci-hcd \
-        drivers/usb/host/xhci-pci \
-        drivers/usb/host/xhci-pci-renesas \
-        drivers/hid/hid \
-        drivers/hid/hid-generic \
-        drivers/hid/usbhid/usbhid; do
-        tar --warning=no-unknown-keyword -xOf "downloads/$linux_package" \
-            "lib/modules/$kernel_release/kernel/$module.ko.gz" \
-            | gzip -dc > "initramfs/lib/modules/$kernel_release/kernel/$module.ko"
+    # USB keyboard for the console, the disk controllers a laptop or desktop
+    # is likely to boot with, and the ACPI drivers behind
+    # /sys/class/power_supply (battery, ac), the power button and thermal
+    # zones — all modules on Alpine's kernels.
+    for module in usb-common usbcore xhci-hcd xhci-pci xhci-pci-renesas hid hid-generic usbhid \
+                  sd_mod ahci nvme usb-storage battery ac button thermal; do
+        select_module "$module"
+    done
+    # Wired NICs: Intel (e1000/e1000e/igb/igc), Realtek (r8169 plus its PHY
+    # driver), Qualcomm Atheros (alx), Broadcom (tg3), and USB dongles
+    # (Realtek r8152, ASIX ax88179, CDC Ethernet). cfg.eth in init.js
+    # matches them to hardware through the pci:/usb: lines of modules.alias.
+    for module in e1000 e1000e igb igc r8169 realtek alx tg3 r8152 ax88179_178a cdc_ether; do
+        select_module "$module"
     done
 fi
+
+while read -r path; do
+    mkdir -p "$modules_root/$(dirname "$path")"
+    extract "$linux_package" "lib/modules/$kernel_release/$path" | gzip -dc > "$modules_root/${path%.gz}"
+done < "$selected"
+
+awk -F: 'NR == FNR { wanted[$0] = 1; next } $1 in wanted' "$selected" "$depfile" \
+    | sed 's/\.ko\.gz/.ko/g' > "$modules_root/modules.dep"
+# modules.alias: the fs-* names, and the pci:/usb:/virtio: device ids of the modules
+# shipped, so /lib/modprobe.js can match hardware to drivers.
+sed 's|.*/||; s|\.ko\.gz$||; s|-|_|g' "$selected" | sort -u > "$selected.names"
+extract "$linux_package" "lib/modules/$kernel_release/modules.alias" \
+    | awk -v names="$selected.names" '
+        BEGIN { while ((getline n < names) > 0) shipped[n] = 1 }
+        $2 ~ /^fs-/ { print; next }
+        $2 ~ /^(pci|usb|virtio):/ { m = $3; gsub("-", "_", m); if (m in shipped) print }
+    ' > "$modules_root/modules.alias"
+extract "$linux_package" "lib/modules/$kernel_release/modules.builtin" > "$modules_root/modules.builtin"
 
 chmod 0755 initramfs/lib/ld-musl-x86_64.so.1
 
-echo "Fetched Alpine linux-$linux_flavor kernel, virtio-net modules, musl, and the x64 UKI stub."
+echo "Fetched Alpine linux-$linux_flavor kernel, $(wc -l < "$selected") modules, musl, and the x64 UKI stub."

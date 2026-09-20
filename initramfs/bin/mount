@@ -1,0 +1,394 @@
+#!/bin/bun
+// mount — mount a filesystem, or list what is mounted. `mount --help` renders
+// /usr/share/doc/buninu-linux/mount.md.
+//
+// A Bun script over the mount(2) binding in /lib/dlopen.js. Filesystem
+// drivers and block-device drivers are kernel modules on the Alpine kernels
+// this distro boots, so the command loads them through /lib/modprobe.js:
+// ext4 (with jbd2/mbcache/crc16), vfat/exfat/ntfs3 with their NLS tables,
+// and virtio_blk / sd_mod / nvme when the device node is not there yet.
+
+import { existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync, readFileSync } from "node:fs";
+import { libc, cString, ptr, errno, strerror, Errno, SysError, showDocument } from "../lib/dlopen.js";
+import { modprobe, tryModprobe, modulesDirectory, ModuleNotFound } from "../lib/modprobe.js";
+
+const fail = (message, status = 32) => {
+  console.error(`mount: ${message}`);
+  process.exit(status);
+};
+
+// ---------------------------------------------------------------- options --
+
+// <linux/mount.h> flags, keyed by the -o word that sets or clears them.
+const MS = {
+  RDONLY: 1n, NOSUID: 2n, NODEV: 4n, NOEXEC: 8n, SYNCHRONOUS: 16n, REMOUNT: 32n,
+  MANDLOCK: 64n, DIRSYNC: 128n, NOSYMFOLLOW: 256n, NOATIME: 1024n, NODIRATIME: 2048n,
+  BIND: 4096n, MOVE: 8192n, REC: 16384n, SILENT: 32768n, UNBINDABLE: 1n << 17n,
+  PRIVATE: 1n << 18n, SLAVE: 1n << 19n, SHARED: 1n << 20n, RELATIME: 1n << 21n,
+  STRICTATIME: 1n << 24n, LAZYTIME: 1n << 25n,
+};
+
+const flagWords = {
+  ro: [MS.RDONLY, true], rw: [MS.RDONLY, false],
+  nosuid: [MS.NOSUID, true], suid: [MS.NOSUID, false],
+  nodev: [MS.NODEV, true], dev: [MS.NODEV, false],
+  noexec: [MS.NOEXEC, true], exec: [MS.NOEXEC, false],
+  sync: [MS.SYNCHRONOUS, true], async: [MS.SYNCHRONOUS, false],
+  dirsync: [MS.DIRSYNC, true],
+  mand: [MS.MANDLOCK, true], nomand: [MS.MANDLOCK, false],
+  noatime: [MS.NOATIME, true], atime: [MS.NOATIME, false],
+  nodiratime: [MS.NODIRATIME, true], diratime: [MS.NODIRATIME, false],
+  relatime: [MS.RELATIME, true], norelatime: [MS.RELATIME, false],
+  strictatime: [MS.STRICTATIME, true], nostrictatime: [MS.STRICTATIME, false],
+  lazytime: [MS.LAZYTIME, true], nolazytime: [MS.LAZYTIME, false],
+  nosymfollow: [MS.NOSYMFOLLOW, true], symfollow: [MS.NOSYMFOLLOW, false],
+  silent: [MS.SILENT, true], loud: [MS.SILENT, false],
+  remount: [MS.REMOUNT, true],
+  bind: [MS.BIND, true], rbind: [MS.BIND | MS.REC, true],
+  move: [MS.MOVE, true],
+  shared: [MS.SHARED, true], rshared: [MS.SHARED | MS.REC, true],
+  private: [MS.PRIVATE, true], rprivate: [MS.PRIVATE | MS.REC, true],
+  slave: [MS.SLAVE, true], rslave: [MS.SLAVE | MS.REC, true],
+  unbindable: [MS.UNBINDABLE, true], runbindable: [MS.UNBINDABLE | MS.REC, true],
+  defaults: [0n, true], auto: [0n, true], noauto: [0n, true], user: [0n, true],
+  nouser: [0n, true], nofail: [0n, true], _netdev: [0n, true],
+};
+
+// Splits "-o ro,noatime,size=64M" into mount(2) flags plus the data string the
+// filesystem driver parses itself.
+const parseOptions = (list, state) => {
+  for (const word of list.split(",")) {
+    if (!word) continue;
+    const key = word.split("=")[0];
+    if (word in flagWords) {
+      const [bit, set] = flagWords[word];
+      state.flags = set ? state.flags | bit : state.flags & ~bit;
+    } else if (key === "loop") {
+      fail("loop devices are not supported yet");
+    } else {
+      state.data.push(word);
+    }
+  }
+};
+
+const usage = () => {
+  console.error(`Usage:
+  mount [-l]
+  mount [-t TYPE] [-o OPTIONS] [-r|-w] [--mkdir] SOURCE TARGET
+  mount -L LABEL|-U UUID [-t TYPE] [-o OPTIONS] TARGET
+  mount --bind|--rbind|--move OLD NEW
+  mount -o remount[,ro|rw] TARGET
+  mount -h | --help          full manual (mount.md)`);
+  process.exit(1);
+};
+
+const parseArguments = (argv) => {
+  const state = { flags: 0n, data: [], positional: [], type: null, mkdir: false, verbose: false, fake: false };
+  const takeValue = (i, flag) => {
+    if (i + 1 >= argv.length) fail(`option ${flag} needs an argument`, 1);
+    return argv[i + 1];
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const argument = argv[i];
+    if (argument === "-h" || argument === "--help") state.help = true;
+    else if (argument === "-t" || argument === "--types") state.type = argv[++i] ?? usage();
+    else if (argument.startsWith("--types=")) state.type = argument.slice(8);
+    else if (argument.startsWith("-t") && argument.length > 2) state.type = argument.slice(2);
+    else if (argument === "-o" || argument === "--options") parseOptions(takeValue(i++, "-o"), state);
+    else if (argument.startsWith("--options=")) parseOptions(argument.slice(10), state);
+    else if (argument.startsWith("-o") && argument.length > 2) parseOptions(argument.slice(2), state);
+    else if (argument === "-L" || argument === "--label") state.source = `LABEL=${takeValue(i++, "-L")}`;
+    else if (argument === "-U" || argument === "--uuid") state.source = `UUID=${takeValue(i++, "-U")}`;
+    else if (argument === "-r" || argument === "--read-only") state.flags |= MS.RDONLY;
+    else if (argument === "-w" || argument === "--rw" || argument === "--read-write") state.flags &= ~MS.RDONLY;
+    else if (argument === "-B" || argument === "--bind") state.flags |= MS.BIND;
+    else if (argument === "-R" || argument === "--rbind") state.flags |= MS.BIND | MS.REC;
+    else if (argument === "-M" || argument === "--move") state.flags |= MS.MOVE;
+    else if (argument === "--make-shared") state.flags |= MS.SHARED;
+    else if (argument === "--make-private") state.flags |= MS.PRIVATE;
+    else if (argument === "--make-rshared") state.flags |= MS.SHARED | MS.REC;
+    else if (argument === "--make-rprivate") state.flags |= MS.PRIVATE | MS.REC;
+    else if (argument === "--mkdir") state.mkdir = true;
+    else if (argument === "-v" || argument === "--verbose") state.verbose = true;
+    else if (argument === "-f" || argument === "--fake") state.fake = true;
+    else if (argument === "-l" || argument === "-n" || argument === "--no-mtab" || argument === "-i" || argument === "--no-canonicalize") {}
+    else if (argument === "-a" || argument === "--all") fail("there is no /etc/fstab on this system, so -a does nothing", 1);
+    else if (argument === "--") state.positional.push(...argv.slice(i + 1)), i = argv.length;
+    else if (argument.startsWith("-") && argument.length > 1) console.error(`mount: unknown option ${argument}`), usage();
+    else state.positional.push(argument);
+  }
+  return state;
+};
+
+// -------------------------------------------------------------- listing ----
+
+const listMounts = () => {
+  const table = readFileSync("/proc/self/mounts", "utf8");
+  const unescape = (field) => field.replace(/\\([0-7]{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8)));
+  for (const line of table.split("\n")) {
+    if (!line) continue;
+    const [source, target, type, options] = line.split(" ").map(unescape);
+    console.log(`${source} on ${target} type ${type} (${options})`);
+  }
+};
+
+// ---------------------------------------------------------------- probing --
+
+// Reads the first 128 KiB of a block device: enough for every superblock
+// magic checked below (btrfs sits at 64 KiB, ISO 9660 at 32 KiB).
+const readHeader = (device) => {
+  const fd = openSync(device, "r");
+  try {
+    const buffer = Buffer.alloc(128 * 1024);
+    const length = readSync(fd, buffer, 0, buffer.length, 0);
+    return buffer.subarray(0, length);
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const ascii = (buffer, offset, length) =>
+  buffer.subarray(offset, offset + length).toString("latin1").replace(/\0.*$/s, "").trim();
+
+const hex = (buffer, offset, length, reverse = false) => {
+  const bytes = [...buffer.subarray(offset, offset + length)];
+  if (reverse) bytes.reverse();
+  return bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+};
+
+// { type, label, uuid } for the volume at `device`, or null when unknown.
+// Identifies what the shipped drivers can mount, plus a few more so the
+// error for an unsupported volume can at least name it.
+const probe = (device) => {
+  let header;
+  try {
+    header = readHeader(device);
+  } catch {
+    return null;
+  }
+  const at = (offset, text) =>
+    header.length >= offset + text.length && header.subarray(offset, offset + text.length).toString("latin1") === text;
+  const u16 = (offset) => header.readUInt16LE(offset);
+  const u32 = (offset) => header.readUInt32LE(offset);
+
+  if (header.length >= 0x800 && u16(0x438) === 0xef53) {
+    // ext2/3/4 share the superblock; a journal means ext3+, extents or
+    // 64-bit or metadata_csum mean ext4. The ext4 driver handles ext3 too.
+    const compat = u32(0x45c), incompat = u32(0x460), roCompat = u32(0x464);
+    const type = incompat & 0x2c0 || roCompat & 0x478 ? "ext4" : compat & 0x4 ? "ext3" : "ext2";
+    const raw = hex(header, 0x468, 16);
+    const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`.toLowerCase();
+    return { type, label: ascii(header, 0x478, 16), uuid };
+  }
+  if (at(3, "NTFS    ")) return { type: "ntfs3", label: "", uuid: hex(header, 0x48, 8, true) };
+  if (at(3, "EXFAT   ")) return { type: "exfat", label: "", uuid: `${hex(header, 0x66, 2, true)}-${hex(header, 0x64, 2, true)}` };
+  if (header.length >= 512 && u16(510) === 0xaa55 && (at(0x52, "FAT") || at(0x36, "FAT"))) {
+    const fat32 = at(0x52, "FAT32");
+    const serialOffset = fat32 ? 0x43 : 0x27;
+    const labelOffset = fat32 ? 0x47 : 0x2b;
+    let label = ascii(header, labelOffset, 11);
+    if (label === "NO NAME") label = "";
+    return { type: "vfat", label, uuid: `${hex(header, serialOffset + 2, 2, true)}-${hex(header, serialOffset, 2, true)}` };
+  }
+  if (at(0, "XFSB")) return { type: "xfs", label: ascii(header, 0x6c, 12), uuid: "" };
+  if (at(0x10040, "_BHRfS_M")) return { type: "btrfs", label: ascii(header, 0x1012b, 256), uuid: "" };
+  if (at(0, "hsqs")) return { type: "squashfs", label: "", uuid: "" };
+  if (at(0x8001, "CD001")) return { type: "iso9660", label: ascii(header, 0x8028, 32), uuid: "" };
+  if (header.length >= 0x404 && u32(0x400) === 0xf2f52010) return { type: "f2fs", label: "", uuid: "" };
+  if (header.length >= 4096 && at(4096 - 10, "SWAPSPACE2")) return { type: "swap", label: "", uuid: "" };
+  return null;
+};
+
+const blockDevices = () => {
+  try {
+    return readdirSync("/sys/class/block")
+      .filter((name) => !/^(loop|ram|zram|sr)\d/.test(name))
+      .sort()
+      .map((name) => `/dev/${name}`)
+      .filter((path) => existsSync(path));
+  } catch {
+    return [];
+  }
+};
+
+const findVolume = (key, value) => {
+  for (const device of blockDevices()) {
+    const info = probe(device);
+    if (!info) continue;
+    const candidate = key === "LABEL" ? info.label : info.uuid;
+    if (candidate.toUpperCase() === value.toUpperCase()) return device;
+  }
+  return null;
+};
+
+// LABEL=/UUID= sources need udev's /dev/disk/by-*; this scans instead.
+const resolveSource = (source) => {
+  const match = /^(LABEL|UUID)=(.+)$/.exec(source);
+  if (!match) return source;
+  ensureBlockDrivers(null);
+  const device = findVolume(match[1], match[2]);
+  if (!device) fail(`can't find ${source}`);
+  return device;
+};
+
+// ---------------------------------------------------------------- drivers --
+
+const sleep = (milliseconds) => Bun.sleepSync(milliseconds);
+
+// The device name says which driver creates it. Loading is skipped when the
+// node already exists, so this costs nothing after the first mount.
+const ensureBlockDrivers = (device) => {
+  if (device && existsSync(device)) return;
+  const drivers = device === null
+    ? ["virtio_blk", "sd_mod", "nvme"]
+    : /^\/dev\/vd/.test(device) ? ["virtio_blk"]
+    : /^\/dev\/sd/.test(device) ? ["sd_mod", "ahci", "usb_storage"]
+    : /^\/dev\/nvme/.test(device) ? ["nvme"]
+    : [];
+  let loaded = 0;
+  for (const driver of drivers) loaded += tryModprobe(driver)?.length ?? 0;
+  if (device === null) {
+    if (loaded) sleep(500);
+    return;
+  }
+  // devtmpfs creates the node once the driver has probed the disk.
+  for (let waited = 0; !existsSync(device) && waited < 3000; waited += 100) sleep(100);
+};
+
+const kernelFilesystems = () => {
+  try {
+    return new Set(
+      readFileSync("/proc/filesystems", "utf8").split("\n").map((line) => line.split("\t").pop()).filter(Boolean),
+    );
+  } catch {
+    return new Set();
+  }
+};
+
+// The kernel's own request_module() has no /sbin/modprobe to run here, so the
+// filesystem driver and the NLS tables FAT/exFAT/NTFS ask for are loaded
+// before mount(2). Names come from the fs-* aliases (ntfs -> ntfs3, ...).
+// A type with no module is still handed to mount(2): the kernel knows about
+// built-in filesystems that neither /proc/filesystems (unreadable) nor
+// modules.builtin (tmpfs, proc, ...) may list, and answers ENODEV otherwise.
+let driverHint = "";
+const ensureFilesystemDriver = (type, data) => {
+  const registered = kernelFilesystems();
+  const loaded = [];
+  if (!registered.has(type)) {
+    try {
+      loaded.push(...modprobe(`fs-${type}`));
+    } catch (error) {
+      if (!(error instanceof ModuleNotFound)) throw error;
+      driverHint = ` (no ${type} module in ${modulesDirectory()})`;
+    }
+  }
+  if (["vfat", "msdos", "exfat", "ntfs3", "iso9660", "udf"].includes(type)) {
+    const charsets = new Set(["utf8", "cp437", "iso8859-1"]);
+    for (const option of data) {
+      const [key, value] = option.split("=");
+      if (key === "iocharset" || key === "nls") charsets.add(value);
+      if (key === "codepage") charsets.add(`cp${value}`);
+    }
+    for (const charset of charsets) loaded.push(...(tryModprobe(`nls_${charset}`) ?? []));
+  }
+  return loaded;
+};
+
+// ---------------------------------------------------------------- mounting -
+
+const explain = (code, source, target, type) => {
+  switch (code) {
+    case Errno.EPERM: return "must be superuser to use mount";
+    case Errno.ENOENT: return existsSync(target) ? `special device ${source} does not exist` : `mount point ${target} does not exist`;
+    case Errno.ENOTDIR: return `mount point ${target} is not a directory`;
+    case Errno.EBUSY: return `${source} already mounted or ${target} busy`;
+    case Errno.ENODEV: return `unknown filesystem type '${type}'${driverHint}`;
+    case Errno.EROFS: return `${source} is write-protected; try -o ro`;
+    case Errno.EACCES: return `${source} is not readable`;
+    case Errno.ENXIO: return `${source}: no such device or the partition has not been detected`;
+    case Errno.EINVAL: return `wrong fs type, bad option, bad superblock on ${source}, missing codepage or helper program, or other error (dmesg may say more)`;
+    default: return `${strerror(code)}`;
+  }
+};
+
+const doMount = (source, target, type, flags, data, { verbose, fake }) => {
+  if (verbose || fake) {
+    const words = [];
+    for (const [name, bit] of Object.entries(MS)) if (flags & bit) words.push(name.toLowerCase());
+    console.log(`mount(${source}, ${target}, ${type ?? "(none)"}, [${words.join(",")}], "${data}")`);
+  }
+  if (fake) return;
+  const dataBytes = data ? cString(data) : null;
+  const typeBytes = type ? cString(type) : null;
+  const result = libc.symbols.mount(
+    ptr(cString(source)),
+    ptr(cString(target)),
+    typeBytes ? ptr(typeBytes) : null,
+    flags,
+    dataBytes ? ptr(dataBytes) : null,
+  );
+  if (result === 0) return;
+  const code = errno();
+  // The kernel demotes a dirty NTFS or a FAT with errors to read-only rather
+  // than fail; when it does refuse outright, tell the user the escape hatch.
+  const hint = type === "ntfs3" && code === Errno.EINVAL
+    ? " — a Windows volume left dirty by hibernation or Fast Startup needs -o force, or -o ro" : "";
+  fail(explain(code, source, target, type) + hint);
+};
+
+const main = async () => {
+  const state = parseArguments(process.argv.slice(2));
+  if (state.help) return showDocument("mount");
+
+  if (state.source) state.positional.unshift(state.source);
+  if (state.positional.length === 0) return listMounts();
+
+  const pure = state.flags & (MS.BIND | MS.MOVE | MS.REMOUNT | MS.SHARED | MS.PRIVATE | MS.SLAVE | MS.UNBINDABLE);
+  let [source, target] = state.positional;
+  if (state.positional.length === 1) {
+    // `mount -o remount,rw /` and `mount --make-private /` name the target only.
+    if (!(state.flags & MS.REMOUNT) && !(state.flags & (MS.SHARED | MS.PRIVATE | MS.SLAVE | MS.UNBINDABLE))) usage();
+    target = source;
+    source = "none";
+  } else if (state.positional.length > 2) usage();
+
+  if (state.mkdir) mkdirSync(target, { recursive: true });
+
+  let type = state.type;
+  const loaded = [];
+  if (!pure) {
+    source = resolveSource(source);
+    if (source.startsWith("/dev/")) {
+      ensureBlockDrivers(source);
+      if (!existsSync(source)) fail(`special device ${source} does not exist`);
+    }
+    if (!type || type === "auto") {
+      const info = source.startsWith("/dev/") ? probe(source) : null;
+      if (!info) fail(`can't identify the filesystem on ${source}; use -t TYPE`);
+      if (info.type === "swap") fail(`${source} is swap space, not a filesystem`);
+      type = info.type;
+      if (state.verbose) console.log(`${source}: ${info.type}${info.label ? ` label "${info.label}"` : ""}${info.uuid ? ` uuid ${info.uuid}` : ""}`);
+    }
+    if (type === "ntfs") type = "ntfs3";
+    if (type === "ext3") type = "ext4";
+    loaded.push(...ensureFilesystemDriver(type, state.data));
+  }
+  if (state.verbose && loaded.length) console.log(`loaded modules: ${loaded.join(" ")}`);
+
+  doMount(source, target, pure ? null : type, state.flags, state.data.join(","), state);
+  // mount(2) ignores every other flag on a bind, so `--bind -o ro` takes a
+  // second, remount pass the way util-linux does it.
+  if (state.flags & MS.BIND && state.flags & MS.RDONLY && !(state.flags & MS.REMOUNT)) {
+    doMount("none", target, null, MS.REMOUNT | MS.BIND | MS.RDONLY | (state.flags & MS.REC), "", state);
+  }
+  if (state.verbose) console.log(`${source} mounted on ${target}.`);
+};
+
+try {
+  await main();
+} catch (error) {
+  if (error instanceof SysError) fail(error.message);
+  if (error?.code === "ENOENT" || error?.code === "EACCES") fail(`${error.path ?? ""}: ${error.message}`);
+  throw error;
+}

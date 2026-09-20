@@ -66,7 +66,7 @@ REPL on the serial console:
 Run /bin/bun as init process
 init.js: Bun runtime entered JavaScript
 init.js: loading physical musl libc for FFI
-init.js: mounted /proc, /sys, /dev, /tmp
+init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts
 network: lo 127.0.0.1/8
 network: eth0 10.0.2.15/24 via 10.0.2.2
 fetch example.com: HTTP 200, text/html
@@ -238,7 +238,7 @@ runs the steps below in order. Each one writes files the next one reads.
 
 | script | reads | writes |
 | --- | --- | --- |
-| `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-virt`, `kernel/linuxx64.efi.stub`, `initramfs/lib/ld-musl-x86_64.so.1`, `initramfs/lib/modules/…/{failover,net_failover,virtio_net}.ko` |
+| `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-virt`, `kernel/linuxx64.efi.stub`, `initramfs/lib/ld-musl-x86_64.so.1`, `initramfs/lib/modules/…/` (virtio_net, virtio_blk, ext4, vfat, exfat, ntfs3, NLS tables, each with its dependencies, plus a trimmed `modules.dep`/`modules.alias`/`modules.builtin`) |
 | `fetch-bun.sh` | GitHub, Alpine CDN | `initramfs/bin/bun`, `initramfs/lib/{libc.musl-x86_64.so.1,libstdc++.so.6,libgcc_s.so.1}` |
 | `scripts/pack-initramfs.sh` | `initramfs/` | `build/initramfs.cpio.gz` |
 | `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` |
@@ -404,6 +404,46 @@ Two things to expect:
 * **QEMU write-locks `vda.img`.** A second instance fails with `Failed to get
   "write" lock`; copy the image first if you want two at once.
 
+### Commands in /bin
+
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` carries three commands
+written as Bun scripts on top of two shared modules in `/lib`:
+
+| command | does | manual |
+| --- | --- | --- |
+| `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads the filesystem and disk modules it needs | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
+| `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
+| `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+
+`--help` renders the Markdown manual with `Bun.markdown.ansi`, hyperlinks
+included. The shared pieces:
+
+* `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-x86_64.so.1`
+  (`mount`, `umount2`, `ioctl`, `socket`, `syscall`, …), `errno`/`strerror`,
+  a `SysError` class and the `showDocument()` helper behind every `--help`.
+  `init.js` keeps its own copy of the binding because it runs before `/proc`
+  exists and cannot import anything.
+* `/lib/modprobe.js` — `modprobe(name)` resolves `modules.alias` and
+  `modules.dep` under `/lib/modules/<release>/` and calls `finit_module`
+  for each dependency in order. The kernel has no `/sbin/modprobe` to call
+  here, so `mount` preloads `ext4`+`jbd2`, `vfat`+NLS tables, `ntfs3`,
+  `virtio_blk`, and so on itself.
+
+```sh
+mount /dev/vda1 /mnt --mkdir           # the ESP: vfat detected, modules loaded
+mount -t tmpfs -o size=64M tmpfs /tmp/x
+mount -t ntfs3 -o force /dev/sda3 /mnt/windows
+ip -br addr && ip route
+ip addr replace 10.0.2.20/24 dev eth0 && ip route replace default via 10.0.2.2
+```
+
+Which modules the image carries is the list in `fetch-alpine.sh`; the
+`select_module` helper there pulls in dependencies from Alpine's
+`modules.dep`, and `--real` adds the disk controllers (`sd_mod`, `ahci`,
+`nvme`, `usb-storage`), the wired NICs and the ACPI power drivers. Alpine's
+kernels build all of these as modules; a self-built kernel with them `=y`
+works the same way, the loaders just find nothing to load.
+
 ### Iterating on the boot
 
 Rebuilding the UKI and the disk image for every attempt is slow, and neither is
@@ -477,7 +517,9 @@ was found.
 ### What init.js does
 
 It installs signal handlers, loads a separate physical copy of musl through
-`bun:ffi`, prints a greeting, and starts `node:repl`. The loader and libc paths
+`bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without
+the devpts mount every pty open fails with `ENODEV`, since `/dev/ptmx`
+resolves through `/dev/pts/ptmx`), prints a greeting, and starts `node:repl`. The loader and libc paths
 contain identical bytes but are deliberately distinct inodes:
 
 ```text
@@ -494,6 +536,23 @@ The Bun init also loads Alpine's three compressed `virtio_net` modules through
 musl's generic `syscall`, configures QEMU user networking as `10.0.2.15/24`
 with the standard `10.0.2.2` gateway and `10.0.2.3` DNS proxy, and fetches
 `http://example.com` before opening the REPL.
+
+On a `--real` image the REPL also offers the getter-based `cfg` namespace:
+`cfg.eth`, `cfg.mod` and `cfg.bat` run as soon as the property is read, without
+parentheses. `cfg.eth` loads every packaged network module (including PHY and bus support),
+then reads the `modalias` of every PCI network device, virtio net device and
+USB device, matches it against the `pci:`/`virtio:`/`usb:` lines
+`fetch-alpine.sh` kept in `modules.alias` and lists the interfaces. `cfg.mod`
+unconditionally attempts every packaged module and recursively loads its
+declared dependencies. `--real` ships Intel `e1000`/`e1000e`/`igb`/`igc`,
+Realtek `r8169`, Atheros `alx`, Broadcom `tg3` and the `r8152`/`ax88179_178a`/
+`cdc_ether` USB dongles. `cfg.bat` loads the ACPI
+`battery`, `ac`, `button` and `thermal` modules through `/lib/modprobe.js`
+and lists `/sys/class/power_supply` (a desktop without a battery simply
+reports nothing registered). Nothing loads them at boot. PID 1 also installs
+`uncaughtException`/`unhandledRejection` listeners: without them a stray
+`Promise.reject()` at the prompt makes Bun exit, which is a kernel panic
+(`Attempted to kill init!`).
 
 The REPL exposes a global `bunmsh()` function. Calling it creates
 `/tmp/bunmsh-runtime`, installs the pinned `bunmsh@0.3.6` package there, and

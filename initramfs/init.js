@@ -37,6 +37,10 @@ const libc = dlopen("/lib/libc.musl-x86_64.so.1", {
     args: [FFIType.i32],
     returns: FFIType.i32,
   },
+  mkdir: {
+    args: [FFIType.ptr, FFIType.i32],
+    returns: FFIType.i32,
+  },
 });
 
 const cString = (value) => new TextEncoder().encode(`${value}\0`);
@@ -63,18 +67,23 @@ const errno = () => read.i32(errnoLocation);
 //
 // EBUSY is tolerated so this still works if something else mounted them first.
 const mountFilesystems = () => {
-  for (const [source, target, type] of [
+  for (const [source, target, type, data] of [
     ["proc", "/proc", "proc"],
     ["sysfs", "/sys", "sysfs"],
     ["devtmpfs", "/dev", "devtmpfs"],
     ["tmpfs", "/tmp", "tmpfs"],
+    // Since Linux 4.7 open("/dev/ptmx") resolves through /dev/pts/ptmx, so
+    // without this mount every pty open fails with ENODEV. The directory is
+    // created on the devtmpfs mounted just above.
+    ["devpts", "/dev/pts", "devpts", "gid=5,mode=620,ptmxmode=666"],
   ]) {
+    if (type === "devpts") libc.symbols.mkdir(ptr(cString(target)), 0o755);
     const result = libc.symbols.mount(
       ptr(cString(source)),
       ptr(cString(target)),
       ptr(cString(type)),
       0n,
-      null,
+      data === undefined ? null : ptr(cString(data)),
     );
     if (result === 0) continue;
     if (errno() === 16) continue; // EBUSY: already mounted
@@ -83,12 +92,22 @@ const mountFilesystems = () => {
 };
 
 mountFilesystems();
-console.log("init.js: mounted /proc, /sys, /dev, /tmp");
+console.log("init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts");
 
 const { default: repl } = await import("node:repl");
 const { mkdirSync, writeFileSync } = await import("node:fs");
 
 global.repl = repl;
+
+// QEMU user networking exposes its DNS proxy at 10.0.2.3. A real-machine
+// image instead starts with public resolvers until the user configures DNS
+// for the local network.
+writeFileSync(
+  "/etc/resolv.conf",
+  process.env.REAL_MACHINE === "1"
+    ? "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
+    : "nameserver 10.0.2.3\n",
+);
 
 
 const loadModule = (path) => {
@@ -203,6 +222,36 @@ const configureRealKeyboard = () => {
   ]) loadModule(`/lib/modules/${release}/kernel/${module}`);
 };
 
+// ACPI battery, AC adapter, power button and thermal zones are modules on
+// Alpine's kernels; until they are loaded /sys/class/power_supply is empty.
+// Loaded on demand from the REPL as cfg.bat, through /lib/modprobe.js (a
+// require() is fine here: /proc exists by the time anyone can type it). The
+// modules are only in the image when it was built with --real.
+const configureBattery = () => {
+  const { modprobe } = require("/lib/modprobe.js");
+  for (const module of ["battery", "ac", "button", "thermal"]) {
+    try {
+      const inserted = modprobe(module);
+      console.log(`acpi: ${module} ${inserted.length ? "loaded" : "already loaded"}`);
+    } catch (error) {
+      console.error(`acpi: ${module}: ${error.message}`);
+    }
+  }
+  const { readdirSync, readFileSync } = require("node:fs");
+  const read = (path) => { try { return readFileSync(path, "utf8").trim(); } catch { return "-"; } };
+  const supplies = (() => { try { return readdirSync("/sys/class/power_supply"); } catch { return []; } })();
+  if (supplies.length === 0) console.log("power_supply: nothing registered (no ACPI battery or AC adapter on this machine)");
+  for (const name of supplies) {
+    const base = `/sys/class/power_supply/${name}`;
+    const type = read(`${base}/type`);
+    const detail = type === "Battery"
+      ? `${read(`${base}/status`)} ${read(`${base}/capacity`)}%`
+      : `online=${read(`${base}/online`)}`;
+    console.log(`power_supply: ${name} ${type} ${detail}`);
+  }
+  return supplies;
+};
+
 const reapChildren = () => {
   const status = new Int32Array(1);
   while (libc.symbols.waitpid(-1, ptr(status), 1) > 0) {}
@@ -212,6 +261,13 @@ process.on("SIGCHLD", reapChildren);
 
 process.on("SIGTERM", () => console.log("PID 1 received SIGTERM"));
 process.on("SIGINT", () => console.log("PID 1 received SIGINT"));
+
+// The REPL catches what its eval throws, but not a rejection or a throw
+// from a timer or callback: Bun then exits, and PID 1 exiting is a kernel
+// panic ("Attempted to kill init!"). With a listener installed Bun only
+// reports, so a stray `Promise.reject()` at the prompt stays a message.
+process.on("uncaughtException", (error) => console.error("PID 1 uncaught exception (ignored):", error));
+process.on("unhandledRejection", (reason) => console.error("PID 1 unhandled rejection (ignored):", reason));
 
 
 try {
@@ -227,6 +283,7 @@ try {
 } catch (error) {
   console.error("USB keyboard setup failed:", error);
 }
+
 
 try {
   configureQemuNetwork();
@@ -289,7 +346,8 @@ const launchBuninu = () => {
   const shell = Bun.spawnSync([
     "/bin/bun", entry, "--local"
   ], {
-    env: { 
+    env: {
+      ...process.env,
       PATH:"/bin:/usr/bin:/buninu/bin",
       HOME:"/buninu"
     },
@@ -322,6 +380,77 @@ globalThis.bunmsh = launchBunmsh;
 
 globalThis.start = launchBuninu;
 console.log("Type start() to run buninu --local");
+
+// cfg.eth loads every packaged network module, including PHY and bus support
+// that a kernel userspace modprobe helper would normally load on demand. It
+// then reports the device matches and lists the resulting interfaces. The
+// address and route are still yours to set with `ip`.
+const configureEthernet = () => {
+  const { autoload, modprobeAll } = require("/lib/modprobe.js");
+  const { readdirSync, readFileSync } = require("node:fs");
+  const read = (path) => { try { return readFileSync(path, "utf8").trim(); } catch { return "-"; } };
+  const all = modprobeAll({ accept: (_module, path) => path.startsWith("kernel/drivers/net/") });
+  console.log(`eth: loaded all packaged network modules (${all.inserted.length} newly loaded, ${all.errors.length} failed)`);
+  for (const { module, error } of all.errors) console.log(`eth: ${module}: ${error}`);
+  const report = autoload({
+    // PCI class 02 (network), virtio device id 1 (net), every USB device —
+    // but only network drivers, so a USB keyboard does not show up as usbhid.
+    accept: (modalias) => /^usb:/.test(modalias) || /^virtio:d00000001v/.test(modalias) || /bc02sc/.test(modalias),
+    acceptModule: (module, path) => path.startsWith("kernel/drivers/net/"),
+  });
+  if (report.length === 0) console.log("eth: no network device matched a module in the image (driver built in, or not built with --real)");
+  // Network devices nothing in the image claims, so the chip is at least named.
+  try {
+    for (const device of readdirSync("/sys/bus/pci/devices")) {
+      const modalias = read(`/sys/bus/pci/devices/${device}/modalias`);
+      if (!/bc02sc/.test(modalias) || report.some((entry) => entry.device === device)) continue;
+      const [, vendor, id] = /^pci:v0000([0-9A-F]{4})d0000([0-9A-F]{4})/.exec(modalias) ?? [];
+      const kind = /bc02sc80/.test(modalias) ? "wireless" : "network";
+      console.log(`eth: pci ${device} ${kind} controller ${vendor}:${id} has no driver in the image`);
+    }
+  } catch {}
+  for (const { bus, device, modules, loaded, error } of report) {
+    const status = error ?? (loaded.length ? `loaded ${loaded.join(" ")}` : "already loaded");
+    console.log(`eth: ${bus} ${device} -> ${modules.join(" ")}: ${status}`);
+  }
+  const interfaces = (() => { try { return readdirSync("/sys/class/net").filter((name) => name !== "lo"); } catch { return []; } })();
+  for (const name of interfaces) {
+    const carrier = read(`/sys/class/net/${name}/carrier`);
+    console.log(`eth: ${name} ${read(`/sys/class/net/${name}/address`)} ${read(`/sys/class/net/${name}/operstate`)}${carrier === "1" ? " carrier" : ""}`);
+  }
+  if (interfaces.length) console.log(`eth:
+  Next steps in shell( after start() ):
+  ip link set ${interfaces[0]} up
+  ip addr add A.B.C.D/24 dev ${interfaces[0]};
+  ip route add default via GATEWAY
+`);
+  return interfaces;
+};
+
+// Explicit full coldplug for this deliberately tiny system: load every .ko
+// represented in modules.dep, recursively including each module's declared
+// dependencies. Failures are reported individually without stopping the rest.
+const configureModules = () => {
+  const { modprobeAll } = require("/lib/modprobe.js");
+  const report = modprobeAll();
+  console.log(`modules: ${report.inserted.length} newly loaded, ${report.errors.length} failed`);
+  for (const { module, error } of report.errors) console.log(`modules: ${module}: ${error}`);
+  return report;
+};
+
+globalThis.cfg = Object.freeze(Object.defineProperties({}, {
+  bat: { enumerable: true, get: configureBattery },
+  eth: { enumerable: true, get: configureEthernet },
+  mod: { enumerable: true, get: configureModules },
+}));
+
+// Compatibility aliases for images and notes that used the original API.
+globalThis.cfgEth = configureEthernet;
+globalThis.cfgMod = configureModules;
+globalThis.cfgBat = configureBattery;
+if (process.env.REAL_MACHINE === "1") {
+  console.log(`Configuration getters: ${Object.keys(globalThis.cfg).map((name) => `cfg.${name}`).join(", ")}`);
+}
 
 const startRepl = () => {
   const server = repl.start({

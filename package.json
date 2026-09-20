@@ -37,6 +37,6 @@
     "fetch": "./index.js -f",
     "pack": "./index.js -b",
     "start": "./index.js -r",
-    "check": "node --check ./index.js && node --check ./initramfs/init.js"
+    "check": "for f in ./index.js ./initramfs/init.js ./initramfs/lib/dlopen.js ./initramfs/lib/modprobe.js ./initramfs/bin/mount ./initramfs/bin/umount ./initramfs/bin/ip; do node --check \"$f\" || exit 1; done"
   }
 }

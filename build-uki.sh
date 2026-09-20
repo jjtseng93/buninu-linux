@@ -7,8 +7,10 @@ linux_flavor=${LINUX_FLAVOR:-virt}
 kernel_release="6.18.52-0-$linux_flavor"
 kernel_image="kernel/vmlinuz-$linux_flavor"
 
-if [ ! -s "$kernel_image" ] || { [ "${REAL_MACHINE:-}" = 1 ] && \
-    [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid/usbhid.ko" ]; }; then
+if [ ! -s "$kernel_image" ] || [ ! -s "initramfs/lib/modules/$kernel_release/modules.dep" ] || \
+    { [ "${REAL_MACHINE:-}" = 1 ] && \
+    { [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid/usbhid.ko" ] || \
+      [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/acpi/battery.ko" ]; }; }; then
     ./fetch-alpine.sh
 fi
 ./scripts/pack-initramfs.sh
