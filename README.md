@@ -25,9 +25,10 @@
 - Still in the early stages
   * Built & tested on Android Termux QEMU (PRoot+Native)
   * [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
-    its interactive REPL on the local display and keyboard. Physical networking
-    is not implemented yet, but the bundled `jmi` editor and local JavaScript
-    execution work.
+    its interactive REPL on the local display and keyboard. Common wired NIC
+    drivers can be loaded with `cfg.net`; addresses and routes are configured
+    manually because the image does not yet include a DHCP client. The bundled
+    `jmi` editor and local JavaScript execution also work.
   * Built & booted in a cloud VM provided by ChatGPT Work mode, running Ubuntu 24.04.3 LTS on x86-64 with QEMU 8.2.2, TCG, and OVMF. Bun 1.4.2 was verified running as PID 1, and the Buninu userspace and bunmsh started successfully.
 
 - The hello-world EFI application in Section 1 is the starting point that the UKI replaces
@@ -73,9 +74,16 @@ fetch example.com: HTTP 200, text/html
 
 Welcome to Buninu Linux!
 Bun 1.4.2 is now PID 1
-
 Type start() to run buninu --local
+
 bun-repl>
+```
+
+With a `--real` image, the same welcome also includes the dynamically generated
+getter list before the blank line and prompt:
+
+```text
+Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power
 ```
 
 Ctrl-C stops QEMU. After editing `initramfs/init.js`, `bun ./index.js -b` in
@@ -420,7 +428,7 @@ written as Bun scripts on top of two shared modules in `/lib`:
 included. The shared pieces:
 
 * `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-x86_64.so.1`
-  (`mount`, `umount2`, `ioctl`, `socket`, `syscall`, …), `errno`/`strerror`,
+  (`mount`, `umount2`, `ioctl`, `socket`, `sync`, `reboot`, `syscall`, …), `errno`/`strerror`,
   a `SysError` class and the `showDocument()` helper behind every `--help`.
   `init.js` keeps its own copy of the binding because it runs before `/proc`
   exists and cannot import anything.
@@ -432,6 +440,7 @@ included. The shared pieces:
 
 ```sh
 mount /dev/vda1 /mnt --mkdir           # the ESP: vfat detected, modules loaded
+mount -fv /dev/sda1 /mnt               # detect type/label/UUID without mounting
 mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
 ip -br addr && ip route
@@ -521,7 +530,9 @@ was found.
 It installs signal handlers, loads a separate physical copy of musl through
 `bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without
 the devpts mount every pty open fails with `ENODEV`, since `/dev/ptmx`
-resolves through `/dev/pts/ptmx`), prints a greeting, and starts `node:repl`. The loader and libc paths
+resolves through `/dev/pts/ptmx`), prints a greeting, and starts `node:repl`.
+Submitting an empty or whitespace-only REPL line prints the welcome message
+and the available `cfg` getters again. The loader and libc paths
 contain identical bytes but are deliberately distinct inodes:
 
 ```text
@@ -534,10 +545,13 @@ deadlocks, while the independent physical libc works. It provides `mount`,
 `waitpid`, networking calls, and the generic `syscall` entry point, so no
 custom `libinit.so` is needed.
 
-The Bun init also loads Alpine's three compressed `virtio_net` modules through
+The Bun init also loads `virtio_net` and its packaged dependencies through
 musl's generic `syscall`, configures QEMU user networking as `10.0.2.15/24`
-with the standard `10.0.2.2` gateway and `10.0.2.3` DNS proxy, and fetches
-`http://example.com` before opening the REPL.
+with the standard `10.0.2.2` gateway, writes `nameserver 10.0.2.3`, and fetches
+`http://example.com` before opening the REPL. A `--real` image instead starts
+`/etc/resolv.conf` with `1.1.1.1` and `8.8.8.8`; these are initial public
+resolvers until the user replaces them with DNS appropriate for the local
+network.
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
 `cfg.net`, `cfg.disk`, `cfg.power` and `cfg.all` run as soon as the property is read, without
@@ -562,7 +576,8 @@ The REPL exposes a global `bunmsh()` function. Calling it creates
 `/tmp/bunmsh-runtime`, installs the pinned `bunmsh@0.3.6` package there, and
 directly runs its `src/main.js` with a small explicit environment. The calls
 are synchronous so bunmsh exclusively owns the terminal until `exit` returns
-to the Bun REPL.
+to the Bun REPL. `start()` launches Buninu with the current process environment
+preserved, while overriding `PATH` and `HOME` for the userspace session.
 
 ## Authorship
 
