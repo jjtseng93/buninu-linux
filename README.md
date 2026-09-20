@@ -49,13 +49,15 @@
 
 ### Steps
 
-Before anything, install Bun in Debian first:
+- Before anything, install Bun in Debian first:
 
 ```sh
 apt update
 apt install curl unzip
 curl -fsSL https://bun.sh/install | bash
 ```
+
+- Small tip: The below `apt install` command shows in the terminal when you run -b without the needed tools
 
 #### Build directly with bun x
 
