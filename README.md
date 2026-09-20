@@ -26,13 +26,17 @@
 ---
 
 - Still in the early stages
-  * [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`: Bun reached
-    its interactive REPL on the local display and keyboard. Common wired NIC
-    drivers can be loaded with `cfg.net`; addresses and routes are configured
-    manually because the image does not yet include a DHCP client. The bundled
-    `jmi` editor and local JavaScript execution also work.
+- [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`:
+  * Bun reaches its interactive REPL
+  * start() starts the Buninu userspace shell
+  * `cfg.disk` + shell `mount` mounts local disks
+  * `cfg.net` loads common wired NIC drivers
+  * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
+  * The bundled `jmi` editor, `jsmdcui` app runtime, and local JavaScript execution also work.
 
-- The hello-world EFI application in Section 1 is the starting point that the UKI replaces
+---
+
+- The hello-world EFI application in [Section 1](#1-hello-world) is the starting point that the UKI replaces
 - It still builds, and it is the quickest way to check whether the disk image and firmware path work at all.
 
 ## Quick start
@@ -135,6 +139,95 @@ described under [Real hardware](#real-hardware). Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
+## Running
+
+### Real hardware
+
+Real hardware is the primary target. Boot the USB drive with Secure Boot
+disabled unless you have signed the UKI yourself. The physical display and USB
+keyboard provide the `bun-repl>` prompt.
+
+Load only the hardware subsystem you need:
+
+```js
+cfg.net
+cfg.disk
+cfg.power
+```
+
+`cfg.net` loads the packaged wired-network drivers and prints detected
+interfaces and MAC addresses. There is no DHCP client yet, so configure the
+interface manually after entering the Buninu shell with `start()`:
+
+```sh
+ip link set eth0 up
+ip addr add 192.168.1.50/24 dev eth0
+ip route add default via 192.168.1.1
+```
+
+The real image initializes `/etc/resolv.conf` with `1.1.1.1` and `8.8.8.8`;
+replace them if your network requires different DNS servers. `cfg.disk` loads
+common SATA/PATA/SCSI, NVMe/VMD and USB-storage drivers so detected disks and
+partitions appear in `/dev`. To inspect a filesystem without mounting it:
+
+```sh
+mount -fv /dev/sda1 /mnt
+```
+
+Run `poweroff` for a synced shutdown.
+
+The bundled `jmi` terminal editor works without a network connection:
+
+```sh
+jmi hlw.js
+```
+
+- The recommended `jmi` color theme is `cmc-tc`
+- Set it by: 
+  * Press `Ctrl-E`
+  * Type `theme ` (including the trailing space)
+  * Press `Tab`, select it with up/dn keys
+  * Press `Enter`. 
+  
+- Enter and save(Ctrl-S) this content:
+
+```js
+console.log("Hello world from real hardware");
+```
+
+After leaving the editor with `Ctrl-Q`, run it locally:
+
+```sh
+bun hlw.js
+```
+
+- Sometimes `Enters` in some scenarios don't directly work; if that's the case, try `Ctrl-J` or `Ctrl-M`
+
+## Commands inside /bin
+
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes four commands
+implemented as Bun scripts:
+
+| command | does | manual |
+| --- | --- | --- |
+| `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
+| `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
+| `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+| `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
+
+`--help` renders each Markdown manual in the terminal. Common examples:
+
+```sh
+mount /dev/sda1 /mnt --mkdir
+mount -fv /dev/sda1 /mnt
+mount -t tmpfs -o size=64M tmpfs /tmp/x
+mount -t ntfs3 -o force /dev/sda3 /mnt/windows
+ip -br addr && ip route
+ip addr replace 192.168.1.50/24 dev eth0
+ip route replace default via 192.168.1.1
+poweroff
+```
+
 ## Environment and dependencies
 
 ### Build environment
@@ -151,7 +244,7 @@ The base image already provides `bash`, GNU `tar`, `gzip`, `sha256sum`,
 `dd`, `printf`, `awk` and `dirname`, all used by these scripts as they are.
 Everything else has to be added.
 
-### Buninu Linux (Section 2)
+### Buninu Linux ([Section 2](#2-buninu-linux-bun-as-pid-1))
 
 Buninu Linux needs no compiler: Bun is downloaded as a prebuilt binary and the
 UKI is assembled with `objcopy`.
@@ -181,7 +274,7 @@ apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parte
 * **`bun`** (or **`node`**) — runs `index.js` in the build environment. 
   + Under bun, `--readme` renders the Markdown; under node it is printed as-is.
 
-### Hello world (Section 1)
+### Hello world ([Section 1](#1-hello-world))
 
 The hello-world EFI application needs the C/PE toolchain plus the shared disk
 image tools:
@@ -204,7 +297,9 @@ The retired `test/build-init-bootstrap.sh` also needs `clang lld`. It compiles
 the historical freestanding x86-64 `/init`; the current Buninu Linux path does
 not use or compile it.
 
-## 1. Hello world
+## Implementation details
+
+### 1. Hello world
 
 - `hello/hello.c` is a freestanding PE32+ EFI application installed at the
   removable media fallback path `EFI/BOOT/BOOTX64.EFI`.
@@ -220,9 +315,9 @@ After verifying `/dev/sdX` is the whole destination USB device, boot it on the
 physical x86-64 UEFI machine. It writes `Hello world from x64 UEFI!` to the
 firmware console and waits; press any key to return to the firmware interface.
 
-`build-image.sh` is shared with Section 2 — see [Disk layout](#disk-layout).
+`build-image.sh` is shared with [Section 2](#2-buninu-linux-bun-as-pid-1) — see [Disk layout](#disk-layout).
 
-## 2. Buninu Linux – Bun as PID 1
+### 2. Buninu Linux – Bun as PID 1
 
 An unsigned x64 Unified Kernel Image assembled from official Alpine packages,
 with Bun as the init process, replaces the hello-world application:
@@ -267,10 +362,10 @@ index.js                  entry point: -f / -b / --export / --linux-lts / --real
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
-build-image.sh            [build]  GPT disk image; shared with Section 1
+build-image.sh            [build]  GPT disk image; shared with the hello-world EFI
 scripts/fetch.sh          hash-checked download helper, sourced by fetch-*.sh
 scripts/pack-initramfs.sh cpio archive with the device nodes
-hello/                    Section 1: hello.c and build-hello.sh
+hello/                    hello-world EFI: hello.c and build-hello.sh
 test/                     the retired C bootstrap and its build script
 initramfs/                init.js and the committed libraries; rest fetched
 ```
@@ -287,7 +382,7 @@ tampered with is fetched again and has to pass the same hash before a script
 extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
-### Build pipeline
+#### Build pipeline
 
 The primary `bun ./index.js -fb --real` pipeline runs the steps below in order;
 each writes files the next one reads. When selected, `--export` runs afterward
@@ -315,7 +410,7 @@ The kernel command line works the same way: `build-uki.sh` writes it to
 `build/cmdline` and compiles it into the UKI. Nothing reads it from disk at
 boot.
 
-### UKI layout
+#### UKI layout
 
 `build-uki.sh` appends sections to systemd's `linuxx64.efi.stub` with
 `objcopy`, at hand-picked VMAs because `objcopy` will not lay them out for you:
@@ -331,7 +426,7 @@ boot.
 The current `--real` result is a single 59.3 MB PE32+ file holding kernel, initramfs and command
 line.
 
-### Disk layout
+#### Disk layout
 
 `build-image.sh` needs no mount, no loop device and no root privilege. It
 formats a standalone FAT32 image, fills it with mtools, builds the GPT with
@@ -352,91 +447,22 @@ LBA 262111..       backup GPT
 backup GPT. `EFI/BOOT/BOOTX64.EFI` is the removable-media fallback path, so the
 firmware runs it without any NVRAM boot entry.
 
-### Running
+#### Real-hardware boot details
 
-#### Real hardware
-
-Real hardware is the primary target. Build the physical-machine image in
-PRoot, then write the complete `vda.img` (not its inner FAT partition) to a
-USB drive and boot it as x86-64 UEFI media:
-
-```sh
-bun ./index.js -fb --real
-sudo dd if=vda.img of=/dev/sdX bs=4M conv=fsync status=progress
-```
-
-Replace `/dev/sdX` with the verified whole USB device; this command destroys
-its previous contents. The boot chain is firmware → the UKI stub → its embedded
+The physical boot chain is firmware → the UKI stub → its embedded
 `.linux`/`.initrd`/`.cmdline` sections → kernel → `rdinit=/bin/bun`.
-
-`--real` uses Alpine `linux-lts`, adds the xHCI and USB HID module chain, and
-changes the embedded console order to:
+`--real` uses Alpine `linux-lts`, includes the xHCI and USB HID module chain,
+and embeds this console order:
 
 ```text
 console=ttyS0,115200 console=tty0
 ```
 
-Serial kernel logging is retained, while `/dev/console` and the Bun REPL use
-the physical display and keyboard. The UKI is unsigned, so Secure Boot must be
-disabled unless the image is signed separately.
+Serial kernel logging is retained, while the final console makes
+`/dev/console` and the Bun REPL use the physical display and keyboard. This
+path has been tested successfully on real hardware.
 
-This path has been tested successfully on real hardware: the machine entered
-the interactive `bun-repl>` with working local keyboard input. The image ships
-common wired NIC, SATA/PATA/SCSI, NVMe/VMD, USB storage and ACPI power modules.
-Use the getter matching the subsystem instead of loading everything:
-
-```js
-cfg.net
-cfg.disk
-cfg.power
-```
-
-From the Bun REPL, start the bundled Buninu userspace:
-
-```text
-bun-repl> start()
-```
-
-`cfg.net` prints the interface name and MAC address. There is no DHCP client,
-so configure the interface in that shell with addresses from your network,
-for example:
-
-```sh
-ip link set eth0 up
-ip addr add 192.168.1.50/24 dev eth0
-ip route add default via 192.168.1.1
-```
-
-The real image initializes `/etc/resolv.conf` with `1.1.1.1` and `8.8.8.8`;
-replace those if the local network requires different DNS. `cfg.disk` makes
-detected disks and partitions appear in `/dev`; `mount -fv /dev/sda1 /mnt`
-can inspect a filesystem without mounting it. Shut down with `poweroff`, which
-syncs pending writes before requesting kernel power-off.
-
-The bundled `jmi` terminal editor works without a network connection. For
-example, open a new `hlw.js` from the Buninu shell:
-
-```sh
-jmi hlw.js
-```
-
-The recommended colour theme for `jmi` is `cmc-tc`. Once inside the editor,
-press `Ctrl-E`, type `theme ` (including the trailing space), press `Tab`, then
-use the `Up` and `Down` arrow keys to select `cmc-tc` and press `Enter`.
-
-Enter and save this content:
-
-```js
-console.log("Hello world from real hardware");
-```
-
-After leaving the editor, execute it locally:
-
-```sh
-bun hlw.js
-```
-
-### QEMU development
+#### QEMU development
 
 This optional path has been tested in native Android Termux and in an Ubuntu
 24.04 cloud VM with QEMU 8.2.2, TCG and OVMF. In native Termux, install the
@@ -464,7 +490,7 @@ because a PID 1 that exits panics the kernel.
 The QEMU-only CLI stage is `-r`/`--run`; `-fbr` is the full virtual pipeline,
 `-br` is its edit-and-boot loop, and arguments after `--` are passed through
 verbatim, for example `-r -- -m 1G`. The corresponding repository entry is
-`run-qemu.sh`. To smoke-test the Section 1 EFI hello-world image instead, build
+`run-qemu.sh`. To smoke-test the [Section 1](#1-hello-world) EFI hello-world image instead, build
 it and run the same `-r` stage; OVMF exposes its console over COM1.
 The legacy `fetch-plus-build.sh` wrapper is equivalent to the virtual `-fb`
 stages and does not select `--real`. `npm start` invokes the run stage.
@@ -483,7 +509,7 @@ parks the guest because of `panic=0`, so press Ctrl-C. This shortcut does not
 exercise the UKI stub, GPT, physical console or hardware drivers; validate the
 result afterward with `bun ./index.js -b --real` on the real UEFI path.
 
-#### QEMU networking
+##### QEMU networking
 
 The NIC is QEMU user-mode networking (SLIRP): the guest is `10.0.2.15/24`
 behind a NAT with `10.0.2.2` as gateway and `10.0.2.3` as DNS, so it can reach
@@ -520,20 +546,11 @@ Two things to expect:
 * **QEMU write-locks `vda.img`.** A second instance fails with `Failed to get
   "write" lock`; copy the image first if you want two at once.
 
-### Commands in /bin
+#### Command implementation
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` carries four commands
-written as Bun scripts on top of two shared modules in `/lib`:
-
-| command | does | manual |
-| --- | --- | --- |
-| `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads the filesystem and disk modules it needs | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
-| `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
-| `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
-| `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
-
-`--help` renders the Markdown manual with `Bun.markdown.ansi`, hyperlinks
-included. The shared pieces:
+The `/bin` commands described earlier are Bun scripts built on two shared
+modules in `/lib`. `--help` uses `Bun.markdown.ansi` to render the Markdown
+manual with hyperlinks. The shared pieces are:
 
 * `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-x86_64.so.1`
   (`mount`, `umount2`, `ioctl`, `socket`, `sync`, `reboot`, `syscall`, …), `errno`/`strerror`,
@@ -546,15 +563,6 @@ included. The shared pieces:
   here, so `mount` preloads `ext4`+`jbd2`, `vfat`+NLS tables, `ntfs3`,
   `sd_mod`, `nvme`, and so on itself.
 
-```sh
-mount /dev/sda1 /mnt --mkdir           # type detected and modules loaded
-mount -fv /dev/sda1 /mnt               # detect type/label/UUID without mounting
-mount -t tmpfs -o size=64M tmpfs /tmp/x
-mount -t ntfs3 -o force /dev/sda3 /mnt/windows
-ip -br addr && ip route
-ip addr replace 192.168.1.50/24 dev eth0 && ip route replace default via 192.168.1.1
-```
-
 Which modules the image carries is the list in `fetch-alpine.sh`; the
 `select_module` helper there pulls in dependencies from Alpine's
 `modules.dep`, and `--real` adds common storage paths (`sd_mod`, `ahci`,
@@ -563,7 +571,7 @@ the wired NICs and the ACPI power drivers. Alpine's
 kernels build all of these as modules; a self-built kernel with them `=y`
 works the same way, the loaders just find nothing to load.
 
-### Reaching JavaScript with nothing mounted
+#### Reaching JavaScript with nothing mounted
 
 The default `--real` image embeds this kernel command line (shown for the
 currently pinned LTS release):
@@ -619,7 +627,7 @@ it, repack, and boot it with `rdinit=/init`. Varying which filesystems such a
 bootstrap mounted before the exec is how the `/dev/urandom` requirement above
 was found.
 
-### What init.js does
+#### What init.js does
 
 It installs signal handlers, loads a separate physical copy of musl through
 `bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without
