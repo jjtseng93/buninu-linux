@@ -21,7 +21,13 @@ function partialMarkerSuffixLength(text, marker) {
   return 0;
 }
 
-export function mouseInput(onMouse, onCursorPosition, onShortcut = () => {}, onPaste = () => {}) {
+export function mouseInput(
+  onMouse,
+  onCursorPosition,
+  onShortcut = () => {},
+  onPaste = () => {},
+  onEditShortcut = () => {},
+) {
   const decoder = new StringDecoder("utf8");
   let pending = "";
   // Bracketed paste (\x1b[200~ ... \x1b[201~): everything between the
@@ -48,6 +54,25 @@ export function mouseInput(onMouse, onCursorPosition, onShortcut = () => {}, onP
         source = source.replace(/\x1bc/g, () => { onShortcut("tab-close"); return ""; });
       }
       let output = "";
+      const flushOutput = () => {
+        if (!output) return;
+        this.push(output);
+        output = "";
+      };
+      const appendPlainText = (text) => {
+        let start = 0;
+        for (let index = 0; index < text.length; index++) {
+          const side = text[index] === "\x15" ? "head"
+            : text[index] === "\x0b" ? "tail"
+            : null;
+          if (!side) continue;
+          output += text.slice(start, index);
+          flushOutput();
+          onEditShortcut(side);
+          start = index + 1;
+        }
+        output += text.slice(start);
+      };
       while (source) {
         if (pasting) {
           const end = source.indexOf(PASTE_END);
@@ -66,8 +91,8 @@ export function mouseInput(onMouse, onCursorPosition, onShortcut = () => {}, onP
           continue;
         }
         const escape = source.indexOf("\x1b[");
-        if (escape < 0) { output += source; break; }
-        output += source.slice(0, escape);
+        if (escape < 0) { appendPlainText(source); break; }
+        appendPlainText(source.slice(0, escape));
         source = source.slice(escape);
         if (source.startsWith(PASTE_START)) {
           pasting = true;
@@ -93,7 +118,7 @@ export function mouseInput(onMouse, onCursorPosition, onShortcut = () => {}, onP
         output += source.slice(0, 2);
         source = source.slice(2);
       }
-      if (output) this.push(output);
+      flushOutput();
       done();
     },
   });

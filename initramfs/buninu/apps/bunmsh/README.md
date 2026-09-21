@@ -476,6 +476,13 @@ Bun.e, Bun.file("/tm     # -> a path, completed inside the string
 
 - `Ctrl-D`: On an empty input line, sends EOF and exits the interactive shell.
 
+- `Ctrl-U`: Removes and saves everything before the cursor. Press it again
+  while the cursor is at the beginning to restore that saved prefix.
+
+- `Ctrl-K`: Removes and saves everything after the cursor. Press it again
+  while the cursor is at the end to restore that saved suffix. Its saved text
+  is independent from `Ctrl-U`.
+
 - `Ctrl-T`: Calls `builtin tab` without adding a command to history. It creates
   a tab when only one exists, or switches to the next tab otherwise. Any
   command text currently being edited is preserved.

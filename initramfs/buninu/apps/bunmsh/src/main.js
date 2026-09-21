@@ -29,6 +29,7 @@ import { importedHistory, readlineHistory, saveBunmshHistory } from "./history.j
 import pkg from "../package.json" with { type:"json" }
 import { MOUSE_OFF, MOUSE_ON, PASTE_OFF, PASTE_ON, mouseInput } from "./mouse.js";
 import { homeRelativePath } from "./environment.js";
+import { toggleSavedText } from "./line-edit.js";
 
 const VERSION = `
 ${pkg.name}: ${pkg.description}
@@ -223,6 +224,8 @@ async function interactive(state) {
   let lastTabClick = null;
   let mouseCommandRunning = false;
   let foregroundCommand = false;
+  let savedHead = "";
+  let savedTail = "";
   let promptAbort = null;
   // Set by onPaste (below) when a bracketed paste contains a newline, and
   // consumed by the main loop's readline.question() catch block right after
@@ -332,6 +335,17 @@ async function interactive(state) {
     const key = { name: delta > 0 ? "right" : "left" };
     for (let n = 0; n < Math.abs(delta); n++) readline.write(null, key);
   };
+  const toggleLineText = (side) => {
+    if (!readline || foregroundCommand) return;
+    const saved = side === "head" ? savedHead : savedTail;
+    const result = toggleSavedText(readline.line, readline.cursor, saved, side);
+    if (side === "head") savedHead = result.saved;
+    else savedTail = result.saved;
+    if (!result.changed) return;
+    readline.line = result.line;
+    readline.cursor = result.cursor;
+    readline.prompt(true);
+  };
   const filteredInput = terminal ? mouseInput((mouse) => {
     if (!mouse.press || (mouse.button & 3) !== 0 || (mouse.button & 32)) return;
     pendingClick = { ...mouse, at: Date.now() };
@@ -384,7 +398,7 @@ async function interactive(state) {
     else if (shortcut === "lsfancy") runFancyShortcut();
     else if (shortcut === "lsfancy-parent") runFancyShortcut([".."]);
     else if (shortcut === "tab-close") runTabShortcut(["x"]);
-  }, onPaste) : process.stdin;
+  }, onPaste, toggleLineText) : process.stdin;
   const completer = (line) => {
     commandIndex.refreshIfChanged(state);
     if (javascriptLine(line)) {

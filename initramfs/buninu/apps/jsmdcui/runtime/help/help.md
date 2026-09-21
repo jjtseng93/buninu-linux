@@ -793,6 +793,8 @@ selection, search, and copy remain available.
 | `Ctrl-F` | Search; use `Ctrl-N` and `Ctrl-P` for the next and previous match. |
 | `Ctrl-G` | Open the editor help. |
 | `Alt-G` | Show or hide the shortcut bar. |
+| `Ctrl-W` | Switch to the next pane in the current tab. |
+| `Ctrl-W` twice quickly | Switch to the next tab like `Alt-T`. At the rightmost tab, if every tab contains only terminal panes, create a new editor tab instead of cycling back. |
 | `Ctrl-Q` or `Alt-Q` | Close the current UI. |
 
 To preview another color theme, press `Ctrl-E` or click on `€`, type `theme `, then use `Tab`

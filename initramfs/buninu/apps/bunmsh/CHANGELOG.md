@@ -2,6 +2,42 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.3.9] - 2026-09-22
+
+### Fixed
+
+- Make pathname expansion follow directory symbolic links used as intermediate
+  path components, matching traditional shell behaviour. `Bun.Glob` disables
+  that traversal by default, so patterns such as `./*/*.js` silently skipped
+  a matching directory symlink, and sysfs patterns such as
+  `/sys/class/net/*/device` failed to pass through class-device links. bunmsh
+  now enables `followSymlinks` while scanning; a symlink matched as the final
+  component is still passed to the command as a symlink.
+
+- Stop the fallback `ls`/`lsfancy` from printing every glob-expanded file as
+  a directory section. `builtin ls L*` previously expanded the glob
+  correctly, but multiple operands unconditionally received `filename:`
+  headings and blank separators. Only directories whose contents are being
+  listed now receive section headings; multiple ordinary files form one
+  continuous listing and retain their full operand paths rather than being
+  reduced to basenames.
+
+- Honor `--` in `ls`/`lsfancy`, so names such as `-odd` after it are operands
+  rather than option clusters. Also follow a command-line symlink to a
+  directory for ordinary and recursive listings, as traditional `ls` does;
+  `-d`, `-l`, and `-F` continue to inspect the symlink itself.
+
+## [0.3.8] - 2026-09-21
+
+### Added
+
+- Make `Ctrl-U` and `Ctrl-K` toggle their edits in the interactive line
+  editor. `Ctrl-U` saves the text removed before the cursor and restores it
+  when pressed again at the beginning of the line; `Ctrl-K` does the same for
+  text after the cursor when pressed again at the end. Each shortcut keeps an
+  independent saved value, and control bytes inside bracketed paste remain
+  literal pasted content rather than triggering either action.
+
 ## [0.3.7] - 2026-09-20
 
 ### Fixed

@@ -2,6 +2,16 @@
 
 All notable user-visible changes to jsmdcui are documented here.
 
+## [0.19.2] - 2026-09-21
+
+### Added
+
+- Quickly pressing `Ctrl-W` twice now switches to the next tab like `Alt-T`
+  from either an editor or terminal pane. A single press retains its existing
+  next-pane behavior. At the rightmost tab, when every tab contains only
+  terminal panes, the double press creates a new editor tab instead of cycling
+  back, ensuring keyboard-only access to editing and other non-terminal work.
+
 ## [0.19.0] - 2026-08-24
 
 ### Fixed

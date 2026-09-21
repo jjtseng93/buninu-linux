@@ -53,6 +53,7 @@ import { fancyLs } from "../src/fancy-ls.js";
 import { MOUSE_OFF, MOUSE_ON, mouseInput } from "../src/mouse.js";
 import { canonicalEnvironment, environmentValue, homeRelativePath } from "../src/environment.js";
 import { findIsRegularBuiltin } from "../src/find.js";
+import { toggleSavedText } from "../src/line-edit.js";
 
 async function run(source, options = {}) {
   const state = createState({
@@ -179,6 +180,36 @@ describe("completion", () => {
       "tab", "tab-left", "lsfancy", "lsfancy-parent", "lsfancy-parent",
       "tab-close",
     ]);
+  });
+
+  test("toggles independently saved Ctrl-U heads and Ctrl-K tails", () => {
+    const cutHead = toggleSavedText("headtail", 4, "", "head");
+    expect(cutHead).toEqual({ line: "tail", cursor: 0, saved: "head", changed: true });
+    expect(toggleSavedText(cutHead.line, cutHead.cursor, cutHead.saved, "head"))
+      .toEqual({ line: "headtail", cursor: 4, saved: "", changed: true });
+
+    const cutTail = toggleSavedText("headtail", 4, "", "tail");
+    expect(cutTail).toEqual({ line: "head", cursor: 4, saved: "tail", changed: true });
+    expect(toggleSavedText(cutTail.line, cutTail.cursor, cutTail.saved, "tail"))
+      .toEqual({ line: "headtail", cursor: 4, saved: "", changed: true });
+  });
+
+  test("intercepts Ctrl-U and Ctrl-K outside bracketed paste", async () => {
+    const edits = [];
+    const pasted = [];
+    let forwarded = "";
+    const input = mouseInput(() => {}, () => {}, () => {},
+      (text) => pasted.push(text),
+      (side) => edits.push({ side, forwarded }));
+    input.on("data", (chunk) => { forwarded += chunk.toString(); });
+    input.end("abc\x15def\x0b\x1b[200~x\x15y\x0bz\x1b[201~");
+    await new Promise((resolve) => input.once("end", resolve));
+    expect(edits).toEqual([
+      { side: "head", forwarded: "abc" },
+      { side: "tail", forwarded: "abcdef" },
+    ]);
+    expect(forwarded).toBe("abcdef");
+    expect(pasted).toEqual(["x\x15y\x0bz"]);
   });
 
   test("imports Bash and Fish history by default and can be disabled", async () => {
@@ -575,6 +606,7 @@ describe("execution", () => {
       mkdirSync(join(cwd, "targetdir"));
       symlinkSync("target.txt", join(cwd, "link_ok"));
       symlinkSync("targetdir", join(cwd, "link_dir"));
+      await Bun.write(join(cwd, "targetdir", "inside.js"), "export {};\n");
       symlinkSync("/nonexistent/path", join(cwd, "link_broken"));
       symlinkSync("loop_b", join(cwd, "loop_a"));
       symlinkSync("loop_a", join(cwd, "loop_b"));
@@ -597,6 +629,15 @@ describe("execution", () => {
       const plain = await run("builtin lsfancy", { cwd });
       expect(plain.stdout).toContain("🔗 link_ok");
       expect(plain.stdout).toContain("🚫 link_broken");
+
+      // A command-line link to a directory is followed for an ordinary
+      // listing, but -l, -d, and -F inspect/classify the link itself.
+      const followed = await run("builtin lsfancy link_dir", { cwd });
+      expect(followed.stdout).toContain("inside.js");
+      const linkLong = await run("builtin lsfancy -l link_dir", { cwd });
+      expect(linkLong.stdout).toContain("link_dir -> targetdir");
+      expect((await run("builtin lsfancy -d link_dir", { cwd })).stdout).toContain("🔗 link_dir");
+      expect((await run("builtin lsfancy -F link_dir", { cwd })).stdout).toContain("link_dir@");
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 
@@ -621,6 +662,35 @@ describe("execution", () => {
       const missing = await run("builtin ls does-not-exist", { cwd });
       expect(missing.status).toBe(1);
       expect(missing.stderr).toContain("bunmsh: ls: does-not-exist:");
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
+  test("builtin ls lists glob-expanded files as files, not directory sections", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "bunmsh-ls-glob-"));
+    try {
+      await Bun.write(join(cwd, "first.sh"), "#!/bin/sh\n");
+      await Bun.write(join(cwd, "final.sh"), "#!/bin/sh\n");
+      await Bun.write(join(cwd, "other.txt"), "other\n");
+      const output = await run("builtin ls f*.sh", { cwd });
+      expect(output).toMatchObject({ status: 0, stderr: "" });
+      expect(output.stdout).toContain("first.sh");
+      expect(output.stdout).toContain("final.sh");
+      expect(output.stdout).not.toContain("other.txt");
+      expect(output.stdout).not.toContain("first.sh:");
+      expect(output.stdout).not.toContain("final.sh:");
+      expect(output.stdout).not.toContain("\n\n");
+
+      await Bun.write(join(cwd, "-odd"), "odd\n");
+      const afterDoubleDash = await run("builtin ls -- -odd", { cwd });
+      expect(afterDoubleDash).toMatchObject({ status: 0, stderr: "" });
+      expect(afterDoubleDash.stdout).toContain("-odd");
+
+      mkdirSync(join(cwd, ".hidden-target"));
+      await Bun.write(join(cwd, ".hidden-target", "through-link.js"), "export {};\n");
+      symlinkSync(".hidden-target", join(cwd, "class-link"));
+      const throughLink = await run("builtin ls ./*/*.js", { cwd });
+      expect(throughLink).toMatchObject({ status: 0, stderr: "" });
+      expect(throughLink.stdout).toContain("./class-link/through-link.js");
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 

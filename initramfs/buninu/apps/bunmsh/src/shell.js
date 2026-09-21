@@ -787,7 +787,15 @@ async function pathnameFields(field, state) {
     return ch;
   }).join("");
   const glob = new Bun.Glob(pattern);
-  const matches = [...glob.scanSync({ cwd: state.cwd, dot: false, onlyFiles: false })].sort();
+  // Shell pathname expansion follows a directory symlink used as an
+  // intermediate path component. Bun.Glob defaults this off, which makes
+  // patterns such as /sys/class/*/device silently miss sysfs class links.
+  const matches = [...glob.scanSync({
+    cwd: state.cwd,
+    dot: false,
+    onlyFiles: false,
+    followSymlinks: true,
+  })].sort();
   return matches.length ? matches : [value];
 }
 
