@@ -6,9 +6,9 @@
 // place. The library is located relative to this file (/lib in the guest),
 // which also lets the commands run from a checkout for testing.
 
-import { dlopen, FFIType, ptr, read, CString } from "bun:ffi";
+import { dlopen, FFIType, ptr, read, CString, toArrayBuffer } from "bun:ffi";
 
-export { ptr, read };
+export { ptr, read, toArrayBuffer };
 
 // Everything that differs per CPU lives in this table: the musl file name
 // and the syscall numbers musl has no wrapper for. Struct layouts used by
@@ -55,6 +55,18 @@ export const libc = dlopen(libcPath, {
   },
   close: {
     args: [FFIType.i32],
+    returns: FFIType.i32,
+  },
+  mmap: {
+    args: [FFIType.ptr, FFIType.u64, FFIType.i32, FFIType.i32, FFIType.i32, FFIType.i64],
+    returns: FFIType.ptr,
+  },
+  msync: {
+    args: [FFIType.ptr, FFIType.u64, FFIType.i32],
+    returns: FFIType.i32,
+  },
+  munmap: {
+    args: [FFIType.ptr, FFIType.u64],
     returns: FFIType.i32,
   },
   ioctl: {
