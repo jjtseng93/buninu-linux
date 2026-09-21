@@ -1,6 +1,7 @@
 // Shared implementation for /bin/poweroff and /bin/reboot.
 
-import { libc, check, showDocument } from "./dlopen.js";
+import { libc, check } from "./dlopen.js";
+import { showDocument } from "./document.js";
 
 export const LINUX_REBOOT_CMD_RESTART = 0x01234567;
 export const LINUX_REBOOT_CMD_POWER_OFF = 0x4321fedc;

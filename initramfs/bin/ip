@@ -9,7 +9,8 @@
 // shown but not configured.
 
 import { readdirSync, readFileSync } from "node:fs";
-import { cString, ptr, withInetSocket, Errno, SysError, showDocument } from "../lib/dlopen.js";
+import { cString, ptr, withInetSocket, Errno, SysError } from "../lib/dlopen.js";
+import { showDocument } from "../lib/document.js";
 
 const fail = (message, status = 1) => {
   console.error(`ip: ${message}`);

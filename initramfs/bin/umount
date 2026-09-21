@@ -2,7 +2,8 @@
 // umount — unmount a filesystem. `umount --help` renders
 // /usr/share/doc/buninu-linux/umount.md.
 
-import { libc, cString, ptr, errno, strerror, Errno, showDocument } from "../lib/dlopen.js";
+import { libc, cString, ptr, errno, strerror, Errno } from "../lib/dlopen.js";
+import { showDocument } from "../lib/document.js";
 
 const MNT = { FORCE: 1, DETACH: 2, EXPIRE: 4, NOFOLLOW: 8 };
 

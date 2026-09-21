@@ -10,7 +10,8 @@
 // is not there yet.
 
 import { existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync, readFileSync } from "node:fs";
-import { libc, cString, ptr, errno, strerror, Errno, SysError, showDocument } from "../lib/dlopen.js";
+import { libc, cString, ptr, errno, strerror, Errno, SysError } from "../lib/dlopen.js";
+import { showDocument } from "../lib/document.js";
 import { modprobe, tryModprobe, modulesDirectory, ModuleNotFound } from "../lib/modprobe.js";
 
 const fail = (message, status = 32) => {

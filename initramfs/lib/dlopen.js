@@ -119,12 +119,3 @@ export const withInetSocket = (use) => {
     libc.symbols.close(fd);
   }
 };
-
-// Renders /usr/share/doc/buninu-linux/<name>.md for --help. Hyperlinks are
-// on so the references at the end of each page are clickable in terminals
-// that support OSC 8.
-export const showDocument = async (name) => {
-  const path = `${import.meta.dir}/../usr/share/doc/buninu-linux/${name}.md`;
-  const rendered = Bun.markdown.ansi(await Bun.file(path).text(), { hyperlinks: true });
-  process.stdout.write(rendered.endsWith("\n") ? rendered : `${rendered}\n`);
-};
