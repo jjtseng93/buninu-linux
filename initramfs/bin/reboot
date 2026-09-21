@@ -1,0 +1,10 @@
+#!/bin/bun
+// reboot — thin wrapper over the shared sync-and-reboot implementation.
+
+import { LINUX_REBOOT_CMD_RESTART, runPowerCommand } from "../lib/power.js";
+
+await runPowerCommand({
+  name: "reboot",
+  command: { name: "LINUX_REBOOT_CMD_RESTART", value: LINUX_REBOOT_CMD_RESTART },
+  action: "restarting",
+});

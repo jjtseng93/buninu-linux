@@ -30,7 +30,8 @@
   * Bun reaches its interactive REPL
   * start() starts the Buninu userspace shell
   * `cfg.disk` + shell `mount` mounts local disks
-  * `cfg.net` loads common wired NIC drivers
+  * `cfg.net` loads common wired NIC and Android USB-tethering drivers
+  * Android phone USB tethering over RNDIS has been tested successfully
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
   * The bundled `jmi` editor, `jsmdcui` app runtime, and local JavaScript execution also work.
 
@@ -130,7 +131,7 @@ whitespace-only line prints the welcome and current `cfg.*` getter list again.
 Load only the subsystem needed, then enter the Buninu shell:
 
 ```js
-cfg.net       // wired NIC drivers
+cfg.net       // wired NIC and Android USB-tethering drivers
 cfg.disk      // SATA/NVMe/USB storage drivers and detected block devices
 cfg.power     // battery, AC, button and thermal drivers
 start()
@@ -157,7 +158,7 @@ cfg.disk
 cfg.power
 ```
 
-`cfg.net` loads the packaged wired-network drivers and prints detected
+`cfg.net` loads the packaged wired-network and Android USB-tethering drivers and prints detected
 interfaces and MAC addresses. There is no DHCP client yet, so configure the
 interface manually after entering the Buninu shell with `start()`:
 
@@ -207,7 +208,7 @@ bun hlw.js
 
 ## Commands inside /bin
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes four commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes five commands
 implemented as Bun scripts:
 
 | command | does | manual |
@@ -216,6 +217,7 @@ implemented as Bun scripts:
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
+| `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 
 `--help` renders each Markdown manual in the terminal. Common examples:
 
@@ -234,6 +236,7 @@ ip addr replace 192.168.1.50/24 dev eth0
 ip route replace default via 192.168.1.1
 
 poweroff
+reboot
 ```
 
 ## Environment and dependencies
@@ -356,8 +359,8 @@ bun x buninu-linux -fb --real --export
 
 `--linux-lts` selects Alpine's general-purpose LTS kernel. `--real` implies
 `--linux-lts` and builds for physical hardware: it makes `tty0` the primary
-console and includes xHCI/USB HID, common wired network, storage and ACPI power
-modules needed by typical laptops and desktops.
+console and includes xHCI/USB HID, common wired NIC, Android USB-tethering,
+storage and ACPI power modules needed by typical laptops and desktops.
 
 For real hardware, `-fb --real` is the complete image pipeline and
 `-b --real` is the edit-and-rebuild loop. Before starting, `index.js` checks
@@ -589,7 +592,7 @@ Which modules the image carries is the list in `fetch-alpine.sh`; the
 `select_module` helper there pulls in dependencies from Alpine's
 `modules.dep`, and `--real` adds common storage paths (`sd_mod`, `ahci`,
 `ata_generic`, `pata_acpi`, `nvme`, Intel `vmd`, `usb-storage` and `uas`),
-the wired NICs and the ACPI power drivers. Alpine's
+the wired NICs, Android USB-tethering drivers and the ACPI power drivers. Alpine's
 kernels build all of these as modules; a self-built kernel with them `=y`
 works the same way, the loaders just find nothing to load.
 
@@ -685,8 +688,10 @@ loads the packaged SATA/PATA/SCSI, NVMe/VMD and USB storage stacks so
 their disks and partitions appear in `/dev`, then lists `/sys/class/block`. `cfg.all`
 unconditionally attempts every packaged module and recursively loads its
 declared dependencies. `--real` ships Intel `e1000`/`e1000e`/`igb`/`igc`,
-Realtek `r8169`, Atheros `alx`, Broadcom `tg3` and the `r8152`/`ax88179_178a`/
-`cdc_ether` USB dongles. `cfg.power` loads the ACPI
+Realtek `r8169`, Atheros `alx`, Broadcom `tg3`, common USB dongles, and
+`rndis_host`/`cdc_ether`/`cdc_ncm`/`cdc_eem`/`cdc_subset`/`zaurus` for Android
+USB tethering. `cfg.net` unconditionally attempts all of these packaged
+network modules. `cfg.power` loads the ACPI
 `battery`, `ac`, `button` and `thermal` modules through `/lib/modprobe.js`
 and lists `/sys/class/power_supply` (a desktop without a battery simply
 reports nothing registered). Nothing loads them at boot. PID 1 also installs

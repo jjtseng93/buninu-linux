@@ -79,10 +79,15 @@ if [ "${REAL_MACHINE:-}" = 1 ]; then
         select_module "$module"
     done
     # Wired NICs: Intel (e1000/e1000e/igb/igc), Realtek (r8169 plus its PHY
-    # driver), Qualcomm Atheros (alx), Broadcom (tg3), and USB dongles
-    # (Realtek r8152, ASIX ax88179, CDC Ethernet). cfg.net in init.js
-    # matches them to hardware through the pci:/usb: lines of modules.alias.
-    for module in e1000 e1000e igb igc r8169 realtek alx tg3 r8152 ax88179_178a cdc_ether; do
+    # driver), Qualcomm Atheros (alx), Broadcom (tg3), and USB dongles.
+    # Android USB tethering commonly presents RNDIS, CDC ECM/NCM/EEM, or an
+    # older CDC subset/zaurus-compatible gadget. Selecting the leaf drivers
+    # recursively includes usbnet, mii, usbcore and usb-common from
+    # modules.dep. cfg.net unconditionally attempts every packaged
+    # kernel/drivers/net module, then matches USB and PCI modaliases.
+    for module in e1000 e1000e igb igc r8169 realtek alx tg3 \
+                  r8152 ax88179_178a cdc_ether rndis_host cdc_ncm cdc_eem \
+                  cdc_subset zaurus; do
         select_module "$module"
     done
 fi
