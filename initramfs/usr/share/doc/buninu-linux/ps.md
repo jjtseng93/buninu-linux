@@ -4,6 +4,11 @@
 the full-command-line table consumed by bunmsh's `pspa` and coloured `pspac`
 builtins.
 
+The file is also an importable module. It exports `readProcessSnapshot()`,
+`prepareProcessFormat()`, `formatProcessHeader()`, and
+`formatProcessLine()`. `/bin/top` uses these exports, so process discovery and
+single-row formatting have one implementation.
+
 ## Synopsis
 
 ```sh
@@ -34,12 +39,17 @@ and `CMD` is the short process name. The default selection is the caller's
 effective UID and terminal, excluding session leaders. `-e`/`-A` selects all;
 `a`, `x`, `-a`, and `-x` apply their usual BSD or Unix selection rules.
 
+Plain `ps` excludes processes carrying Linux's `PF_KTHREAD` flag. This matters
+on boot consoles where the shell and kernel threads may all be UID 0 without a
+controlling TTY. Explicit all-process forms such as `ps -e`, `ps -A`, and
+`ps -eo ...` include kernel threads.
+
 ### `-o` fields
 
 Supported names are:
 
 ```text
-pid ppid uid user euser comm args cmd command tty tt stat state
+pid ppid uid user euser comm args cmd command tty tt stat state c
 %cpu pcpu %mem pmem vsz rss sz time etime etimes
 start stime lstart ni nice pri psr
 ```

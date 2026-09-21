@@ -208,7 +208,7 @@ bun hlw.js
 
 ## Commands inside /bin
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes seven commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eight commands
 implemented as Bun scripts:
 
 | command | does | manual |
@@ -216,7 +216,8 @@ implemented as Bun scripts:
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
-| `ps` | all processes from `/proc` as the `PID COMMAND` table used by bunmsh `pspa`/`pspac` | `ps --help` |
+| `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
+| `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
@@ -247,6 +248,8 @@ ps -eo pid,args
 ps -ef
 ps aux
 pspac
+top
+top -b -n 1
 
 poweroff
 reboot

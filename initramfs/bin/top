@@ -1,0 +1,129 @@
+#!/bin/bun
+// top — periodically render snapshots and process lines supplied by ps.
+
+import { showDocument } from "../lib/document.js";
+import {
+  CLOCK_TICKS,
+  formatProcessHeader,
+  formatProcessLine,
+  prepareProcessFormat,
+  readProcessSnapshot,
+} from "./ps";
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const fields = ["pid", "user", "pri", "ni", "vsz", "rss", "state", "%cpu", "%mem", "time", "comm"];
+
+const uptimeText = (seconds) => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor(seconds % 86400 / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  return `${days ? `${days} day${days === 1 ? "" : "s"}, ` : ""}${hours}:${String(minutes).padStart(2, "0")}`;
+};
+
+const memoryText = (memory) => {
+  const total = memory.MemTotal ?? 0;
+  const free = memory.MemFree ?? 0;
+  const cache = (memory.Buffers ?? 0) + (memory.Cached ?? 0) + (memory.SReclaimable ?? 0);
+  return `MiB Mem : ${(total / 1024).toFixed(1)} total, ${(free / 1024).toFixed(1)} free, ${((total - free - cache) / 1024).toFixed(1)} used, ${(cache / 1024).toFixed(1)} buff/cache`;
+};
+
+const intervalRows = (snapshot, previous) => {
+  if (!previous) return snapshot.processes;
+  const elapsed = Math.max(0.001, (snapshot.at - previous.at) / 1000);
+  const oldTicks = new Map(previous.processes.map((row) => [row.pid, row.ticks]));
+  return snapshot.processes.map((row) => ({
+    ...row,
+    cpu: Math.max(0, row.ticks - (oldTicks.get(row.pid) ?? row.ticks)) / CLOCK_TICKS / elapsed * 100,
+  }));
+};
+
+const render = (snapshot, previous, sort, batch) => {
+  const rows = intervalRows(snapshot, previous);
+  rows.sort(sort === "memory"
+    ? (a, b) => b.memory - a.memory || a.pid - b.pid
+    : sort === "pid" ? (a, b) => a.pid - b.pid : (a, b) => b.cpu - a.cpu || a.pid - b.pid);
+  const states = { running: 0, sleeping: 0, stopped: 0, zombie: 0 };
+  for (const row of rows) {
+    if (row.state[0] === "R") states.running++;
+    else if (row.state[0] === "T") states.stopped++;
+    else if (row.state[0] === "Z") states.zombie++;
+    else states.sleeping++;
+  }
+  const total = previous ? snapshot.cpu.total - previous.cpu.total : snapshot.cpu.total;
+  const idleTicks = previous ? snapshot.cpu.idle - previous.cpu.idle : snapshot.cpu.idle;
+  const idle = total > 0 ? idleTicks / total * 100 : 0;
+  const clock = new Date().toLocaleTimeString("en-US", { hour12: false });
+  const lines = [
+    `top - ${clock} up ${uptimeText(snapshot.uptime)}, load average: ${snapshot.loadAverage.map((v) => v.toFixed(2)).join(", ")}`,
+    `Tasks: ${rows.length} total, ${states.running} running, ${states.sleeping} sleeping, ${states.stopped} stopped, ${states.zombie} zombie`,
+    `%Cpu(s): ${(100 - idle).toFixed(1)} used, ${idle.toFixed(1)} id`,
+    memoryText(snapshot.memory),
+    "",
+  ];
+  const format = prepareProcessFormat(rows, fields);
+  lines.push(formatProcessHeader(format));
+  // Some early boot consoles report a TTY size of 0x0. Treat that as
+  // unknown; otherwise Math.max(1, 0 - headers) displays only one process
+  // and makes it look as if the snapshot contained only top itself.
+  const terminalRows = Number(process.stdout.rows);
+  const screenRows = Number.isFinite(terminalRows) && terminalRows > lines.length
+    ? terminalRows
+    : 24;
+  const limit = batch ? rows.length : Math.max(1, screenRows - lines.length);
+  for (const row of rows.slice(0, limit)) lines.push(formatProcessLine(row, format));
+  return lines.join("\n");
+};
+
+async function main(argv) {
+  let delay = 3;
+  let iterations = Infinity;
+  let batch = false;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === "-h" || argument === "--help") return showDocument("top");
+    if (argument === "-b") { batch = true; continue; }
+    if (argument === "-d") { delay = Number(argv[++index]); continue; }
+    if (argument === "-n") { iterations = Number(argv[++index]); continue; }
+    throw new Error(`top: unsupported option '${argument}'`);
+  }
+  if (!(delay > 0) || !(iterations > 0)) throw new Error("top: -d and -n require positive numbers");
+  let quit = false;
+  let sort = "cpu";
+  const interactive = !batch && process.stdin.isTTY && process.stdout.isTTY;
+  const cleanup = () => {
+    if (interactive) {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdout.write("\x1b[?25h\n");
+    }
+  };
+  if (interactive) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (key) => {
+      if (key === "q" || key === "\u0003") quit = true;
+      else if (key === "P") sort = "cpu";
+      else if (key === "M") sort = "memory";
+      else if (key === "N") sort = "pid";
+    });
+    process.stdout.write("\x1b[?25l");
+    process.on("exit", cleanup);
+  } else if (!batch && iterations === Infinity) iterations = 1;
+
+  let previous = null;
+  try {
+    for (let count = 0; count < iterations && !quit; count++) {
+      const snapshot = readProcessSnapshot();
+      const output = render(snapshot, previous, sort, batch);
+      process.stdout.write(`${interactive ? "\x1b[H\x1b[2J" : ""}${output}\n`);
+      previous = snapshot;
+      if (count + 1 < iterations && !quit) await sleep(delay * 1000);
+    }
+  } finally { cleanup(); }
+}
+
+if (import.meta.main) {
+  try { await main(process.argv.slice(2)); }
+  catch (error) { console.error(error.message); process.exit(1); }
+}
