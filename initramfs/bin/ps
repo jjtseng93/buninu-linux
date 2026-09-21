@@ -1,0 +1,332 @@
+#!/bin/bun
+// ps — the minimal /proc process listing bunmsh's pspa/pspac expects.
+
+import { readdirSync, readFileSync } from "node:fs";
+import { showDocument } from "../lib/document.js";
+
+const fail = (message) => {
+  console.error(`ps: ${message}`);
+  process.exit(1);
+};
+
+const usage = () => {
+  console.error(`Usage:
+  ps
+  ps -e|-A [-o pid,args]
+  ps -eo pid,args
+  ps -ef | ps aux | ps ax
+  ps -h | --help
+
+Try 'ps --help' for the full manual.`);
+  process.exit(1);
+};
+
+let format = "pid,args";
+let view = "default";
+let showAll = false;
+let selection = "default";
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (argument === "-h" || argument === "--help") {
+    await showDocument("ps");
+    process.exit(0);
+  }
+  if (argument === "-e" || argument === "-A" || argument === "--all") {
+    showAll = true;
+    continue;
+  }
+  if (["-f", "-ef", "-Af"].includes(argument)) {
+    view = "full";
+    if (argument !== "-f") showAll = true;
+    continue;
+  }
+  if (["-F", "-eF", "-AF"].includes(argument)) {
+    view = "extra-full";
+    if (argument !== "-F") showAll = true;
+    continue;
+  }
+  if (argument === "aux" || argument === "-aux") {
+    view = "aux";
+    showAll = true;
+    continue;
+  }
+  if (argument === "ax" || argument === "-ax") {
+    view = "bsd";
+    showAll = true;
+    continue;
+  }
+  if (argument === "a") {
+    view = "bsd";
+    selection = "any-with-tty";
+    continue;
+  }
+  if (argument === "x") {
+    view = "bsd";
+    selection = "own-any-tty";
+    continue;
+  }
+  if (argument === "-a") {
+    selection = "unix-a";
+    continue;
+  }
+  if (argument === "-x") {
+    selection = "own-any-tty";
+    continue;
+  }
+  if (argument === "-o" || argument === "--format") {
+    format = argv[++index] ?? usage();
+    view = "basic";
+    continue;
+  }
+  if (argument.startsWith("--format=")) {
+    format = argument.slice(9);
+    view = "basic";
+    continue;
+  }
+  const combined = /^-([eA]*)o(.*)$/.exec(argument);
+  if (combined) {
+    format = combined[2] || argv[++index] || usage();
+    view = "basic";
+    if (combined[1]) showAll = true;
+    continue;
+  }
+  usage();
+}
+
+let processDirectories;
+try {
+  processDirectories = readdirSync("/proc", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
+    .map((entry) => Number(entry.name))
+    .sort((a, b) => a - b);
+} catch (error) {
+  fail(`cannot read /proc: ${error.message}`);
+}
+
+const rows = [];
+const passwd = new Map();
+try {
+  for (const line of readFileSync("/etc/passwd", "utf8").split("\n")) {
+    const fields = line.split(":");
+    if (fields.length >= 3 && /^\d+$/.test(fields[2]) && !passwd.has(Number(fields[2])))
+      passwd.set(Number(fields[2]), fields[0]);
+  }
+} catch {}
+let uptime = 0;
+let memoryTotal = 0;
+let bootSeconds = 0;
+try { uptime = Number(readFileSync("/proc/uptime", "utf8").split(/\s+/)[0]); } catch {}
+try { memoryTotal = Number(/^MemTotal:\s+(\d+)/m.exec(readFileSync("/proc/meminfo", "utf8"))?.[1] ?? 0); } catch {}
+try { bootSeconds = Number(/^btime\s+(\d+)/m.exec(readFileSync("/proc/stat", "utf8"))?.[1] ?? 0); } catch {}
+const bootTime = bootSeconds ? bootSeconds * 1000 : Date.now() - uptime * 1000;
+// Linux exposes USER_HZ through sysconf; every architecture shipped by
+// Buninu uses the conventional value 100.
+const clockTicks = 100;
+
+const ttyName = (number) => {
+  if (!number) return "?";
+  const device = number >>> 0;
+  const major = (device >>> 8) & 0xfff;
+  const minor = (device & 0xff) | ((device >>> 12) & 0xfff00);
+  if (major >= 136 && major <= 143) return `pts/${minor}`;
+  if (major === 4 && minor < 64) return `tty${minor}`;
+  if (major === 5 && minor === 0) return "tty";
+  return `${major}:${minor}`;
+};
+
+const cpuTime = (seconds) => {
+  const whole = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor(whole % 3600 / 60);
+  const secs = whole % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+};
+
+const elapsedTime = (seconds) => {
+  const whole = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(whole / 86400);
+  const hours = Math.floor(whole % 86400 / 3600);
+  const minutes = Math.floor(whole % 3600 / 60);
+  const secs = whole % 60;
+  const clock = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return days ? `${days}-${clock}` : clock;
+};
+
+const startText = (started, short = false) => {
+  const date = new Date(started);
+  const now = new Date();
+  if (short)
+    return date.toDateString() === now.toDateString()
+      ? `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+      : date.toLocaleString("en-US", { month: "short", day: "2-digit" }).replace(" ", "");
+  if (date.toDateString() === now.toDateString())
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return date.getFullYear() === now.getFullYear()
+    ? date.toLocaleString("en-US", { month: "short", day: "2-digit" }).replace(" ", "")
+    : String(date.getFullYear());
+};
+
+for (const pid of processDirectories) {
+  let args = "";
+  try {
+    args = readFileSync(`/proc/${pid}/cmdline`)
+      .toString("utf8")
+      .replace(/\0/g, " ")
+      .replace(/[\r\n]+/g, " ")
+      .trimEnd();
+  } catch {}
+  if (!args) {
+    try {
+      const name = readFileSync(`/proc/${pid}/comm`, "utf8").trim().replace(/[\r\n]+/g, " ");
+      if (name) args = `[${name}]`;
+    } catch {}
+  }
+  // The process may have exited between readdir and either read. If neither
+  // proc file remains readable, omit the stale PID instead of inventing text.
+  if (!args) continue;
+  try {
+    const status = readFileSync(`/proc/${pid}/status`, "utf8");
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close < 0) continue;
+    const open = stat.indexOf("(");
+    const command = open >= 0 ? stat.slice(open + 1, close) : args.split(" ")[0];
+    const fields = stat.slice(close + 2).trim().split(/\s+/);
+    const uid = Number(/^Uid:\s+(\d+)/m.exec(status)?.[1] ?? 0);
+    const vmSize = Number(/^VmSize:\s+(\d+)/m.exec(status)?.[1] ?? 0);
+    const rss = Number(/^VmRSS:\s+(\d+)/m.exec(status)?.[1] ?? 0);
+    const ppid = Number(fields[1]);
+    const session = Number(fields[3]);
+    const tty = ttyName(Number(fields[4]));
+    const foregroundGroup = Number(fields[5]);
+    const userTicks = Number(fields[11]);
+    const systemTicks = Number(fields[12]);
+    const nice = Number(fields[16]);
+    const priority = Number(fields[15]);
+    const threads = Number(fields[17]);
+    const startedTicks = Number(fields[19]);
+    const virtualBytes = Number(fields[20]);
+    const processor = Number(fields[36] ?? 0);
+    const started = bootTime + startedTicks / clockTicks * 1000;
+    const elapsed = Math.max(0.01, (Date.now() - started) / 1000);
+    const usedSeconds = (userTicks + systemTicks) / clockTicks;
+    let state = fields[0];
+    if (nice < 0) state += "<";
+    else if (nice > 0) state += "N";
+    if (session === pid) state += "s";
+    if (threads > 1) state += "l";
+    if (foregroundGroup > 0 && foregroundGroup === Number(fields[2])) state += "+";
+    rows.push({
+      pid, ppid, uid, user: passwd.get(uid) ?? String(uid), args, command, tty,
+      ttyNumber: Number(fields[4]), session, state, processor, nice, priority, elapsed,
+      cpu: usedSeconds / elapsed * 100,
+      memory: memoryTotal ? rss / memoryTotal * 100 : 0,
+      vmSize, rss, size: Math.ceil(virtualBytes / 4096), time: cpuTime(usedSeconds), started,
+    });
+  } catch {
+    // A process can disappear while its /proc files are being read.
+  }
+}
+
+const own = rows.find((row) => row.pid === process.pid);
+const ownUid = own?.uid ?? process.geteuid?.() ?? process.getuid?.() ?? 0;
+const ownTty = own?.ttyNumber ?? 0;
+const selected = showAll ? rows : rows.filter((row) => {
+  if (selection === "unix-a") return row.ttyNumber !== 0 && row.session !== row.pid;
+  if (selection === "any-with-tty") return row.ttyNumber !== 0;
+  if (selection === "own-any-tty") return row.uid === ownUid;
+  return row.uid === ownUid && row.ttyNumber === ownTty && row.session !== row.pid;
+});
+
+const width = selected.reduce((widest, row) => Math.max(widest, String(row.pid).length), 5);
+const outputFields = format.toLowerCase().split(/[\s,]+/).filter(Boolean);
+const fieldDefinitions = {
+  pid:     { header: "PID", numeric: true, minimum: 5, value: (row) => row.pid },
+  ppid:    { header: "PPID", numeric: true, minimum: 5, value: (row) => row.ppid },
+  uid:     { header: "UID", numeric: true, minimum: 5, value: (row) => row.uid },
+  user:    { header: "USER", value: (row) => row.user },
+  euser:   { header: "EUSER", value: (row) => row.user },
+  comm:    { header: "COMMAND", value: (row) => row.command },
+  args:    { header: "COMMAND", value: (row) => row.args },
+  cmd:     { header: "CMD", value: (row) => row.args },
+  command: { header: "COMMAND", value: (row) => row.args },
+  tty:     { header: "TT", value: (row) => row.tty },
+  tt:      { header: "TT", value: (row) => row.tty },
+  stat:    { header: "STAT", value: (row) => row.state },
+  state:   { header: "S", value: (row) => row.state[0] },
+  "%cpu": { header: "%CPU", numeric: true, value: (row) => row.cpu.toFixed(1) },
+  pcpu:    { header: "%CPU", numeric: true, value: (row) => row.cpu.toFixed(1) },
+  "%mem": { header: "%MEM", numeric: true, value: (row) => row.memory.toFixed(1) },
+  pmem:    { header: "%MEM", numeric: true, value: (row) => row.memory.toFixed(1) },
+  vsz:     { header: "VSZ", numeric: true, value: (row) => row.vmSize },
+  rss:     { header: "RSS", numeric: true, value: (row) => row.rss },
+  sz:      { header: "SZ", numeric: true, value: (row) => row.size },
+  time:    { header: "TIME", numeric: true, value: (row) => row.time },
+  etime:   { header: "ELAPSED", numeric: true, value: (row) => elapsedTime(row.elapsed) },
+  etimes:  { header: "ELAPSED", numeric: true, value: (row) => Math.floor(row.elapsed) },
+  start:   { header: "STARTED", value: (row) => startText(row.started) },
+  stime:   { header: "STIME", value: (row) => startText(row.started, true) },
+  lstart:  { header: "STARTED", value: (row) => new Date(row.started).toString().slice(0, 24) },
+  ni:      { header: "NI", numeric: true, value: (row) => row.nice },
+  nice:    { header: "NI", numeric: true, value: (row) => row.nice },
+  pri:     { header: "PRI", numeric: true, value: (row) => row.priority },
+  psr:     { header: "PSR", numeric: true, value: (row) => row.processor },
+};
+
+const printCustomFormat = () => {
+  if (outputFields.length === 0) fail("empty -o format");
+  const definitions = outputFields.map((name) => {
+    const definition = fieldDefinitions[name];
+    if (!definition) fail(`unsupported output field '${name}'`);
+    const values = selected.map((row) => String(definition.value(row)));
+    const width = Math.max(definition.minimum ?? 0, definition.header.length, ...values.map((value) => value.length));
+    return { ...definition, values, width };
+  });
+  console.log(definitions.map((field) =>
+    field.numeric ? field.header.padStart(field.width) : field.header.padEnd(field.width)).join(" ").trimEnd());
+  for (let row = 0; row < selected.length; row++) {
+    console.log(definitions.map((field, index) => {
+      const value = field.values[row];
+      if (index === definitions.length - 1) return field.numeric ? value.padStart(field.width) : value;
+      return field.numeric ? value.padStart(field.width) : value.padEnd(field.width);
+    }).join(" ").trimEnd());
+  }
+};
+
+if (view === "full") {
+  const userWidth = selected.reduce((widest, row) => Math.max(widest, row.user.length), 3);
+  const ppidWidth = selected.reduce((widest, row) => Math.max(widest, String(row.ppid).length), 4);
+  console.log(`${"UID".padEnd(userWidth)} ${"PID".padStart(width)} ${"PPID".padStart(ppidWidth)}  C STIME TTY          TIME CMD`);
+  for (const row of selected)
+    console.log(`${row.user.padEnd(userWidth)} ${String(row.pid).padStart(width)} ${String(row.ppid).padStart(ppidWidth)} ${String(Math.floor(row.cpu)).padStart(2)} ${startText(row.started, true).padStart(5)} ${row.tty.padEnd(8)} ${row.time.padStart(9)} ${row.args}`);
+} else if (view === "extra-full") {
+  const userWidth = selected.reduce((widest, row) => Math.max(widest, row.user.length), 3);
+  const ppidWidth = selected.reduce((widest, row) => Math.max(widest, String(row.ppid).length), 4);
+  console.log(`${"UID".padEnd(userWidth)} ${"PID".padStart(width)} ${"PPID".padStart(ppidWidth)}  C    SZ   RSS PSR STIME TTY          TIME CMD`);
+  for (const row of selected)
+    console.log(`${row.user.padEnd(userWidth)} ${String(row.pid).padStart(width)} ${String(row.ppid).padStart(ppidWidth)} ${String(Math.floor(row.cpu)).padStart(2)} ${String(row.size).padStart(5)} ${String(row.rss).padStart(5)} ${String(row.processor).padStart(3)} ${startText(row.started, true).padStart(5)} ${row.tty.padEnd(8)} ${row.time.padStart(9)} ${row.args}`);
+} else if (view === "aux") {
+  const userWidth = selected.reduce((widest, row) => Math.max(widest, row.user.length), 4);
+  console.log(`${"USER".padEnd(userWidth)} ${"PID".padStart(width)} %CPU %MEM    VSZ   RSS TTY      STAT START     TIME COMMAND`);
+  for (const row of selected)
+    console.log(`${row.user.padEnd(userWidth)} ${String(row.pid).padStart(width)} ${row.cpu.toFixed(1).padStart(4)} ${row.memory.toFixed(1).padStart(4)} ${String(row.vmSize).padStart(6)} ${String(row.rss).padStart(5)} ${row.tty.padEnd(8)} ${row.state.padEnd(4)} ${startText(row.started).padStart(5)} ${row.time.padStart(8)} ${row.args}`);
+} else if (view === "bsd") {
+  console.log(`${"PID".padStart(width)} TTY      STAT     TIME COMMAND`);
+  for (const row of selected)
+    console.log(`${String(row.pid).padStart(width)} ${row.tty.padEnd(8)} ${row.state.padEnd(4)} ${row.time.padStart(8)} ${row.args}`);
+} else if (view === "basic") {
+  if (outputFields.length === 2 && outputFields[0] === "pid" && outputFields[1] === "args") {
+    // bunmsh's pspa/pspac contract: keep this exact procps-compatible shape.
+    console.log(`${"PID".padStart(width)} COMMAND`);
+    for (const row of selected) console.log(`${String(row.pid).padStart(width)} ${row.args}`);
+  } else {
+    printCustomFormat();
+  }
+} else {
+  console.log(`${"PID".padStart(width)} TTY          TIME CMD`);
+  for (const row of selected)
+    console.log(`${String(row.pid).padStart(width)} ${row.tty.padEnd(8)} ${row.time.padStart(9)} ${row.command}`);
+}

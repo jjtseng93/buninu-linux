@@ -1,0 +1,169 @@
+#!/bin/bun
+// tar — a small tar/gzip/zstd CLI over Bun.Archive.
+
+import { lstat, readdir } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
+import { showDocument } from "../lib/document.js";
+
+const fail = (message) => {
+  console.error(`tar: ${message}`);
+  process.exit(2);
+};
+
+const usage = () => {
+  console.error(`Usage:
+  tar -cf ARCHIVE FILE...
+  tar -xf ARCHIVE [-C DIR] [MEMBER...]
+  tar -tf ARCHIVE [MEMBER...]
+  tar -h | --help
+
+Try 'tar --help' for the full manual.`);
+  process.exit(2);
+};
+
+const options = { operation: null, archive: null, directory: ".", compression: null, verbose: false, operands: [] };
+const argv = process.argv.slice(2);
+if (argv.length === 0) usage();
+const take = (index, option) => {
+  if (index + 1 >= argv.length) fail(`${option} requires an argument`);
+  return argv[index + 1];
+};
+
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  const oldStyleOptions = index === 0 && /^[cxtrvfz]+$/.test(argument)
+    && /[cxtr]/.test(argument);
+  if (argument === "--") { options.operands.push(...argv.slice(index + 1)); break; }
+  if (argument === "-h" || argument === "--help") {
+    await showDocument("tar");
+    process.exit(0);
+  }
+  if (argument === "--zstd") { options.compression = "zstd"; continue; }
+  if (argument === "--gzip") { options.compression = "gzip"; continue; }
+  if (argument === "-C" || argument === "--directory") {
+    options.directory = take(index++, argument);
+    continue;
+  }
+  if (argument.startsWith("--directory=")) {
+    options.directory = argument.slice(12);
+    continue;
+  }
+  if (argument === "-f" || argument === "--file") {
+    options.archive = take(index++, argument);
+    continue;
+  }
+  if (argument.startsWith("--file=")) {
+    options.archive = argument.slice(7);
+    continue;
+  }
+  if ((argument.startsWith("-") && argument !== "-") || oldStyleOptions) {
+    const flags = oldStyleOptions ? argument : argument.slice(1);
+    for (let offset = 0; offset < flags.length; offset++) {
+      const flag = flags[offset];
+      if ("cxt".includes(flag)) {
+        if (options.operation && options.operation !== flag) fail("only one of -c, -x, or -t may be used");
+        options.operation = flag;
+      } else if (flag === "r") {
+        fail("-r append is not supported by Bun.Archive");
+      } else if (flag === "v") options.verbose = true;
+      else if (flag === "z") options.compression = "gzip";
+      else if (flag === "f") {
+        const attached = flags.slice(offset + 1);
+        options.archive = attached || take(index++, "-f");
+        break;
+      } else fail(`unknown option -- ${flag}`);
+    }
+    continue;
+  }
+  options.operands.push(argument);
+}
+
+if (!options.operation) fail("one of -c, -x, or -t is required");
+if (!options.archive) fail("an archive must be specified with -f");
+
+const archiveBytes = async () => {
+  const bytes = options.archive === "-"
+    ? await Bun.stdin.bytes()
+    : await Bun.file(options.archive).bytes();
+  const zstd = options.compression === "zstd" || /\.(?:zst|tzst)$/i.test(options.archive);
+  return zstd ? Bun.zstdDecompressSync(bytes) : bytes;
+};
+
+const patterns = () => options.operands.flatMap((name) => {
+  const clean = name.replace(/^\.\//, "").replace(/\/$/, "");
+  return [clean, `${clean}/**`];
+});
+
+const verboseListing = (name, file) => {
+  const modified = Number.isFinite(file.lastModified) && file.lastModified > 0
+    ? new Date(file.lastModified).toISOString().replace("T", " ").slice(0, 16)
+    : "---- -- -- --:--";
+  return `${String(file.size).padStart(12)} ${modified} ${name}`;
+};
+
+if (options.operation === "x" || options.operation === "t") {
+  let archive;
+  try {
+    archive = new Bun.Archive(await archiveBytes());
+  } catch (error) {
+    fail(error?.message || String(error));
+  }
+
+  if (options.operation === "t") {
+    try {
+      const files = await archive.files(options.operands.length ? patterns() : undefined);
+      for (const [name, file] of files) {
+        console.log(options.verbose ? verboseListing(name, file) : name);
+      }
+    } catch (error) {
+      fail(error?.message || String(error));
+    }
+  } else {
+    try {
+      if (options.verbose) {
+        const files = await archive.files(options.operands.length ? patterns() : undefined);
+        for (const name of files.keys()) console.log(name);
+      }
+      await archive.extract(options.directory, options.operands.length ? { glob: patterns() } : undefined);
+    } catch (error) {
+      fail(error?.message || String(error));
+    }
+  }
+  process.exit(0);
+}
+
+if (options.operands.length === 0) fail("refusing to create an empty archive");
+const root = resolve(options.directory);
+const inputs = {};
+
+const add = async (diskPath, archivePath) => {
+  const info = await lstat(diskPath);
+  if (info.isSymbolicLink()) fail(`${archivePath}: creating symbolic links is not supported by Bun.Archive`);
+  if (info.isDirectory()) {
+    for (const entry of await readdir(diskPath)) await add(join(diskPath, entry), `${archivePath}/${entry}`);
+    return;
+  }
+  if (!info.isFile()) fail(`${archivePath}: unsupported file type`);
+  const name = archivePath.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\/+/, "");
+  if (!name || name === ".." || name.startsWith("../") || name.includes("/../")) fail(`${archivePath}: unsafe archive path`);
+  // Bun 1.4.3 accepts Blob in ArchiveInput, but a lazy BunFile is currently
+  // archived as zero bytes. Materialise it until Bun.Archive handles BunFile
+  // contents directly.
+  inputs[name] = await Bun.file(diskPath).bytes();
+  if (options.verbose) console.error(name);
+};
+
+try {
+  for (const operand of options.operands) {
+    const diskPath = resolve(root, operand);
+    const name = operand.startsWith("/") ? basename(operand) : operand.replace(/\/$/, "");
+    await add(diskPath, name);
+  }
+  const archive = new Bun.Archive(inputs, options.compression === "gzip" ? { compress: "gzip" } : undefined);
+  const output = options.compression === "zstd"
+    ? Bun.zstdCompressSync(await archive.bytes())
+    : archive;
+  await Bun.write(options.archive === "-" ? Bun.stdout : options.archive, output);
+} catch (error) {
+  fail(error?.message || String(error));
+}

@@ -208,7 +208,7 @@ bun hlw.js
 
 ## Commands inside /bin
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes five commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes seven commands
 implemented as Bun scripts:
 
 | command | does | manual |
@@ -216,8 +216,16 @@ implemented as Bun scripts:
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+| `ps` | all processes from `/proc` as the `PID COMMAND` table used by bunmsh `pspa`/`pspac` | `ps --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
+| `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+
+The small `tar` follows the current `Bun.Archive` boundary: extraction
+restores directories and symbolic links, while hard links are skipped by Bun
+1.4.3. Creation stores regular files but not Unix metadata, links, or empty
+directories, and listing reports regular files only. It supports gzip and
+Bun's built-in zstd, not xz or bzip2.
 
 `--help` renders each Markdown manual in the terminal. Common examples:
 
@@ -234,6 +242,11 @@ ip route add default via 192.168.1.1
 ip -br addr && ip route
 ip addr replace 192.168.1.50/24 dev eth0
 ip route replace default via 192.168.1.1
+
+ps -eo pid,args
+ps -ef
+ps aux
+pspac
 
 poweroff
 reboot
