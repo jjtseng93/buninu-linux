@@ -25,6 +25,8 @@
 
 ---
 
+- [Table of contents](#contents)
+- .
 - Still in the early stages
 - [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`:
   * Bun reaches its interactive REPL
@@ -33,7 +35,7 @@
   * `cfg.net` loads common wired NIC and Android USB-tethering drivers
   * Android phone USB tethering over RNDIS has been tested successfully, allowing Buninu Linux to access the Internet through an Android phone
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
-  * The bundled `jmi` editor, `jsmdcui` app runtime, and local JavaScript execution also work.
+  * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
 
 ---
 
@@ -138,13 +140,13 @@ start()
 ```
 
 There is no DHCP client yet; configure a detected wired interface with `ip` as
-described under [Real hardware](#real-hardware). Run `poweroff` for a synced
+described under [Basic configuration](#basic-configuration). Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
-## Running
+## Using Buninu Linux
 
-### Real hardware
+### Basic configuration
 
 Real hardware is the primary target. Boot the USB drive with Secure Boot
 disabled unless you have signed the UKI yourself. The physical display and USB
@@ -179,6 +181,8 @@ mount -fv /dev/sda1 /mnt
 
 Run `poweroff` for a synced shutdown.
 
+### Editor quick start
+
 The bundled `jmi` terminal editor works without a network connection:
 
 ```sh
@@ -204,12 +208,87 @@ After leaving the editor with `Ctrl-Q`, run it locally:
 bun hlw.js
 ```
 
-- Sometimes `Enters` in some scenarios don't directly work; if that's the case, try `Ctrl-J` or `Ctrl-M`
+If `Enter` is not recognized in a particular terminal, try `Ctrl-J` or
+`Ctrl-M`.
+
+### Panes, terminals, and tabs
+
+`jmi` and jsmdcui can keep editors and terminal sessions open together. Press
+`Ctrl-E`, type `term`, and press `Enter` to open the default Buninu shell in a
+terminal pane. `term COMMAND` starts a specific command instead. Use `vsplit`,
+`hsplit`, or `tab` from the same `Ctrl-E` command prompt to create another
+editor pane or tab; each command optionally accepts a filename. From an editor
+pane, `Ctrl-T` is the direct shortcut for a new empty tab.
+
+#### Pane and tab controls
+
+| Input | Result |
+| --- | --- |
+| Click a pane | Focus that editor or terminal pane. |
+| `Ctrl-T` in an editor pane | Open a new empty tab. |
+| `Ctrl-W` once | Move to the next pane in the current tab, from either an editor or terminal pane. |
+| `Alt-T` | Move to the next tab. |
+| **`Ctrl-W` twice quickly** | **Important escape hatch:** move to the next tab like `Alt-T`, or create an editor tab when needed. See the detailed explanation below. |
+| `Esc` in a terminal pane | Close that terminal pane and return to its previous editor buffer |
+| `Ctrl-Q` or `Alt-Q` in an editor pane | Close the current editor UI. |
+
+**Why this escape hatch is important:** A terminal pane must forward almost every key combination unchanged to the
+shell or application running inside it. `Ctrl-W` is therefore the one
+multitasking escape key that jsmdcui intercepts: it lets you leave the active
+terminal without terminating the work inside it. Press it once to move to the
+next pane in the current tab. Press it twice quickly to move to the next tab.
+
+The double press is especially important in an all-terminal workspace. When
+the current tab is the rightmost tab and every existing tab contains only
+terminal panes, it creates a new editor tab instead of wrapping back to the
+first terminal tab. In every other case it performs the normal next-tab cycle.
+Use `Esc` only when you actually want to close the current terminal pane.
+
+### Using Bun Modern Shell
+
+bunmsh is the dependency-free, mksh-inspired shell bundled with Buninu. Its
+main features are:
+
+- Lines beginning with `Bun.*` run as JavaScript; returned values are printed
+  and promises are awaited automatically. Use `Bun.e;` or `Bun.e,` for
+  arbitrary JavaScript.
+- Lightweight cwd tabs keep several working directories ready. In bunmsh,
+  `Ctrl-T` creates or cycles right through tabs, while `Alt-T` cycles left.
+  * Also useful cmds: `tab n`, `tab c`(Alt-C)
+- Shell variables and JavaScript share a live variable table by `$.`, and `Bun.sha`
+  can retain JavaScript values across commands and cwd tabs.
+- Saved history, Bash/Fish history import, completions, and ghost suggestions
+  are available interactively.
+- `serve [directory]` starts a browsable HTTP file server. Together with
+  Android USB tethering, it provides a simple way to transfer files between
+  Buninu Linux and the connected phone.
+- Cross-platform builtins and PATH-fallback commands.
+- `Ctrl-U` removes and saves the text before the cursor; press it again at the
+  beginning of the line to restore it. `Ctrl-K` independently toggles the text
+  after the cursor when at the end of the line.
+- Unquoted pathname patterns use `Bun.Glob` and follow directory symbolic
+  links used as intermediate path components, as traditional shells do. This
+  matters for sysfs, where class entries are normally links. For example:
+
+```sh
+ls /sys/class/net/*/device
+```
+
+For a readable process overview, run:
+
+```sh
+pspac
+```
+
+`pspac` shows the real `PID COMMAND` process table and highlights each command
+line as shell syntax with micro's Monokai colours. Leading directories are
+dimmed so the program name stands out. Use `pspa` for the same table as plain
+text.
+
+See the [bunmsh repository](https://github.com/jjtseng93/bunmsh) for its full
+syntax, interactive controls, builtins, and current compatibility details.
 
 ## Commands inside /bin
-
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eight commands
-implemented as Bun scripts:
 
 | command | does | manual |
 | --- | --- | --- |
@@ -221,6 +300,9 @@ implemented as Bun scripts:
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eight commands
+implemented as Bun scripts.
 
 The small `tar` follows the current `Bun.Archive` boundary: extraction
 restores directories and symbolic links, while hard links are skipped by Bun
@@ -235,6 +317,8 @@ mount /dev/sda1 /mnt --mkdir
 mount -fv /dev/sda1 /mnt
 mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
+umount /mnt
+umount -R /mnt
 
 ip link set eth0 up
 ip addr add 192.168.1.50/24 dev eth0
@@ -253,6 +337,14 @@ top -b -n 1
 
 poweroff
 reboot
+
+tar cvf /tmp/buninu.tar README.md package.json
+tar tvf /tmp/buninu.tar
+mkdir -p /tmp/buninu-copy
+tar xvf /tmp/buninu.tar -C /tmp/buninu-copy
+
+# Add z to create a gzip-compressed archive
+tar czvf /tmp/buninu.tar.gz README.md package.json
 ```
 
 ## Environment and dependencies
@@ -359,6 +451,8 @@ bun ./index.js -fb --real --export
 `index.js` is the single entry point (`npm run fetch` and `npm run pack` call
 it too). Its physical-image stages run as fetch → build:
 
+#### Build flags
+
 | flag | runs | use it when |
 | --- | --- | --- |
 | `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh` | first clone, or after bumping a pinned version |
@@ -415,6 +509,8 @@ The primary `bun ./index.js -fb --real` pipeline runs the steps below in order;
 each writes files the next one reads. When selected, `--export` runs afterward
 and copies the final `vda.img` to the invocation directory.
 
+##### Pipeline inputs and outputs
+
 | script | reads | writes |
 | --- | --- | --- |
 | `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-lts`, `kernel/linuxx64.efi.stub`, musl, and the selected network, storage, input, power and filesystem modules with trimmed module indexes |
@@ -441,6 +537,8 @@ boot.
 
 `build-uki.sh` appends sections to systemd's `linuxx64.efi.stub` with
 `objcopy`, at hand-picked VMAs because `objcopy` will not lay them out for you:
+
+##### UKI sections
 
 | section | offset from image base | contents | size |
 | --- | --- | --- | --- |
@@ -715,12 +813,48 @@ reports nothing registered). Nothing loads them at boot. PID 1 also installs
 `Promise.reject()` at the prompt makes Bun exit, which is a kernel panic
 (`Attempted to kill init!`).
 
-The REPL exposes a global `bunmsh()` function. Calling it creates
-`/tmp/bunmsh-runtime`, installs the pinned `bunmsh@0.3.6` package there, and
-directly runs its `src/main.js` with a small explicit environment. The calls
-are synchronous so bunmsh exclusively owns the terminal until `exit` returns
-to the Bun REPL. `start()` launches Buninu with the current process environment
-preserved, while overriding `PATH` and `HOME` for the userspace session.
+`start()` launches the bundled Buninu userspace and its bunmsh (Bun Modern Shell) with
+the current process environment preserved, while overriding `PATH` and `HOME`
+for the userspace session.
+
+## Contents
+
+- [Quick start](#quick-start)
+  * [Steps](#steps)
+    + [Build directly with bun x](#build-directly-with-bun-x)
+    + [Or build from a source checkout](#or-build-from-a-source-checkout)
+    + [Write the image to a USB drive](#write-the-image-to-a-usb-drive)
+    + [Booting from the USB drive](#booting-from-the-usb-drive)
+- [Using Buninu Linux](#using-buninu-linux)
+  * [Basic configuration](#basic-configuration)
+  * [Editor quick start](#editor-quick-start)
+  * [Panes, terminals, and tabs](#panes-terminals-and-tabs)
+    + [Pane and tab controls](#pane-and-tab-controls)
+  * [Using Bun Modern Shell](#using-bun-modern-shell)
+- [Commands inside /bin](#commands-inside-bin)
+- [Environment and dependencies](#environment-and-dependencies)
+  * [Build environment](#build-environment)
+  * [Buninu Linux (Section 2)](#buninu-linux-section-2)
+  * [Hello world (Section 1)](#hello-world-section-1)
+  * [Retired native bootstrap](#retired-native-bootstrap)
+- [Implementation details](#implementation-details)
+  * [1. Hello world](#1-hello-world)
+  * [2. Buninu Linux – Bun as PID 1](#2-buninu-linux-bun-as-pid-1)
+    + [Build flags](#build-flags)
+    + [Build pipeline](#build-pipeline)
+      - [Pipeline inputs and outputs](#pipeline-inputs-and-outputs)
+    + [UKI layout](#uki-layout)
+      - [UKI sections](#uki-sections)
+    + [Disk layout](#disk-layout)
+    + [Real-hardware boot details](#real-hardware-boot-details)
+    + [QEMU development](#qemu-development)
+      - [QEMU networking](#qemu-networking)
+    + [Command implementation](#command-implementation)
+    + [Reaching JavaScript with nothing mounted](#reaching-javascript-with-nothing-mounted)
+    + [What init.js does](#what-initjs-does)
+- [Authorship](#authorship)
+- [License](#license)
+  * [Bundled component licenses](#bundled-component-licenses)
 
 ## Authorship
 
@@ -741,6 +875,8 @@ own third-party notices, listed at the end of [NOTICE.md](NOTICE.md).
 The repository also commits four third-party platform binaries under
 `initramfs/lib/`, and the built image redistributes several more. Each stays
 under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
+
+### Bundled component licenses
 
 | Component | License | Where |
 |---|---|---|
