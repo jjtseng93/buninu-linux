@@ -31,7 +31,7 @@
   * start() starts the Buninu userspace shell
   * `cfg.disk` + shell `mount` mounts local disks
   * `cfg.net` loads common wired NIC and Android USB-tethering drivers
-  * Android phone USB tethering over RNDIS has been tested successfully
+  * Android phone USB tethering over RNDIS has been tested successfully, allowing Buninu Linux to access the Internet through an Android phone
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
   * The bundled `jmi` editor, `jsmdcui` app runtime, and local JavaScript execution also work.
 
