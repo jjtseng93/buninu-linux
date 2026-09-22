@@ -1173,9 +1173,9 @@ class KittyGraphicsParser {
 
     if (control.m === "1") {
       this.transfers.set(key, existing);
-      if (!control.i && !control.I) {
-        this.implicitTransferKey = key;
-      }
+      //  Later chunks of a transfer only need m=; they continue the transfer
+      //  in progress whether or not its first chunk named an image id.
+      this.implicitTransferKey = key;
       return null;
     }
 
@@ -3314,6 +3314,7 @@ async function bootstrap() {
 
 module.exports.CursorStateTracker = CursorStateTracker;
 module.exports.KittyGraphicsParser = KittyGraphicsParser;
+module.exports.BunPtyBackend = BunPtyBackend;
 module.exports.webSocketOriginAllowed = webSocketOriginAllowed;
 
 if (require.main === module) {
