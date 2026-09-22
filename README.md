@@ -37,6 +37,7 @@
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
   * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
   * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
+    + Also has mouse click, wheel, and cursor drawing
 
 ---
 
