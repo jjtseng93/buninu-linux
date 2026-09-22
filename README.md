@@ -36,6 +36,7 @@
   * Android phone USB tethering over RNDIS has been tested successfully, allowing Buninu Linux to access the Internet through an Android phone
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
   * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
+  * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
 
 ---
 
@@ -278,6 +279,9 @@ For a readable process overview, run:
 
 ```sh
 pspac
+
+# Kernel threads show as [name]; filter them out to see only userspace
+pspac | grep -v '\[[a-z]'
 ```
 
 `pspac` shows the real `PID COMMAND` process table and highlights each command
@@ -287,6 +291,35 @@ text.
 
 See the [bunmsh repository](https://github.com/jjtseng93/bunmsh) for its full
 syntax, interactive controls, builtins, and current compatibility details.
+
+### Showing images
+
+The Linux text console cannot draw pictures, so first start `bunterm`, the
+graphical terminal on the framebuffer, and run the image commands inside it:
+
+```sh
+# Start the graphical terminal on this virtual console (or name one: bunterm /dev/tty1)
+bunterm
+
+# Show an image with the kitty graphics protocol (jsgotty --viu)
+showimg /buninu/icon.png
+
+# Render README.md with glow, then show icon.png
+buninu-help
+
+# Markdown view with its images in place
+# cfg.net first to show that GitHub image
+jsmdcui --allow-url README.md
+```
+
+`bunterm` draws with Skia (CanvasKit) and understands the kitty graphics
+protocol, so anything that speaks it — `showimg`, `jsmdcui`, `kitten icat`,
+`timg` — shows images, alongside CJK text and colour emoji. The cursor moves
+below a shown image, and images scroll with the text. When the program you
+started exits, the console returns to text mode. `bunterm --help` has the
+options; [graphics.md](graphics.md) describes how it is built. The image
+needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
+(the default `linux-virt` kernel has none).
 
 ## Commands inside /bin
 
@@ -839,6 +872,7 @@ for the userspace session.
   * [Panes, terminals, and tabs](#panes-terminals-and-tabs)
     + [Pane and tab controls](#pane-and-tab-controls)
   * [Using Bun Modern Shell](#using-bun-modern-shell)
+  * [Showing images](#showing-images)
 - [Commands inside /bin](#commands-inside-bin)
 - [Environment and dependencies](#environment-and-dependencies)
   * [Build environment](#build-environment)
