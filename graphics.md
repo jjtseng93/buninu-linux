@@ -170,8 +170,10 @@ needs about 1 GB.
 
 ## Trying it
 
-The framebuffer needs a kernel with one: Alpine's `linux-virt` (the default
-kernel) has no `CONFIG_FB` at all, so `/dev/fb0` never appears. Build with
+The framebuffer needs a kernel that provides one. Alpine's `linux-lts` has
+`CONFIG_FB`, `CONFIG_FB_EFI` and `CONFIG_DRM_SIMPLEDRM` built in; the default
+`linux-virt` builds them as modules, and the image ships only the network,
+storage, USB and HID modules, so there `/dev/fb0` never appears. Build with
 `./index.js -b --linux-lts` (or `--real`); under QEMU the lts kernel gets a
 1280×800 `simpledrm` framebuffer from the UEFI GOP even with `-display none`,
 and the monitor's `screendump` shows it. From a virtual console in the guest:

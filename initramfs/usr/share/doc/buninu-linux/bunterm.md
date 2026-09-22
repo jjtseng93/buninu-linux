@@ -61,8 +61,9 @@ follow the program's application cursor mode.
 
 ## Limits
 
-- Needs a framebuffer: the default `linux-virt` kernel has none, so build
-  the image with `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
+- Needs a framebuffer: `linux-lts` has one built in, while the default
+  `linux-virt` builds it as modules the image does not ship, so build with
+  `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
 - No mouse, no selection, no scrollback viewing (the buffer keeps 1000
   lines for programs that query it).
 - A program that prints a terminal reply while the tty echoes (that is, one

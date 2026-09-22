@@ -319,7 +319,7 @@ below a shown image, and images scroll with the text. When the program you
 started exits, the console returns to text mode. `bunterm --help` has the
 options; [graphics.md](graphics.md) describes how it is built. The image
 needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
-(the default `linux-virt` kernel has none).
+(the default `linux-virt` builds one only as modules the image omits).
 
 ## Commands inside /bin
 
