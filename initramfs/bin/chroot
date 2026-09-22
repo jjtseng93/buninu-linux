@@ -8,7 +8,7 @@
 // /etc/resolv.conf, so `chroot /mnt/rootfs` lands in a usable system. Every
 // mount it makes is undone when the command exits.
 
-import { existsSync, mkdirSync, realpathSync, statSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, realpathSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { libc, cString, ptr, errno, strerror, Errno } from "../lib/dlopen.js";
 import { showDocument } from "../lib/document.js";
 
@@ -125,6 +125,9 @@ if (options.mount) {
   // A bound file, so name resolution inside follows the host's configuration
   // and nothing inside the root is modified.
   if (existsSync("/etc/resolv.conf") && existsSync(`${root}/etc`)) {
+  
+    chmodSync(`/etc/resolv.conf`, 0o644);
+    
     prepare({ inside: "/etc/resolv.conf", source: "/etc/resolv.conf", type: "none", flags: MS.BIND, file: true });
   }
 }
