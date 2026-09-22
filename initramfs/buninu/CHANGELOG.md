@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.15 - 2026-09-22
+
+### Changed
+
+- Sync jsgotty to 1.1.12
+  * Export `BunPtyBackend` from `gotty.js`, the PTY layer built on
+    `Bun.spawn({ terminal })`, so other programs can run a command on a
+    pseudo-terminal without their own FFI. Buninu Linux's `bunterm`, a
+    graphical terminal on the framebuffer, is its first user, together with
+    the already exported `KittyGraphicsParser`
+
+### Fixed
+
+- jsgotty: a chunked kitty graphics transfer whose first chunk names an
+  image id (`i=`) is now continued by later chunks that carry only `m=`, as
+  the protocol allows. Previously those chunks were treated as new anonymous
+  transfers, so the image never completed. jsgotty's own `showimg` repeats
+  the id in every chunk and was unaffected; `kitten icat`, timg, chafa and
+  similar clients were
+
+## 0.4.13 - 2026-09-22
+
+### Changed
+
+- Sync bunmsh to 0.3.9
+  * `Ctrl-U` removes and saves the text before the cursor; pressing it again
+    at the beginning of the line restores it. `Ctrl-K` independently toggles
+    the text after the cursor when at the end of the line
+  * Unquoted pathname patterns follow directory symbolic links used as
+    intermediate path components, as traditional shells do, so patterns such
+    as `/sys/class/net/*/device` pass through sysfs class links
+  * The fallback `ls`/`lsfancy` lists a glob's files as one listing instead
+    of one section per file, honors `--`, and follows a command-line symlink
+    to a directory
+- Sync jsmdcui to 0.19.2
+  * Pressing `Ctrl-W` twice quickly switches to the next tab like `Alt-T`
+    from either an editor or a terminal pane; at the rightmost tab, when every
+    tab holds only terminal panes, it opens a new editor tab instead of
+    cycling back
+
 ## 0.4.12 - 2026-09-20
 
 ### Fixed
