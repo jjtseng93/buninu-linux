@@ -341,6 +341,12 @@ const launchBunmsh = () => {
 
 const launchBuninu = () => {
 
+  console.log(`
+Type bunterm in bunmsh: Graphical Terminal
+  Shows Emojis, CJK chars
+  Supports Kitty Graphics Protocol
+`)
+
   const entry = `/buninu/bin/init.js`;
   console.log(`buninu: Starting ${entry} --local`);
   const shell = Bun.spawnSync([

@@ -118,11 +118,11 @@ export class ImageStore {
     this.placements.set(key, placement);
     this.invalidate(placement);
     if (control.C === "1") return "";
-    // The cursor ends on the image's last row, just after its last column.
-    const motion = [];
-    if (rows > 1) motion.push(`\u001b[${rows - 1}B`);
-    motion.push(`\u001b[${buffer.cursorX + columns + 1}G`);
-    return motion.join("");
+    // Move the cursor below the image, the way jsgotty does for its browser
+    // terminal: one line feed per image row (so the screen scrolls when the
+    // image runs past the bottom, and the placement's marker scrolls with
+    // it), then to the column after the image.
+    return `${"\r\n".repeat(rows)}\u001b[${buffer.cursorX + columns + 1}G`;
   }
 
   invalidate(placement) {
