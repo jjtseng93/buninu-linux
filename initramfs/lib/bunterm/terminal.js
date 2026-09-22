@@ -90,8 +90,15 @@ export const createSession = ({
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
     const buffer = term.buffer.active;
+    // cursorY counts from the buffer's base, so a scrolled-back viewport
+    // moves the cursor down the screen and eventually off it.
+    const row = buffer.baseY + buffer.cursorY - buffer.viewportY;
     return renderer.render(term, {
-      cursor: { x: buffer.cursorX, y: buffer.cursorY, visible: blinkOn && !cursorHidden() },
+      cursor: {
+        x: buffer.cursorX,
+        y: row,
+        visible: blinkOn && !cursorHidden() && row >= 0 && row < renderer.rows,
+      },
       images: images.visible(),
       pointer,
     });
@@ -142,6 +149,11 @@ export const createSession = ({
     const applicationCursorKeys = Boolean(term._core?.coreService?.decPrivateModes?.applicationCursorKeys);
     const text = translateKeys(bytes.toString("latin1"), { applicationCursorKeys });
     backend.write(Buffer.from(text, "latin1"));
+    // Typing returns to the live screen, as every terminal does.
+    if (term.buffer.active.viewportY !== term.buffer.active.baseY) {
+      term.scrollToBottom();
+      renderer.invalidate();
+    }
     resetBlink();
     requestFrame();
   };
@@ -159,11 +171,35 @@ export const createSession = ({
     : buttons.right ? CoreMouseButton.RIGHT
     : CoreMouseButton.NONE);
 
+  // Scrolls the viewport when the program is not reading the mouse itself:
+  // through the scrollback on the normal screen, and as arrow keys on the
+  // alternate screen, which has no scrollback and is what a pager expects.
+  const wheelScroll = (notches) => {
+    const lines = notches * 3;
+    if (term.buffer.active.type === "alternate") {
+      const application = Boolean(term._core?.coreService?.decPrivateModes?.applicationCursorKeys);
+      const key = `\u001b${application ? "O" : "["}${lines > 0 ? "A" : "B"}`;
+      backend.write(Buffer.from(key.repeat(Math.abs(lines)), "latin1"));
+      return;
+    }
+    const before = term.buffer.active.viewportY;
+    term.scrollLines(-lines);
+    if (term.buffer.active.viewportY !== before) {
+      // Every row on screen is different now, and identical text at the same
+      // row would otherwise hash the same as before.
+      renderer.invalidate();
+      requestFrame();
+    }
+  };
+
   const reportMouse = (report) => {
     pointer = { x: report.x, y: report.y };
     requestFrame();
     const service = term._core?.coreMouseService;
-    if (!service?.areMouseEventsActive) return;
+    if (!service?.areMouseEventsActive) {
+      if (report.wheel) wheelScroll(report.wheel);
+      return;
+    }
     const column = Math.floor((report.x - renderer.offsetX) / renderer.cellWidth);
     const row = Math.floor((report.y - renderer.offsetY) / renderer.cellHeight);
     const send = (button, action) => {
@@ -232,7 +268,7 @@ export const createSession = ({
   paint();
   return {
     term, backend, renderer, images, kitty,
-    paint, requestFrame, settle, input, exited, close, attachPointer, reportMouse,
+    paint, requestFrame, settle, input, exited, close, attachPointer, reportMouse, wheelScroll,
   };
 };
 

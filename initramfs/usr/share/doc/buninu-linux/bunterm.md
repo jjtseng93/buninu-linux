@@ -70,8 +70,14 @@ enabled reporting (`DECSET 1000`, `1002` or `1003`), and what is sent follows
 the mode it chose, SGR (`1006`) included. `jsmdcui`, `micro`, `htop`, `vim`
 and anything else that speaks the protocol work with no configuration.
 
-`--no-mouse` turns this off: the terminal then never looks at `/dev/input`
-and never loads the mouse module.
+When the program is not reading the mouse, the wheel scrolls instead: back
+through the scrollback on the normal screen, three lines per notch, and as
+arrow keys on the alternate screen, which has no scrollback and is what a
+pager expects. Typing returns to the live screen, and the text cursor is
+hidden while it is scrolled out of view.
+
+`--no-mouse` turns all of this off: the terminal then never looks at
+`/dev/input` and never loads the mouse module.
 
 `init.js` loads `evdev` and `psmouse` at boot, so a PS/2 mouse — which is
 what QEMU's q35 machine and most PCs present — has a device node ready. A USB
@@ -85,10 +91,10 @@ reported and the session continues without it.
 - Needs a framebuffer: `linux-lts` has one built in, while the default
   `linux-virt` builds it as modules the image does not ship, so build with
   `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
-- No selection or scrollback viewing (the buffer keeps 1000 lines for
-  programs that query it), and a program that does not enable mouse
-  reporting sees nothing — the arrow still moves so the pointer is visibly
-  alive. `--no-mouse` removes the pointer entirely.
+- No selection, and no keyboard way to scroll back: the wheel is it. The
+  buffer keeps 1000 lines. A program that does not enable mouse reporting
+  sees no clicks — the arrow still moves, so the pointer is visibly alive.
+  `--no-mouse` removes the pointer entirely.
 - A program that prints a terminal reply while the tty echoes (that is, one
   not in raw mode) will see the reply echoed, as on any terminal.
 - Kitty images are drawn above text; `z` ordering below text and animation
