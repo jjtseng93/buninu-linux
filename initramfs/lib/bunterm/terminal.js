@@ -50,6 +50,7 @@ export const createSession = ({
   theme = defaultTheme,
   scrollback = 1000,
   cursorBlink = true,
+  mouse = true,
   env = {},
   onError = (error) => console.error(`bunterm: ${error?.stack ?? error}`),
 }) => {
@@ -82,6 +83,9 @@ export const createSession = ({
   let frameTimer = null;
   let blinkOn = true;
   const cursorHidden = () => Boolean(term._core?.coreService?.isCursorHidden);
+  // Only set when a pointer is attached; without one the renderer is called
+  // exactly as before.
+  let pointer = null;
   const paint = () => {
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
@@ -89,6 +93,7 @@ export const createSession = ({
     return renderer.render(term, {
       cursor: { x: buffer.cursorX, y: buffer.cursorY, visible: blinkOn && !cursorHidden() },
       images: images.visible(),
+      pointer,
     });
   };
   const requestFrame = () => {
@@ -141,6 +146,69 @@ export const createSession = ({
     requestFrame();
   };
 
+  // Turns a pointer report from mouse.js into the mouse sequences the
+  // program asked for. xterm.js's CoreMouseService owns the protocol: it
+  // knows which events the program enabled (DECSET 1000/1002/1003), encodes
+  // them (SGR 1006 or the default form) and sends them through onData, so
+  // nothing here builds an escape sequence. Reports arrive only while a
+  // pointer is open, and this is the only place the terminal sees one.
+  const CoreMouseButton = { LEFT: 0, MIDDLE: 1, RIGHT: 2, NONE: 3, WHEEL: 4 };
+  const CoreMouseAction = { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, MOVE: 32 };
+  const heldButton = (buttons) => (buttons.left ? CoreMouseButton.LEFT
+    : buttons.middle ? CoreMouseButton.MIDDLE
+    : buttons.right ? CoreMouseButton.RIGHT
+    : CoreMouseButton.NONE);
+
+  const reportMouse = (report) => {
+    pointer = { x: report.x, y: report.y };
+    requestFrame();
+    const service = term._core?.coreMouseService;
+    if (!service?.areMouseEventsActive) return;
+    const column = Math.floor((report.x - renderer.offsetX) / renderer.cellWidth);
+    const row = Math.floor((report.y - renderer.offsetY) / renderer.cellHeight);
+    const send = (button, action) => {
+      try {
+        service.triggerMouseEvent({ col: column, row, button, action, ctrl: false, alt: false, shift: false });
+      } catch (error) {
+        onError(error);
+      }
+    };
+    for (const name of report.released) {
+      send(CoreMouseButton[name.toUpperCase()], CoreMouseAction.UP);
+    }
+    for (const name of report.pressed) {
+      send(CoreMouseButton[name.toUpperCase()], CoreMouseAction.DOWN);
+    }
+    if (report.moved) send(heldButton(report.buttons), CoreMouseAction.MOVE);
+    for (let notch = 0; notch < Math.abs(report.wheel); notch++) {
+      send(CoreMouseButton.WHEEL, report.wheel > 0 ? CoreMouseAction.UP : CoreMouseAction.DOWN);
+    }
+    for (let notch = 0; notch < Math.abs(report.hwheel); notch++) {
+      send(CoreMouseButton.WHEEL, report.hwheel > 0 ? CoreMouseAction.RIGHT : CoreMouseAction.LEFT);
+    }
+  };
+
+  // The pointer is opened only when asked for, by a module that is imported
+  // only then, so a machine without one — or a broken input layer — cannot
+  // affect a plain session.
+  let pointerDevice = null;
+  const attachPointer = async () => {
+    if (!mouse) return null;
+    const { openPointer, findPointers } = await import("./mouse.js");
+    const devices = findPointers();
+    if (!devices.length) throw new Error("no pointing device in /dev/input (is the evdev module loaded?)");
+    pointerDevice = openPointer({
+      devices,
+      width: screen.width,
+      height: screen.height,
+      onSync: reportMouse,
+      onError,
+    });
+    pointer = { x: pointerDevice.state.x, y: pointerDevice.state.y };
+    paint();
+    return pointerDevice;
+  };
+
   // Waits until every byte received so far has been parsed, then paints.
   const settle = async () => {
     await queue;
@@ -154,13 +222,18 @@ export const createSession = ({
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
     backend.close();
+    pointerDevice?.close();
+    pointerDevice = null;
     images.delete();
     renderer.delete();
     term.dispose();
   };
 
   paint();
-  return { term, backend, renderer, images, kitty, paint, requestFrame, settle, input, exited, close };
+  return {
+    term, backend, renderer, images, kitty,
+    paint, requestFrame, settle, input, exited, close, attachPointer, reportMouse,
+  };
 };
 
 // Runs a session on the framebuffer with the console in graphics mode and
@@ -193,6 +266,18 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
         },
       });
       onRestore(() => keyboard.close());
+      if (options.mouse !== false) {
+        // A pointer that cannot be opened is reported and the session
+        // continues as a keyboard-only terminal.
+        try {
+          const attached = await session.attachPointer();
+          if (attached?.devices.length) {
+            console.error(`bunterm: mouse: ${attached.devices.map((device) => device.name).join(", ")}`);
+          }
+        } catch (error) {
+          console.error(`bunterm: mouse: ${error.message}`);
+        }
+      }
       return await session.exited;
     } finally {
       keyboard?.close();

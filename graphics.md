@@ -19,6 +19,7 @@ via Bun FFI.
  │   @xterm/headless Terminal ─ VT parser, screen buffer, attributes     │
  │   images.js ─ kitty placements as Skia images anchored to lines       │
  │   input.js ─ /dev/ttyN raw mode, console→xterm key sequences          │
+ │   mouse.js ─ /dev/input/event* pointer, unless --no-mouse             │
  │   renderer.js ─ cells → glyphs (fonts) or vectors (glyphs.js)         │
  └───────────────────────────────────────────────┬──────────────────────┘
                                                  │ Skia draw calls
@@ -130,6 +131,7 @@ Around those, `/lib/bunterm/` adds:
 | `glyphs.js` | Box drawing (U+2500–257F incl. double, dashed, rounded, mixed-weight), block elements and shades (U+2580–259F), Powerline (U+E0A0–E0BF) and legacy computing (U+1FB70–1FB97) drawn as Skia paths, so they meet seamlessly at any size. The shape tables are xterm.js's `CustomGlyphs.ts` (MIT); coordinates snap to pixel centres for crisp 1-px lines. |
 | `images.js` | Kitty placements: decodes PNG (`f=100`) with Skia or raw RGB/RGBA (`f=24/32`), with `Bun.Image` as a transcoder for other encodings; anchors each placement to an xterm marker so it scrolls with its line and disappears with it (on the alternate screen, where xterm.js issues no markers, to a fixed row that is dropped when that screen ends); sizes in cells (`c,r`) or from pixel size; crops (`x,y,w,h`), cell offsets (`X,Y`), `p=` placement ids, `a=d` deletion scopes, and the cursor move after a placement. |
 | `input.js` | Raw mode on the console (`TCGETS`/`TCSETS` through the shared libc binding) and translation of the kernel's "linux" key sequences to xterm's, honouring DECCKM. |
+| `mouse.js` | `/dev/input/event*` through the input layer: finds pointing devices by their sysfs capability bitmaps, decodes the 24-byte `input_event` records (relative deltas, absolute axes read with `EVIOCGABS`, buttons, wheel) and reports a pointer position per `EV_SYN`. Not loaded under `--no-mouse`; otherwise the session draws an arrow and hands each report to xterm.js's `CoreMouseService`, which decides what the program enabled and encodes it. |
 | `terminal.js` | `createSession()` wires PTY → parser → emulator → renderer with a coalesced ~60 Hz frame timer and a serialized output queue, so a kitty packet always sees the cursor position left by the text before it. `runTerminal()` adds `runGraphics()` and the keyboard. |
 
 Manual: `bunterm --help` / `initramfs/usr/share/doc/buninu-linux/bunterm.md`.
@@ -150,7 +152,9 @@ Manual: `bunterm --help` / `initramfs/usr/share/doc/buninu-linux/bunterm.md`.
 4. `screen.flush()` finishes Skia's work and copies the wasm-heap frame into
    the `/dev/fb0` mapping.
 
-Keyboard bytes travel the other way: console → `input.js` → PTY. Terminal
+Keyboard bytes travel the other way: console → `input.js` → PTY, and with
+the mouse on, pointer reports go `/dev/input/event*` → `mouse.js` → the arrow on
+screen and xterm.js's `CoreMouseService` → PTY. Terminal
 replies (cursor position, device attributes, kitty acks) go from the
 emulator straight to the PTY.
 
@@ -204,7 +208,8 @@ through its transmit / `a=p` / `a=d` sequence exactly as in the browser.
 
 ## Not done yet
 
-- Mouse, selection and scrollback viewing in `bunterm`.
+- Selection and scrollback viewing in `bunterm` (the pointer itself works,
+  and `--no-mouse` turns it off).
 - Kitty `z < 0` (images behind text), animation frames, Unicode
   placeholders, and shared-memory transmission.
 - Text run shaping with ligatures for single-code-point cells (each cell is

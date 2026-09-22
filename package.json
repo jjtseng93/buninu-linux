@@ -37,6 +37,6 @@
     "fetch": "./index.js -f",
     "pack": "./index.js -b",
     "start": "./index.js -r",
-    "check": "for f in ./index.js ./initramfs/init.js ./initramfs/lib/document.js ./initramfs/lib/dlopen.js ./initramfs/lib/fbdev.js ./initramfs/lib/canvas.js ./initramfs/lib/bunterm/glyphs.js ./initramfs/lib/bunterm/renderer.js ./initramfs/lib/bunterm/images.js ./initramfs/lib/bunterm/input.js ./initramfs/lib/bunterm/terminal.js ./initramfs/lib/modprobe.js ./initramfs/lib/power.js ./initramfs/bin/bunterm ./initramfs/bin/chroot ./initramfs/bin/mount ./initramfs/bin/umount ./initramfs/bin/ip ./initramfs/bin/ps ./initramfs/bin/top ./initramfs/bin/poweroff ./initramfs/bin/reboot ./initramfs/bin/tar ./initramfs/bin/stripansi; do node --check \"$f\" || exit 1; done"
+    "check": "for f in ./index.js ./initramfs/init.js ./initramfs/lib/document.js ./initramfs/lib/dlopen.js ./initramfs/lib/fbdev.js ./initramfs/lib/canvas.js ./initramfs/lib/bunterm/glyphs.js ./initramfs/lib/bunterm/renderer.js ./initramfs/lib/bunterm/images.js ./initramfs/lib/bunterm/input.js ./initramfs/lib/bunterm/mouse.js ./initramfs/lib/bunterm/terminal.js ./initramfs/lib/modprobe.js ./initramfs/lib/power.js ./initramfs/bin/bunterm ./initramfs/bin/chroot ./initramfs/bin/mount ./initramfs/bin/umount ./initramfs/bin/ip ./initramfs/bin/ps ./initramfs/bin/top ./initramfs/bin/poweroff ./initramfs/bin/reboot ./initramfs/bin/tar ./initramfs/bin/stripansi; do node --check \"$f\" || exit 1; done"
   }
 }

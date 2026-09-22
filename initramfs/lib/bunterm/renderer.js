@@ -105,6 +105,7 @@ export class Renderer {
     this.forcedRows = new Set();
     this.dirtyAll = true;
     this.lastCursor = { x: -1, y: -1, visible: false };
+    this.lastPointer = null;
   }
 
   fontFor(typeface, size, { bold = false, italic = false } = {}) {
@@ -355,11 +356,46 @@ export class Renderer {
     }
   }
 
+  // Draws the mouse pointer at (x, y) in pixels: an arrow outlined in the
+  // background colour so it stays visible over any cell.
+  drawPointer({ x, y }) {
+    const { CanvasKit, canvas } = this;
+    const size = Math.max(10, Math.round(this.fontSize * 0.9));
+    const builder = new CanvasKit.PathBuilder();
+    builder.moveTo(x, y);
+    builder.lineTo(x, y + size);
+    builder.lineTo(x + size * 0.28, y + size * 0.74);
+    builder.lineTo(x + size * 0.46, y + size * 1.08);
+    builder.lineTo(x + size * 0.63, y + size * 1.0);
+    builder.lineTo(x + size * 0.45, y + size * 0.66);
+    builder.lineTo(x + size * 0.72, y + size * 0.66);
+    builder.close();
+    const path = builder.detach();
+    builder.delete();
+    const outline = this.paintFor(this.background).copy();
+    outline.setStyle(CanvasKit.PaintStyle.Stroke);
+    outline.setStrokeWidth(Math.max(1, size / 8));
+    canvas.drawPath(path, outline);
+    canvas.drawPath(path, this.paintFor(this.cursorColor));
+    outline.delete();
+    path.delete();
+  }
+
+  // The rows an arrow at (x, y) covers, so they are repainted when it moves.
+  pointerRows({ x, y }) {
+    void x;
+    const size = Math.max(10, Math.round(this.fontSize * 0.9));
+    const first = Math.floor((y - this.offsetY) / this.cellHeight);
+    const last = Math.ceil((y + size * 1.1 - this.offsetY) / this.cellHeight);
+    return [first, last];
+  }
+
   // Repaints what changed and flushes to the framebuffer. `cursor` is
   // { x, y, visible }; `images` is a list of { image, rect } placements in
-  // screen pixels, from images.js, drawn over the text. Returns true when
-  // anything was painted.
-  render(term, { cursor, images = [] } = {}) {
+  // screen pixels, from images.js, drawn over the text; `pointer` is the
+  // mouse position in pixels, drawn last. Returns true when anything was
+  // painted.
+  render(term, { cursor, images = [], pointer = null } = {}) {
     const buffer = term.buffer.active;
     const top = buffer.viewportY;
     const dirty = [];
@@ -375,6 +411,13 @@ export class Renderer {
     const cursorRows = new Set();
     if (this.lastCursor.visible) cursorRows.add(this.lastCursor.y);
     if (cursor?.visible) cursorRows.add(cursor.y);
+    // Wherever the pointer was and is has to be repainted: the text under it
+    // has not changed, so no row hash would say so.
+    for (const position of [this.lastPointer, pointer]) {
+      if (!position) continue;
+      const [first, last] = this.pointerRows(position);
+      for (let row = Math.max(0, first); row < Math.min(this.rows, last); row++) cursorRows.add(row);
+    }
     for (const row of cursorRows) {
       if (row >= 0 && row < this.rows && !dirty.includes(row)) dirty.push(row);
     }
@@ -390,6 +433,8 @@ export class Renderer {
     }
     this.lastCursor = { x: cursor?.x ?? -1, y: cursor?.y ?? -1, visible: Boolean(cursor?.visible) };
     if (images.length) this.drawImages(images, dirty);
+    if (pointer) this.drawPointer(pointer);
+    this.lastPointer = pointer ? { x: pointer.x, y: pointer.y } : null;
     this.screen.flush();
     return true;
   }

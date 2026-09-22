@@ -310,6 +310,9 @@ buninu-help
 # Markdown view with its images in place
 # cfg.net first to show that GitHub image
 jsmdcui --allow-url README.md
+
+# The mouse works in bunterm; --no-mouse leaves /dev/input alone
+bunterm -e jsmdcui --allow-url README.md
 ```
 
 `bunterm` draws with Skia (CanvasKit) and understands the kitty graphics
@@ -335,7 +338,7 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
 | `stripansi` | remove ANSI escape sequences from stdin, `-`, or one or more files and concatenate the results | — |
 | `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
-| `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images; xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
+| `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images, with the mouse working (`--no-mouse` turns it off); xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
 Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eleven commands
 implemented as Bun scripts.

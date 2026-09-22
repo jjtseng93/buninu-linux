@@ -66,6 +66,12 @@ for module in failover net_failover virtio_net; do select_module "$module"; done
 for module in virtio_blk ext4 ext2 vfat exfat ntfs3 nls_utf8 nls_cp437 nls_iso8859-1; do
     select_module "$module"
 done
+# Pointing devices for `bunterm --mouse`, which reads /dev/input/event*.
+# evdev is the character-device interface to the input layer; psmouse drives
+# the PS/2 mouse every PC and QEMU's q35 machine has. A USB mouse needs the
+# usbhid stack, which only the --real image carries. init.js loads these two
+# at boot; nothing reads a pointer unless bunterm is asked to.
+for module in evdev psmouse; do select_module "$module"; done
 
 if [ "${REAL_MACHINE:-}" = 1 ]; then
     # USB keyboard for the console; common storage paths (SATA/AHCI HDD and

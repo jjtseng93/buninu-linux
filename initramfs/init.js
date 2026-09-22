@@ -149,6 +149,24 @@ try {
   console.error(`init.js: num lock: ${error?.message ?? error}`);
 }
 
+// The input layer's character devices, so a pointing device has a
+// /dev/input/event* node for `bunterm --mouse` to read. Loading them only
+// creates those nodes: the console keyboard is unaffected, and nothing reads
+// a pointer unless it is asked to. A USB mouse also needs the usbhid stack,
+// which `cfg.all` or a --real boot brings in.
+try {
+  const { tryModprobe } = await import("/lib/modprobe.js");
+  const loaded = ["evdev", "psmouse"].filter((module) => tryModprobe(module) !== null);
+  const { readdirSync } = await import("node:fs");
+  const devices = (() => {
+    try { return readdirSync("/dev/input").filter((name) => name.startsWith("event")); } catch { return []; }
+  })();
+  console.log(`init.js: input modules ${loaded.length ? loaded.join(" ") : "none"}`
+    + ` (${devices.length} event device${devices.length === 1 ? "" : "s"})`);
+} catch (error) {
+  console.error(`init.js: input modules: ${error?.message ?? error}`);
+}
+
 const { default: repl } = await import("node:repl");
 const { mkdirSync, writeFileSync } = await import("node:fs");
 

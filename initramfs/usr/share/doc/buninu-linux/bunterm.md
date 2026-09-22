@@ -10,6 +10,7 @@ bunterm                      # run /bin/sh on the console you are on
 bunterm /dev/tty1            # use virtual console 1 for graphics and keys
 bunterm --font-size 20
 bunterm -e bun /buninu/apps/jsmdcui/src/index.js --demo
+bunterm --no-mouse          # keyboard only
 bunterm -h
 ```
 
@@ -28,6 +29,7 @@ text mode and `bunterm` exits with its status.
 | `--line-height F` | Multiplies the cell height (default 1). |
 | `--fb /dev/fbN` | The framebuffer device (default `/dev/fb0`). |
 | `--no-blink` | A steady cursor. |
+| `--no-mouse` | Do not attach a pointing device; nothing then reads `/dev/input`. |
 
 ## What is drawn
 
@@ -59,13 +61,34 @@ screen. A few console-specific
 sequences are rewritten to xterm's (`F1`–`F5`, `Home`, `End`), and arrow keys
 follow the program's application cursor mode.
 
+## Mouse
+
+Every pointing device under `/dev/input/event*` is opened and an arrow is
+drawn on the screen. Clicks, drags and wheel notches reach the program as
+the xterm mouse sequences it asked for: nothing is sent unless the program
+enabled reporting (`DECSET 1000`, `1002` or `1003`), and what is sent follows
+the mode it chose, SGR (`1006`) included. `jsmdcui`, `micro`, `htop`, `vim`
+and anything else that speaks the protocol work with no configuration.
+
+`--no-mouse` turns this off: the terminal then never looks at `/dev/input`
+and never loads the mouse module.
+
+`init.js` loads `evdev` and `psmouse` at boot, so a PS/2 mouse — which is
+what QEMU's q35 machine and most PCs present — has a device node ready. A USB
+mouse also needs the `usbhid` stack, which a `--real` image carries and
+`cfg.all` loads. The pointer follows relative devices (a mouse) and absolute
+ones (a tablet or touchscreen) alike; a device that cannot be opened is
+reported and the session continues without it.
+
 ## Limits
 
 - Needs a framebuffer: `linux-lts` has one built in, while the default
   `linux-virt` builds it as modules the image does not ship, so build with
   `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
-- No mouse, no selection, no scrollback viewing (the buffer keeps 1000
-  lines for programs that query it).
+- No selection or scrollback viewing (the buffer keeps 1000 lines for
+  programs that query it), and a program that does not enable mouse
+  reporting sees nothing — the arrow still moves so the pointer is visibly
+  alive. `--no-mouse` removes the pointer entirely.
 - A program that prints a terminal reply while the tty echoes (that is, one
   not in raw mode) will see the reply echoed, as on any terminal.
 - Kitty images are drawn above text; `z` ordering below text and animation

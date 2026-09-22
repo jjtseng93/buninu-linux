@@ -6,7 +6,7 @@ import { runTerminal } from "../lib/bunterm/terminal.js";
 
 const usage = () => {
   console.error(`Usage:
-  bunterm [/dev/ttyN] [--font-size N] [--fb /dev/fb0] [-e command [argument...]]
+  bunterm [/dev/ttyN] [--font-size N] [--fb /dev/fb0] [--no-mouse] [-e command [argument...]]
   bunterm -h | --help`);
 };
 
@@ -46,6 +46,10 @@ const main = async () => {
       options.device = valued("--fb");
     } else if (argument === "--no-blink") {
       options.cursorBlink = false;
+    } else if (argument === "--mouse") {
+      options.mouse = true;
+    } else if (argument === "--no-mouse") {
+      options.mouse = false;
     } else if (argument.startsWith("/dev/")) {
       options.console = argument;
     } else {
