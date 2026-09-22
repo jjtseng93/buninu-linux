@@ -207,7 +207,7 @@ its license text next to it inside the image.
 
 ## Buninu userspace
 
-`initramfs/buninu/` is the Buninu userspace (version 0.4.12, MIT; see
+`initramfs/buninu/` is the Buninu userspace (version 0.4.15, MIT; see
 `initramfs/buninu/LICENSE`), copied verbatim from
 https://github.com/jjtseng93/buninu and packed whole into the initramfs. It
 bundles third-party material that is documented next to the files that use

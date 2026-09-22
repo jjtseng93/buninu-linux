@@ -1,6 +1,6 @@
 {
   "name": "jsgotty",
-  "version": "1.1.11",
+  "version": "1.1.12",
   "description": "Share your terminal as a web application: A JavaScript rewrite of GoTTY",
   "license": "MIT",
   "bin": {
