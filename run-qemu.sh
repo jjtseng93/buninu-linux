@@ -34,7 +34,7 @@ done
 exec qemu-system-x86_64 \
     -machine q35,accel=tcg \
     -cpu max \
-    -m 512M \
+    -m 1G \
     -drive if=pflash,format=raw,readonly=on,file="$ovmf_filepath" \
     -drive if=virtio,format=raw,file=vda.img \
     -nic "$nic" \

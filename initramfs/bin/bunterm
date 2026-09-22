@@ -1,0 +1,66 @@
+#!/bin/bun
+// bunterm — a graphical terminal emulator on the Linux framebuffer.
+
+import { showDocument } from "../lib/document.js";
+import { runTerminal } from "../lib/bunterm/terminal.js";
+
+const usage = () => {
+  console.error(`Usage:
+  bunterm [/dev/ttyN] [--font-size N] [--fb /dev/fb0] [-e command [argument...]]
+  bunterm -h | --help`);
+};
+
+const main = async () => {
+  const options = { argv: [] };
+  const arguments_ = process.argv.slice(2);
+  for (let index = 0; index < arguments_.length; index++) {
+    const argument = arguments_[index];
+    if (argument === "-h" || argument === "--help") {
+      await showDocument("bunterm");
+      return 0;
+    }
+    if (argument === "-e") {
+      if (index + 1 >= arguments_.length) {
+        usage();
+        throw new Error("-e needs a command");
+      }
+      options.command = arguments_[index + 1];
+      options.argv = arguments_.slice(index + 2);
+      break;
+    }
+    const valued = (name) => {
+      const value = argument.startsWith(`${name}=`) ? argument.slice(name.length + 1) : arguments_[++index];
+      if (value === undefined) {
+        usage();
+        throw new Error(`${name} needs a value`);
+      }
+      return value;
+    };
+    if (argument === "--font-size" || argument.startsWith("--font-size=")) {
+      options.fontSize = Number(valued("--font-size"));
+      if (!Number.isFinite(options.fontSize) || options.fontSize < 6) throw new Error("--font-size must be a number of at least 6");
+    } else if (argument === "--line-height" || argument.startsWith("--line-height=")) {
+      options.lineHeight = Number(valued("--line-height"));
+      if (!Number.isFinite(options.lineHeight) || options.lineHeight <= 0) throw new Error("--line-height must be a positive number");
+    } else if (argument === "--fb" || argument.startsWith("--fb=")) {
+      options.device = valued("--fb");
+    } else if (argument === "--no-blink") {
+      options.cursorBlink = false;
+    } else if (argument.startsWith("/dev/")) {
+      options.console = argument;
+    } else {
+      usage();
+      throw new Error(`unexpected argument: ${argument}`);
+    }
+  }
+  return runTerminal(options);
+};
+
+let status = 1;
+try {
+  status = await main();
+} catch (error) {
+  console.error(`bunterm: ${error?.message ?? error}`);
+}
+// A pending console read would otherwise keep the process alive.
+process.exit(status);

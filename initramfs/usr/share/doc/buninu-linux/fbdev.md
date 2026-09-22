@@ -80,8 +80,12 @@ than an X11 `Display`. Colours are `{ r, g, b, a }` objects.
 | `fillPolygon(display, points, color?)` | Fill a polygon with the even-odd scanline rule. |
 | `clear(display, color?)` | Fill the in-memory frame, black by default. |
 | `flush(display)` | Copy the in-memory frame to the shared `/dev/fb0` mapping and synchronize it. |
+| `blitImageData(display, imageData, x?, y?)` | Copy an RGBA `ImageData` (for example from CanvasKit's HTML canvas emulation) into the frame, converting to the framebuffer's format and clipping. |
 | `openConsole`, `setConsoleGraphics`, `setConsoleText` | Explicit Linux virtual-console control for callers that need it. |
-| `runDemo({ polygons, device }?)` | Run the same graphics-mode lifecycle used by the CLI. Each item in `polygons` is drawn separately. |
+| `activeConsole(console)`, `activateConsole(console, n)`, `consoleNumber(path)` | `VT_GETSTATE` / `VT_ACTIVATE` + `VT_WAITACTIVE`, and the number in a `/dev/ttyN` path. |
+| `watchConsoleSwitches(console, onAcquire)` | `VT_SETMODE` with `VT_PROCESS`: answers the kernel's switch-away and switch-back signals and calls `onAcquire` when the display returns. Returns a function restoring automatic switching. |
+| `runGraphics(draw, { device, console, switchConsole }?)` | Open the framebuffer, put the console in graphics mode, run `await draw(display, { console, onRestore, onAcquire })`, and restore text mode however the call ends (return, throw, `process.exit()`, `SIGHUP`/`SIGINT`/`SIGQUIT`/`SIGTERM`). `console` lists console devices to try, such as `["/dev/tty1"]`; when the one opened is a `/dev/ttyN` other than the console on screen, the display is switched to it first and back afterwards (`switchConsole: false` disables this). Console switches with Ctrl-Alt-Fn keep working; `onAcquire(callback)` runs when the display comes back so the caller can repaint, and `onRestore(callback)` registers cleanup to run before text mode returns. |
+| `runDemo({ polygons, device }?)` | Run the CLI demo through `runGraphics()`. Each item in `polygons` is drawn separately. |
 
 The module supports 16-, 24-, and 32-bit packed-pixel framebuffers and uses
 the kernel-reported stride, offsets, and RGB bitfields. Paletted and unusual
@@ -104,4 +108,6 @@ non-packed framebuffer formats are rejected rather than drawn incorrectly.
 
 - Source: `/lib/fbdev.js`
 - Shared native binding: `/lib/dlopen.js`
+- Skia on this framebuffer: `/lib/canvas.js` (`canvas.md`); the terminal
+  built on both: `bunterm`
 - Linux UAPI: `linux/fb.h` and `linux/kd.h`

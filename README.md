@@ -300,8 +300,9 @@ syntax, interactive controls, builtins, and current compatibility details.
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+| `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images; xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eight commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes nine commands
 implemented as Bun scripts.
 
 The small `tar` follows the current `Bun.Archive` boundary: extraction
@@ -345,7 +346,14 @@ tar xvf /tmp/buninu.tar -C /tmp/buninu-copy
 
 # Add z to create a gzip-compressed archive
 tar czvf /tmp/buninu.tar.gz README.md package.json
+
+# On a virtual console: a graphical terminal with CJK, emoji and images
+bunterm
+bunterm /dev/tty1 --font-size 20 -e bun /buninu/apps/jsmdcui/src/index.js --demo
 ```
+
+The graphics stack behind `bunterm` — the framebuffer module, CanvasKit,
+the fonts and the terminal — is described in [graphics.md](graphics.md).
 
 ## Environment and dependencies
 
@@ -885,6 +893,11 @@ under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
 | Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
+| CanvasKit 0.41.1 (`initramfs/lib/canvaskit/`, Skia compiled to WebAssembly) | BSD-3-Clause (`LICENSES/BSD-3-Clause-Skia.txt`) | committed |
+| xterm.js 6.0.0 headless core and unicode-graphemes addon (`initramfs/lib/xterm/`); box-drawing shape tables in `initramfs/lib/bunterm/glyphs.js` | MIT (`LICENSES/MIT-xterm.js.txt`) | committed |
+| DejaVu Sans Mono (`initramfs/usr/share/fonts/DejaVuSansMono*.ttf`) | Bitstream Vera (`LICENSES/Bitstream-Vera.txt`) | committed |
+| Noto Sans CJK, Noto Color Emoji (+ Flags), Noto Sans Symbols (`initramfs/usr/share/fonts/Noto*`) | SIL OFL 1.1 (`LICENSES/OFL-1.1.txt`) | committed |
+| Roboto (`initramfs/usr/share/fonts/Roboto-Regular.ttf`) | Apache-2.0 (`LICENSES/Apache-2.0.txt`) | committed |
 
 One component is worth naming here rather than leaving to be found: the two
 GCC runtime libraries are **GPL-3.0 with the GCC Runtime Library Exception**

@@ -13,6 +13,16 @@ const FB_TYPE_PACKED_PIXELS = 0;
 const KDSETMODE = 0x4b3a;
 const KD_TEXT = 0;
 const KD_GRAPHICS = 1;
+const VT_SETMODE = 0x5602;
+const VT_GETSTATE = 0x5603;
+const VT_RELDISP = 0x5605;
+const VT_ACTIVATE = 0x5606;
+const VT_WAITACTIVE = 0x5607;
+const VT_AUTO = 0;
+const VT_PROCESS = 1;
+const VT_ACKACQ = 2;
+const SIGUSR1 = 10;
+const SIGUSR2 = 12;
 const PROT_READ = 1;
 const PROT_WRITE = 2;
 const MAP_SHARED = 1;
@@ -264,6 +274,30 @@ export const flush = (display) => {
   }
 };
 
+// Copies an RGBA ImageData (HTML canvas layout, 4 bytes per pixel, rows of
+// `width` pixels) into the in-memory frame at (x, y), converting to the
+// framebuffer's own pixel format and clipping at the edges.
+export const blitImageData = (display, imageData, x = 0, y = 0) => {
+  const { width, height, data } = imageData;
+  x = Math.round(Number(x));
+  y = Math.round(Number(y));
+  const fromX = Math.max(0, -x);
+  const fromY = Math.max(0, -y);
+  const toX = Math.min(width, display.width - x);
+  const toY = Math.min(height, display.height - y);
+  const color = { r: 0, g: 0, b: 0, a: 255 };
+  for (let row = fromY; row < toY; row++) {
+    let source = (row * width + fromX) * 4;
+    for (let column = fromX; column < toX; column++, source += 4) {
+      color.r = data[source];
+      color.g = data[source + 1];
+      color.b = data[source + 2];
+      color.a = data[source + 3];
+      drawPoint(display, x + column, y + row, color);
+    }
+  }
+};
+
 export const openFramebuffer = (path) => new Framebuffer(path);
 
 export const openConsole = (paths = ["/dev/tty", "/dev/console", "/dev/tty0"]) => {
@@ -289,6 +323,60 @@ export const setConsoleGraphics = (consoleDevice) =>
 
 export const setConsoleText = (consoleDevice) =>
   ioctlValue(consoleDevice.fd, KDSETMODE, KD_TEXT, "KDSETMODE(KD_TEXT)");
+
+// The number of the virtual console currently shown (struct vt_stat.v_active).
+export const activeConsole = (consoleDevice) => {
+  const state = new Uint8Array(6);
+  ioctlBuffer(consoleDevice.fd, VT_GETSTATE, state, "VT_GETSTATE");
+  return new DataView(state.buffer).getUint16(0, true);
+};
+
+// Switches the display and keyboard to virtual console `number` and waits
+// until the kernel has completed the switch.
+export const activateConsole = (consoleDevice, number) => {
+  ioctlValue(consoleDevice.fd, VT_ACTIVATE, number, `VT_ACTIVATE(${number})`);
+  ioctlValue(consoleDevice.fd, VT_WAITACTIVE, number, `VT_WAITACTIVE(${number})`);
+};
+
+// struct vt_mode { char mode; char waitv; short relsig, acqsig, frsig; }.
+const setConsoleSwitchMode = (consoleDevice, mode) => {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  buffer[0] = mode;
+  if (mode === VT_PROCESS) {
+    view.setInt16(2, SIGUSR1, true);
+    view.setInt16(4, SIGUSR2, true);
+  }
+  ioctlBuffer(consoleDevice.fd, VT_SETMODE, buffer, "VT_SETMODE");
+};
+
+// Asks the kernel to tell this process about console switches: SIGUSR1
+// before the display is taken away (answered with VT_RELDISP 1), SIGUSR2
+// when it comes back (answered with VT_ACKACQ), at which point `onAcquire`
+// runs so the caller can repaint what fbcon left on the screen. Returns a
+// function that puts the console back into automatic switching.
+export const watchConsoleSwitches = (consoleDevice, onAcquire) => {
+  const release = () => {
+    try { ioctlValue(consoleDevice.fd, VT_RELDISP, 1, "VT_RELDISP"); } catch {}
+  };
+  const acquire = () => {
+    try { ioctlValue(consoleDevice.fd, VT_RELDISP, VT_ACKACQ, "VT_RELDISP(VT_ACKACQ)"); } catch {}
+    try { onAcquire(); } catch {}
+  };
+  process.on("SIGUSR1", release);
+  process.on("SIGUSR2", acquire);
+  setConsoleSwitchMode(consoleDevice, VT_PROCESS);
+  return () => {
+    process.off("SIGUSR1", release);
+    process.off("SIGUSR2", acquire);
+    try { setConsoleSwitchMode(consoleDevice, VT_AUTO); } catch {}
+  };
+};
+
+export const consoleNumber = (path) => {
+  const match = /^\/dev\/tty(\d+)$/.exec(path);
+  return match && Number(match[1]) > 0 ? Number(match[1]) : null;
+};
 
 const waitForKey = async (setRestore) => {
   const input = process.stdin;
@@ -327,24 +415,49 @@ const defaultTriangle = (display) => [
   { x: display.width * 5 / 6, y: display.height * 5 / 6 },
 ];
 
-export const runDemo = async ({ polygons = [], points, device = "/dev/fb0" } = {}) => {
-  if (!process.stdin.isTTY) throw new Error("interactive demo requires a TTY on stdin");
+// Runs `draw(display, context)` with the framebuffer open and the virtual
+// console in graphics mode, restoring text mode however the call ends:
+// normally, by throwing, by process.exit(), or on SIGHUP/SIGINT/SIGQUIT/
+// SIGTERM. `console` names the console device(s) to use; the default list
+// resolves to the console the process is running on. When it names a
+// specific /dev/ttyN that is not the one on screen, the display is switched
+// to it first (and back afterwards), the way X servers do; `switchConsole:
+// false` disables that. Console switches away and back (Ctrl-Alt-Fn) are
+// allowed while drawing; `context.onAcquire(callback)` runs when the display
+// returns so the caller can repaint. `context` also offers `console` (the
+// open console device) and `onRestore(callback)` for cleanup that must run
+// before text mode returns, such as putting a keyboard back into cooked mode.
+export const runGraphics = async (draw, {
+  device = "/dev/fb0", console: consolePaths, switchConsole = true,
+} = {}) => {
   const display = openFramebuffer(device);
   let consoleDevice;
   try {
-    consoleDevice = openConsole();
+    consoleDevice = openConsole(consolePaths);
   } catch (error) {
     display.close();
     throw error;
   }
   let graphics = false;
-  let restoreKeyboard = () => {};
+  let previousConsole = null;
+  let unwatch = null;
+  const restoreCallbacks = [];
+  const acquireCallbacks = [];
   const restore = () => {
-    try { restoreKeyboard(); } catch {}
-    restoreKeyboard = () => {};
+    while (restoreCallbacks.length) {
+      try { restoreCallbacks.pop()(); } catch {}
+    }
+    if (unwatch) {
+      unwatch();
+      unwatch = null;
+    }
     if (graphics) {
       try { setConsoleText(consoleDevice); } catch {}
       graphics = false;
+    }
+    if (previousConsole !== null) {
+      try { activateConsole(consoleDevice, previousConsole); } catch {}
+      previousConsole = null;
     }
   };
   const signalStatuses = new Map([
@@ -357,17 +470,53 @@ export const runDemo = async ({ polygons = [], points, device = "/dev/fb0" } = {
   for (const [signal, handler] of signalHandlers) process.on(signal, handler);
   process.on("exit", restore);
   try {
-    const shapes = polygons.map(normalizePoints);
-    if (points !== undefined) shapes.unshift(normalizePoints(points));
-    const drawableShapes = shapes.filter((polygon) => polygon.length > 0);
-    for (const polygon of drawableShapes) {
-      if (polygon.length < 3) {
-        throw new Error("each --points/-p polygon needs at least three complete x,y pairs");
+    const target = switchConsole ? consoleNumber(consoleDevice.path) : null;
+    if (target !== null) {
+      const active = activeConsole(consoleDevice);
+      if (active !== target) {
+        activateConsole(consoleDevice, target);
+        previousConsole = active;
       }
     }
-    console.error("fbdev: entering graphics mode; press any key to return");
     setConsoleGraphics(consoleDevice);
     graphics = true;
+    if (switchConsole) {
+      try {
+        unwatch = watchConsoleSwitches(consoleDevice, () => {
+          for (const callback of acquireCallbacks) {
+            try { callback(); } catch {}
+          }
+        });
+      } catch {
+        // Not a virtual console (or no permission): switches stay automatic.
+      }
+    }
+    return await draw(display, {
+      console: consoleDevice,
+      onRestore: (callback) => { restoreCallbacks.push(callback); },
+      onAcquire: (callback) => { acquireCallbacks.push(callback); },
+    });
+  } finally {
+    restore();
+    process.off("exit", restore);
+    for (const [signal, handler] of signalHandlers) process.off(signal, handler);
+    display.close();
+    consoleDevice.close();
+  }
+};
+
+export const runDemo = async ({ polygons = [], points, device = "/dev/fb0" } = {}) => {
+  if (!process.stdin.isTTY) throw new Error("interactive demo requires a TTY on stdin");
+  const shapes = polygons.map(normalizePoints);
+  if (points !== undefined) shapes.unshift(normalizePoints(points));
+  const drawableShapes = shapes.filter((polygon) => polygon.length > 0);
+  for (const polygon of drawableShapes) {
+    if (polygon.length < 3) {
+      throw new Error("each --points/-p polygon needs at least three complete x,y pairs");
+    }
+  }
+  console.error("fbdev: entering graphics mode; press any key to return");
+  await runGraphics(async (display, { onRestore }) => {
     clear(display);
     const drawing = drawableShapes.length ? drawableShapes : [defaultTriangle(display)];
     const colors = [
@@ -379,14 +528,8 @@ export const runDemo = async ({ polygons = [], points, device = "/dev/fb0" } = {
     drawing.forEach((polygon, index) =>
       fillPolygon(display, polygon, colors[index % colors.length]));
     flush(display);
-    await waitForKey((callback) => { restoreKeyboard = callback; });
-  } finally {
-    restore();
-    process.off("exit", restore);
-    for (const [signal, handler] of signalHandlers) process.off(signal, handler);
-    display.close();
-    consoleDevice.close();
-  }
+    await waitForKey(onRestore);
+  }, { device });
 };
 
 const usage = () => {

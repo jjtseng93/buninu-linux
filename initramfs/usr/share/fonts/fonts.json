@@ -1,0 +1,28 @@
+{
+  "fonts": {
+    "DejaVu Sans Mono": { "file": "DejaVuSansMono.ttf", "license": "LICENSE-DejaVu.txt" },
+    "DejaVu Sans Mono Bold": { "file": "DejaVuSansMono-Bold.ttf", "license": "LICENSE-DejaVu.txt" },
+    "Noto Sans CJK": {
+      "file": "NotoSansCJK-Regular.ttc",
+      "license": "LICENSE-OFL-1.1.txt",
+      "families": ["Noto Sans CJK JP", "Noto Sans CJK KR", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK HK"],
+      "preferred": "Noto Sans CJK TC"
+    },
+    "Noto Color Emoji": { "file": "NotoColorEmoji.ttf", "license": "LICENSE-OFL-1.1.txt" },
+    "Noto Color Emoji Flags": { "file": "NotoColorEmojiFlags.ttf", "license": "LICENSE-OFL-1.1.txt" },
+    "Noto Sans Symbols": { "file": "NotoSansSymbols-Regular-Subsetted.ttf", "license": "LICENSE-OFL-1.1.txt" },
+    "Noto Sans Symbols2": { "file": "NotoSansSymbols-Regular-Subsetted2.ttf", "license": "LICENSE-OFL-1.1.txt" },
+    "Roboto": { "file": "Roboto-Regular.ttf", "license": "LICENSE-Apache-2.0.txt" }
+  },
+  "sets": {
+    "terminal": {
+      "regular": "DejaVu Sans Mono",
+      "bold": "DejaVu Sans Mono Bold",
+      "fallback": ["Noto Color Emoji", "Noto Color Emoji Flags", "Noto Sans CJK", "Noto Sans Symbols", "Noto Sans Symbols2"]
+    },
+    "ui": {
+      "regular": "Roboto",
+      "fallback": ["Noto Sans CJK", "Noto Color Emoji", "Noto Color Emoji Flags", "Noto Sans Symbols", "Noto Sans Symbols2"]
+    }
+  }
+}
