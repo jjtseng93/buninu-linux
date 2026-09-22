@@ -360,24 +360,33 @@ mount -t ntfs3 -o force /dev/sda3 /mnt/windows
 umount /mnt
 umount -R /mnt
 
+
 # Clone a Git repository through bunproot
 bun x bunproot --git clone https://github.com/jjtseng93/bunproot
 
 # Read bunproot's Git manual without ANSI formatting in jmi
+bunterm
 bun x bunproot --git --readme | stripansi | jmi
+
+
 
 # Download and enter an x64 Alpine minirootfs
 bun x bunproot --download-alpine-x64
 mkdir alpine
 cd alpine
 tar xvf ../alpine-minirootfs-*-x86_64.tar.gz
+cp $(which bun) bin
 chroot .
+apk add libgcc libstdc++
+
 
 # Enter a root filesystem on a disk. /proc, /sys, /dev, /dev/pts, /run, /tmp
 # and /etc/resolv.conf are mounted for you and removed again on exit
 chroot /mnt
 chroot /mnt /bin/bun --version
 chroot -n /mnt /bin/sh        # traditional: mount nothing
+
+
 
 ip link set eth0 up
 ip addr add 192.168.1.50/24 dev eth0
