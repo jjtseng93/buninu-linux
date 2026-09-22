@@ -339,13 +339,17 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes ten commands
 implemented as Bun scripts.
 
-The small `tar` follows the current `Bun.Archive` boundary: extraction
-restores directories and symbolic links, while hard links are skipped by Bun
-1.4.3. Creation stores regular files but not Unix metadata, links, or empty
-directories, and listing reports regular files only. It supports gzip and
-Bun's built-in zstd, not xz or bzip2.
+The small `tar` reads the archive's own headers for links and listing, so
+extraction restores directories, hard links and every symbolic link —
+including the absolute targets `Bun.Archive` refuses, which is what makes an
+unpacked Alpine root filesystem usable — and `-t` lists every member, not
+only regular files. Creation still follows the `Bun.Archive` boundary: it
+stores regular files but not Unix metadata, links, or empty directories. It
+supports gzip and Bun's built-in zstd, not xz or bzip2.
 
-`--help` renders each Markdown manual in the terminal. Common examples:
+`--help` renders each Markdown manual in the terminal. The `bun x` examples
+below require network access: `bun x` downloads the requested program from the
+npm registry and runs it without installing it permanently. Common examples:
 
 ```sh
 mount /dev/sda1 /mnt --mkdir
@@ -354,6 +358,16 @@ mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
 umount /mnt
 umount -R /mnt
+
+# Clone a Git repository through bunproot
+bun x bunproot --git clone https://github.com/jjtseng93/bunproot
+
+# Download and enter an x64 Alpine minirootfs
+bun x bunproot --download-alpine-x64
+mkdir alpine
+cd alpine
+tar xvf ../alpine-minirootfs-*-x86_64.tar.gz
+chroot .
 
 # Enter a root filesystem on a disk. /proc, /sys, /dev, /dev/pts, /run, /tmp
 # and /etc/resolv.conf are mounted for you and removed again on exit
@@ -737,7 +751,8 @@ Two things to expect:
 
 The `/bin` commands described earlier are Bun scripts built on two shared
 modules in `/lib`. `--help` uses `Bun.markdown.ansi` to render the Markdown
-manual with hyperlinks. The shared pieces are:
+manual with hyperlinks, and prints the page's absolute path at the end so it
+can be read or edited directly. The shared pieces are:
 
 * `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-x86_64.so.1`
   (`mount`, `umount2`, `ioctl`, `socket`, `sync`, `reboot`, `syscall`, …), `errno`/`strerror`,
