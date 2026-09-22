@@ -333,9 +333,10 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+| `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
 | `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images; xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes nine commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes ten commands
 implemented as Bun scripts.
 
 The small `tar` follows the current `Bun.Archive` boundary: extraction
@@ -353,6 +354,12 @@ mount -t tmpfs -o size=64M tmpfs /tmp/x
 mount -t ntfs3 -o force /dev/sda3 /mnt/windows
 umount /mnt
 umount -R /mnt
+
+# Enter a root filesystem on a disk. /proc, /sys, /dev, /dev/pts, /run, /tmp
+# and /etc/resolv.conf are mounted for you and removed again on exit
+chroot /mnt
+chroot /mnt /bin/bun --version
+chroot -n /mnt /bin/sh        # traditional: mount nothing
 
 ip link set eth0 up
 ip addr add 192.168.1.50/24 dev eth0

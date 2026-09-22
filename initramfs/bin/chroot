@@ -1,0 +1,213 @@
+#!/bin/bun
+// chroot — run a command inside another root directory. `chroot --help`
+// renders /usr/share/doc/buninu-linux/chroot.md.
+//
+// A Bun script over the chroot(2) and mount(2) bindings in /lib/dlopen.js.
+// Unlike chroot(8) it prepares the new root before entering it: /proc, /sys,
+// a recursive bind of /dev, /dev/pts, tmpfs on /run and /tmp, and the host's
+// /etc/resolv.conf, so `chroot /mnt/rootfs` lands in a usable system. Every
+// mount it makes is undone when the command exits.
+
+import { existsSync, mkdirSync, realpathSync, statSync, readFileSync, writeFileSync } from "node:fs";
+import { libc, cString, ptr, errno, strerror, Errno } from "../lib/dlopen.js";
+import { showDocument } from "../lib/document.js";
+
+const MS = { RDONLY: 1n, NOSUID: 2n, NODEV: 4n, NOEXEC: 8n, BIND: 4096n, REC: 16384n, SLAVE: 1n << 19n };
+const MNT_DETACH = 2;
+
+const fail = (message, status = 125) => {
+  console.error(`chroot: ${message}`);
+  process.exit(status);
+};
+
+const usage = () => {
+  console.error(`Usage:
+  chroot NEWROOT [COMMAND [ARGUMENT...]]
+  chroot [-n] [-k] [-v] NEWROOT [COMMAND [ARGUMENT...]]
+  chroot -h | --help          full manual (chroot.md)`);
+  process.exit(125);
+};
+
+// ------------------------------------------------------------- arguments --
+
+const options = { mount: true, keep: false, verbose: false };
+const positional = [];
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (positional.length > 0) { positional.push(argument); continue; }
+  if (argument === "--") { positional.push(...argv.slice(index + 1)); break; }
+  if (argument === "-h" || argument === "--help") { await showDocument("chroot"); process.exit(0); }
+  else if (argument === "-n" || argument === "--no-mount") options.mount = false;
+  else if (argument === "-k" || argument === "--keep-mounts") options.keep = true;
+  else if (argument === "-v" || argument === "--verbose") options.verbose = true;
+  else if (argument.startsWith("-") && argument.length > 1) { console.error(`chroot: unknown option ${argument}`); usage(); }
+  else positional.push(argument);
+}
+if (positional.length === 0) usage();
+
+const [target, ...command] = positional;
+let root;
+try {
+  root = realpathSync(target);
+  if (!statSync(root).isDirectory()) fail(`cannot change root directory to ${target}: not a directory`);
+} catch (error) {
+  fail(`cannot change root directory to ${target}: ${error.code === "ENOENT" ? "no such directory" : error.message}`);
+}
+if (root === "/") fail("refusing to chroot to /");
+
+const report = (message) => { if (options.verbose) console.error(`chroot: ${message}`); };
+
+// ---------------------------------------------------------------- mounts --
+
+const mountPoints = () => {
+  try {
+    return readFileSync("/proc/self/mounts", "utf8").split("\n").filter(Boolean).map((line) =>
+      line.split(" ")[1].replace(/\\([0-7]{3})/g, (_, code) => String.fromCharCode(parseInt(code, 8))));
+  } catch {
+    return [];
+  }
+};
+
+const mountSyscall = (source, point, type, flags, data = null) =>
+  libc.symbols.mount(ptr(cString(source)), ptr(cString(point)), ptr(cString(type)), flags,
+    data === null ? null : ptr(cString(data)));
+
+// Mount points this command made, innermost last, as paths inside the new
+// root; they are undone in reverse order when the command is done.
+const made = [];
+
+// Prepares one mount. `inside` is the path within the new root. A target that
+// is already a mount point, or that cannot be created on a read-only root, is
+// left alone rather than treated as a failure: the command may still run.
+const prepare = ({ inside, source, type, flags = 0n, data, file = false }) => {
+  const point = `${root}${inside}`;
+  if (mountPoints().includes(point)) {
+    report(`${inside} is already mounted`);
+    return;
+  }
+  if (!existsSync(point)) {
+    try {
+      if (file) writeFileSync(point, "");
+      else mkdirSync(point, { recursive: true, mode: 0o755 });
+    } catch (error) {
+      report(`cannot create ${inside}: ${error.message}; skipped`);
+      return;
+    }
+  }
+  if (mountSyscall(source, point, type, flags, data) === -1) {
+    report(`mount ${inside}: ${strerror(errno())}; skipped`);
+    return;
+  }
+  made.push(inside);
+  report(`mounted ${inside}`);
+};
+
+if (options.mount) {
+  prepare({ inside: "/proc", source: "proc", type: "proc", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
+  prepare({ inside: "/sys", source: "sysfs", type: "sysfs", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
+  // /dev is bound rather than mounted fresh so the devices, the pty
+  // multiplexer and anything the host added are all there. The bind is then
+  // made a slave: mounts appearing inside do not propagate back to the host,
+  // and unmounting it later does not take the host's /dev with it.
+  prepare({ inside: "/dev", source: "/dev", type: "none", flags: MS.BIND | MS.REC });
+  if (made.includes("/dev")) {
+    if (mountSyscall("none", `${root}/dev`, "none", MS.REC | MS.SLAVE) === -1) {
+      report(`making /dev a slave mount: ${strerror(errno())}`);
+    }
+    // Only needed when the host has no /dev/pts of its own to bring along.
+    if (!existsSync(`${root}/dev/pts/ptmx`)) {
+      prepare({ inside: "/dev/pts", source: "devpts", type: "devpts", flags: MS.NOSUID | MS.NOEXEC, data: "gid=5,mode=620,ptmxmode=666" });
+    }
+  }
+  prepare({ inside: "/run", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=755" });
+  prepare({ inside: "/tmp", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=1777" });
+  // A bound file, so name resolution inside follows the host's configuration
+  // and nothing inside the root is modified.
+  if (existsSync("/etc/resolv.conf") && existsSync(`${root}/etc`)) {
+    prepare({ inside: "/etc/resolv.conf", source: "/etc/resolv.conf", type: "none", flags: MS.BIND, file: true });
+  }
+}
+
+// Mount points are recorded by their path inside the new root. Until
+// chroot(2) has happened they are reached through this prefix; afterwards
+// that is how /proc/self/mounts names them too.
+let prefix = root;
+
+// Unmounts everything this command mounted, deepest first, including whatever
+// appeared under a recursive bind. A busy mount is detached instead: the
+// kernel finishes it once its last user is gone.
+const cleanup = () => {
+  if (options.keep || made.length === 0) return;
+  const points = mountPoints();
+  const targets = new Set();
+  for (const inside of made) {
+    const point = `${prefix}${inside}`;
+    targets.add(point);
+    for (const below of points) if (below.startsWith(`${point}/`)) targets.add(below);
+  }
+  for (const point of [...targets].sort((a, b) => b.length - a.length)) {
+    if (libc.symbols.umount2(ptr(cString(point)), 0) === 0) {
+      report(`unmounted ${point}`);
+      continue;
+    }
+    const code = errno();
+    if (code === Errno.EINVAL) continue; // not mounted any more
+    if (libc.symbols.umount2(ptr(cString(point)), MNT_DETACH) === 0) {
+      report(`detached ${point} (was busy)`);
+      continue;
+    }
+    console.error(`chroot: unmount ${point}: ${strerror(errno())}`);
+  }
+  made.length = 0;
+};
+
+process.on("exit", cleanup);
+
+// ----------------------------------------------------------------- enter --
+
+if (libc.symbols.chroot(ptr(cString(root))) === -1) {
+  const code = errno();
+  cleanup();
+  fail(`cannot change root directory to ${target}: ${code === Errno.EPERM ? "must be superuser" : strerror(code)}`);
+}
+prefix = "";
+process.chdir("/");
+
+const shell = process.env.SHELL && existsSync(process.env.SHELL) ? process.env.SHELL : "/bin/sh";
+// chroot(8) runs an interactive shell when no command is given.
+const run = command.length ? command : [shell, ...(process.stdin.isTTY ? ["-i"] : [])];
+
+// The command owns the terminal while it runs: a Ctrl-C reaches it through
+// the foreground process group, and this process stays alive to unmount.
+const signalNumbers = {
+  SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGILL: 4, SIGTRAP: 5, SIGABRT: 6, SIGBUS: 7,
+  SIGFPE: 8, SIGKILL: 9, SIGUSR1: 10, SIGSEGV: 11, SIGUSR2: 12, SIGPIPE: 13,
+  SIGALRM: 14, SIGTERM: 15,
+};
+const ignored = ["SIGINT", "SIGQUIT", "SIGTSTP"];
+const ignore = () => {};
+for (const signal of ignored) process.on(signal, ignore);
+
+let status = 0;
+try {
+  const child = Bun.spawn(run, {
+    cwd: "/",
+    env: { PATH: "/bin:/usr/bin:/sbin:/usr/sbin", ...process.env },
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const forward = (signal) => { try { child.kill(signal); } catch {} };
+  for (const signal of ["SIGTERM", "SIGHUP"]) process.on(signal, forward);
+  await child.exited;
+  status = child.exitCode ?? (128 + (signalNumbers[child.signalCode] ?? 0));
+} catch (error) {
+  console.error(`chroot: failed to run ${run[0]}: ${error.message}`);
+  status = error.code === "ENOENT" ? 127 : 126;
+} finally {
+  for (const signal of ignored) process.off(signal, ignore);
+  cleanup();
+}
+
+process.exit(status);
