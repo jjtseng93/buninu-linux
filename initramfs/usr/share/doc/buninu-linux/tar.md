@@ -27,7 +27,7 @@ Use `-` as ARCHIVE to read from standard input or write to standard output.
 | `-C DIR`, `--directory=DIR` | Read input files from DIR, or extract into DIR. |
 | `-z`, `--gzip` | Create gzip-compressed tar, or explicitly identify gzip input. |
 | `--zstd` | Create or read a zstd-compressed tar. A `.zst` or `.tzst` input is also detected by name. |
-| `-v` | Print names while creating/extracting; with `-t`, also show each regular file's size and modification time. |
+| `-v` | Print names while creating/extracting; with `-t`, also show each member's size, modification time, kind and link target. |
 
 Short options can be combined, for example `-xzvf` or `-czf`.
 For the traditional first option word, the leading hyphen is optional, so
@@ -42,7 +42,33 @@ tar -xzf source.tar.gz -C /tmp/source
 tar -tf source.tar.gz
 tar --zstd -cf backup.tar.zst home
 tar --zstd -xf backup.tar.zst -C /mnt/restore
+
+# An Alpine root filesystem, symbolic links and all; then enter it
+tar -xzf alpine-minirootfs-3.24.1-x86_64.tar.gz -C /mnt/alpine
+chroot /mnt/alpine
 ```
+
+## Links
+
+Extraction restores symbolic links exactly as the archive records them,
+including absolute targets such as `/bin/busybox` and targets that do not
+exist yet, and it restores hard links. This is what GNU tar does, and it is
+what an unpacked root filesystem needs: an Alpine minirootfs is 335 symbolic
+links, 306 of them absolute, and without them the result has no `/bin/sh`.
+
+`Bun.Archive` creates only the symbolic links whose target is relative and
+stays inside the extraction directory, and skips hard links entirely, so
+this command reads the archive's own headers (ustar, GNU `L`/`K` long names,
+pax `x` records) and creates the rest itself once every file is in place.
+Nothing is ever written through a link, because the links are made last.
+
+A member's own name still follows GNU tar's rule: a leading `/` is dropped
+and a name containing `..` is refused, so an archive cannot write outside
+the extraction directory.
+
+The same header scan backs listing, so `-t` reports every member —
+directories, links, devices — and not just regular files. A symbolic link
+shows its target, a hard link the file it points at.
 
 ## Current Bun.Archive limits
 
@@ -51,11 +77,9 @@ silently archived as the wrong type; modes, ownership, hard links, and empty
 directories are not preserved. Bun 1.4.3 also requires file contents to be
 materialized in memory before archive creation.
 
-Extraction restores directories and symbolic links, but Bun 1.4.3 skips hard
-links. Listing and verbose extraction use `Archive.files()`, so they report
-regular files only. Verbose listing can show their size and modification time,
-but not the unavailable mode or owner. Bun provides gzip and zstd codecs but no xz or bzip2 codec,
-so this command does not accept `.tar.xz` or `.tar.bz2`.
+Extraction does not restore modes, ownership or timestamps. Bun provides gzip
+and zstd codecs but no xz or bzip2 codec, so this command does not accept
+`.tar.xz` or `.tar.bz2`.
 
 Appending with `-r`/`rvf` is not supported. `Bun.Archive` has no append API;
 rebuilding an existing archive through `Archive.files()` would silently lose

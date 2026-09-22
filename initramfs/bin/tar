@@ -2,7 +2,8 @@
 // tar — a small tar/gzip/zstd CLI over Bun.Archive.
 
 import { lstat, readdir } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { linkSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { showDocument } from "../lib/document.js";
 
 const fail = (message) => {
@@ -89,16 +90,186 @@ const archiveBytes = async () => {
   return zstd ? Bun.zstdDecompressSync(bytes) : bytes;
 };
 
+// ----------------------------------------------------------- tar headers --
+//
+// Bun.Archive extracts files, and symbolic links only when their target is
+// relative and stays inside the extraction directory, which drops every
+// absolute target (`/bin/busybox` — 306 of the 335 links in an Alpine
+// minirootfs), every hard link, and every non-regular entry in
+// `Archive.files()`. The header scan below reads the archive itself, so
+// listing is complete and the links can be restored afterwards. Formats:
+// POSIX ustar, GNU long names (`L`/`K`) and pax extended headers (`x`).
+
+const BLOCK = 512;
+const decoder = new TextDecoder();
+
+const text = (block, offset, length) => {
+  let end = offset;
+  const stop = offset + length;
+  while (end < stop && block[end] !== 0) end++;
+  return decoder.decode(block.subarray(offset, end));
+};
+
+const octal = (block, offset, length) => {
+  // GNU base-256 encoding for values that do not fit the octal field.
+  if (block[offset] & 0x80) {
+    let value = block[offset] & 0x7f;
+    for (let index = offset + 1; index < offset + length; index++) value = value * 256 + block[index];
+    return value;
+  }
+  const digits = text(block, offset, length).trim();
+  const value = Number.parseInt(digits, 8);
+  return Number.isFinite(value) ? value : 0;
+};
+
+// The header checksum is computed with its own field read as spaces. A
+// mismatch means this is not a tar header, so scanning stops there.
+const checksumMatches = (block) => {
+  let sum = 0;
+  for (let index = 0; index < BLOCK; index++) {
+    sum += index >= 148 && index < 156 ? 0x20 : block[index];
+  }
+  return sum === octal(block, 148, 8);
+};
+
+const paxRecords = (data) => {
+  const records = {};
+  let offset = 0;
+  const content = decoder.decode(data);
+  while (offset < content.length) {
+    const space = content.indexOf(" ", offset);
+    if (space === -1) break;
+    const length = Number.parseInt(content.slice(offset, space), 10);
+    if (!Number.isFinite(length) || length <= 0) break;
+    const record = content.slice(space + 1, offset + length).replace(/\n$/, "");
+    const equals = record.indexOf("=");
+    if (equals > 0) records[record.slice(0, equals)] = record.slice(equals + 1);
+    offset += length;
+  }
+  return records;
+};
+
+const entryKinds = {
+  "0": "file", "\0": "file", "1": "hardlink", "2": "symlink", "3": "character",
+  "4": "block", "5": "directory", "6": "fifo", "7": "file",
+};
+
+// Every member of the archive, in order, as { name, kind, target, size, mode,
+// mtime }. Returns null when the bytes do not parse as tar.
+const scanEntries = (bytes) => {
+  const entries = [];
+  let offset = 0;
+  let longName = null;
+  let longTarget = null;
+  let extended = {};
+  while (offset + BLOCK <= bytes.length) {
+    const block = bytes.subarray(offset, offset + BLOCK);
+    offset += BLOCK;
+    if (block.every((byte) => byte === 0)) break; // end-of-archive blocks
+    if (!checksumMatches(block)) return entries.length ? entries : null;
+    const flag = String.fromCharCode(block[156] || 0x30);
+    const size = extended.size !== undefined ? Number(extended.size) : octal(block, 124, 12);
+    const dataBlocks = Math.ceil(size / BLOCK) * BLOCK;
+    const data = bytes.subarray(offset, offset + size);
+    if (flag === "L" || flag === "K") {
+      const value = decoder.decode(data).replace(/\0+$/, "");
+      if (flag === "L") longName = value; else longTarget = value;
+      offset += dataBlocks;
+      continue;
+    }
+    if (flag === "x" || flag === "X") {
+      extended = { ...extended, ...paxRecords(data) };
+      offset += dataBlocks;
+      continue;
+    }
+    if (flag === "g") {
+      offset += dataBlocks;
+      continue;
+    }
+    const prefix = text(block, 345, 155);
+    const stored = text(block, 0, 100);
+    const name = extended.path ?? longName ?? (prefix ? `${prefix}/${stored}` : stored);
+    const target = extended.linkpath ?? longTarget ?? text(block, 157, 100);
+    entries.push({
+      name: name.replace(/^\.\//, ""),
+      kind: entryKinds[flag] ?? "file",
+      target,
+      size,
+      mode: octal(block, 100, 8) & 0o7777,
+      mtime: octal(block, 136, 12) * 1000,
+    });
+    longName = null;
+    longTarget = null;
+    extended = {};
+    offset += dataBlocks;
+  }
+  return entries;
+};
+
+const tarBytes = (bytes) => {
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return Bun.gunzipSync(bytes);
+  if (bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd) {
+    return Bun.zstdDecompressSync(bytes);
+  }
+  return bytes;
+};
+
+// Where a member lands, following GNU tar: a leading `/` is stripped, and a
+// name that climbs out with `..` is refused. A link's target is never
+// examined — an absolute symbolic link is a normal thing for a root
+// filesystem to contain — and since links are made after every file, nothing
+// is ever written through one.
+const memberName = (name) => {
+  const stripped = name.replace(/^\/+/, "");
+  const parts = stripped.split("/");
+  if (parts.includes("..")) return null;
+  return stripped || null;
+};
+
 const patterns = () => options.operands.flatMap((name) => {
   const clean = name.replace(/^\.\//, "").replace(/\/$/, "");
   return [clean, `${clean}/**`];
 });
 
-const verboseListing = (name, file) => {
-  const modified = Number.isFinite(file.lastModified) && file.lastModified > 0
-    ? new Date(file.lastModified).toISOString().replace("T", " ").slice(0, 16)
+const kindMarks = { directory: "/", symlink: "@", fifo: "|", character: "#", block: "#" };
+
+const verboseListing = (entry) => {
+  const modified = entry.mtime > 0
+    ? new Date(entry.mtime).toISOString().replace("T", " ").slice(0, 16)
     : "---- -- -- --:--";
-  return `${String(file.size).padStart(12)} ${modified} ${name}`;
+  const suffix = entry.kind === "symlink" ? ` -> ${entry.target}`
+    : entry.kind === "hardlink" ? ` link to ${entry.target}`
+    : "";
+  return `${String(entry.size).padStart(12)} ${modified} ${entry.name}${kindMarks[entry.kind] ?? ""}${suffix}`;
+};
+
+// Creates the links Bun.Archive left out. Files are already in place, so a
+// hard link finds its target and a symbolic link cannot be written through.
+const restoreLinks = (entries) => {
+  for (const entry of entries) {
+    if (entry.kind !== "symlink" && entry.kind !== "hardlink") continue;
+    const name = memberName(entry.name);
+    if (!name || !entry.target) continue;
+    const path = resolve(options.directory, name);
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      try {
+        if (entry.kind === "symlink") symlinkSync(entry.target, path);
+        else linkSync(resolve(options.directory, memberName(entry.target) ?? entry.target), path);
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        // GNU tar replaces what is in the way rather than following it.
+        rmSync(path, { force: true });
+        if (entry.kind === "symlink") symlinkSync(entry.target, path);
+        else linkSync(resolve(options.directory, memberName(entry.target) ?? entry.target), path);
+      }
+    } catch (error) {
+      // A hard link whose target was filtered out by a member pattern is
+      // expected; anything else is worth reporting without stopping.
+      if (entry.kind === "hardlink" && error.code === "ENOENT" && options.operands.length) continue;
+      console.error(`tar: ${entry.name}: ${error.message}`);
+    }
+  }
 };
 
 if (options.operation === "x" || options.operation === "t") {
@@ -109,22 +280,26 @@ if (options.operation === "x" || options.operation === "t") {
     fail(error?.message || String(error));
   }
 
+  // The header scan is what makes listing and links complete; if the bytes
+  // do not parse as tar, fall back to what Bun.Archive reports.
+  const scanned = scanEntries(tarBytes(await archiveBytes()));
+  const wanted = options.operands.length ? patterns().map((pattern) => new Bun.Glob(pattern)) : null;
+  const members = scanned
+    ? scanned.filter((entry) => !wanted || wanted.some((glob) => glob.match(entry.name)))
+    : [...(await archive.files(options.operands.length ? patterns() : undefined))]
+      .map(([name, file]) => ({ name, kind: "file", target: "", size: file.size, mode: 0o644, mtime: file.lastModified }));
+
   if (options.operation === "t") {
-    try {
-      const files = await archive.files(options.operands.length ? patterns() : undefined);
-      for (const [name, file] of files) {
-        console.log(options.verbose ? verboseListing(name, file) : name);
-      }
-    } catch (error) {
-      fail(error?.message || String(error));
+    for (const entry of members) {
+      console.log(options.verbose ? verboseListing(entry) : entry.name);
     }
   } else {
     try {
       if (options.verbose) {
-        const files = await archive.files(options.operands.length ? patterns() : undefined);
-        for (const name of files.keys()) console.log(name);
+        for (const entry of members) console.log(entry.name);
       }
       await archive.extract(options.directory, options.operands.length ? { glob: patterns() } : undefined);
+      restoreLinks(members);
     } catch (error) {
       fail(error?.message || String(error));
     }
