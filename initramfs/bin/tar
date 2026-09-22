@@ -41,6 +41,14 @@ for (let index = 0; index < argv.length; index++) {
   }
   if (argument === "--zstd") { options.compression = "zstd"; continue; }
   if (argument === "--gzip") { options.compression = "gzip"; continue; }
+  // GNU tar compatibility used by js-udocker. Bun.Archive never restores
+  // ownership or permissions, and extraction replaces existing files, so
+  // these options already describe its normal extraction behaviour.
+  if (argument === "--no-same-owner" || argument === "--no-same-permissions" || argument === "--overwrite") continue;
+  // Bun.Archive does not extract device nodes. js-udocker separately removes
+  // whiteout files after extraction, so its excludes are safe no-ops here.
+  if (argument === "--exclude") { take(index++, argument); continue; }
+  if (argument.startsWith("--exclude=")) continue;
   if (argument === "-C" || argument === "--directory") {
     options.directory = take(index++, argument);
     continue;
@@ -67,6 +75,7 @@ for (let index = 0; index < argv.length; index++) {
       } else if (flag === "r") {
         fail("-r append is not supported by Bun.Archive");
       } else if (flag === "v") options.verbose = true;
+      else if (flag === "o") {} // GNU tar: --no-same-owner
       else if (flag === "z") options.compression = "gzip";
       else if (flag === "f") {
         const attached = flags.slice(offset + 1);

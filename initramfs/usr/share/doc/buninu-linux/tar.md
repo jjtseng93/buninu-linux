@@ -28,6 +28,8 @@ Use `-` as ARCHIVE to read from standard input or write to standard output.
 | `-z`, `--gzip` | Create gzip-compressed tar, or explicitly identify gzip input. |
 | `--zstd` | Create or read a zstd-compressed tar. A `.zst` or `.tzst` input is also detected by name. |
 | `-v` | Print names while creating/extracting; with `-t`, also show each member's size, modification time, kind and link target. |
+| `-o`, `--no-same-owner`, `--no-same-permissions`, `--overwrite` | GNU tar compatibility for extraction; these already match Bun.Archive's behaviour. |
+| `--exclude=PATTERN` | Accepted for js-udocker compatibility. Device nodes are not extracted and js-udocker removes whiteout files separately. |
 
 Short options can be combined, for example `-xzvf` or `-czf`.
 For the traditional first option word, the leading hyphen is optional, so
