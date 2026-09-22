@@ -354,7 +354,7 @@ Type bunterm in bunmsh: Graphical Terminal
   ], {
     env: {
       ...process.env,
-      PATH:"/bin:/usr/bin:/buninu/bin",
+      PATH:"/bin:/sbin:/usr/bin:/usr/sbin:/buninu/.bun/bin:/buninu/bin",
       HOME:"/buninu"
     },
     stdin: "inherit",
