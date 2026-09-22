@@ -94,6 +94,61 @@ const mountFilesystems = () => {
 mountFilesystems();
 console.log("init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts");
 
+// Num Lock. The keypad's lock state lives per virtual console in the
+// kernel's keyboard table, and the kernel starts every console with it off,
+// so the keypad types arrows instead of digits. KDSKBLED carries the current
+// flags in its low nibble and the ones a console is reset to in its high
+// nibble; KDSETLED with a value above 7 puts the physical LED back to
+// following those flags. A console allocated later (Ctrl-Alt-F3 for the
+// first time) starts from the kernel default again, so numlock() is left in
+// the REPL for that case.
+const KDSETLED = 0x4b32;
+const KDGKBLED = 0x4b64;
+const KDSKBLED = 0x4b65;
+const LED_NUM = 0x02;
+
+// Nothing here is essential to booting, so a console that is not a virtual
+// terminal, a missing device node or a rejected ioctl is skipped rather than
+// reported: the remaining consoles are still set, and the system comes up
+// either way.
+const setNumLock = (enabled = true) => {
+  const consoles = [];
+  const paths = ["/dev/tty0", "/dev/console", "/dev/tty"];
+  for (let index = 1; index <= 12; index++) paths.push(`/dev/tty${index}`);
+  for (const path of paths) {
+    let fd = -1;
+    try {
+      fd = libc.symbols.open(cString(path), 2, 0);
+      if (fd < 0) continue;
+      const state = new Uint8Array(1);
+      if (libc.symbols.ioctl(fd, KDGKBLED, ptr(state)) !== 0) continue;
+      const current = enabled ? state[0] | LED_NUM : state[0] & ~LED_NUM;
+      const fallback = enabled ? (state[0] >> 4) | LED_NUM : (state[0] >> 4) & ~LED_NUM;
+      const flags = (current & 7) | ((fallback & 7) << 4);
+      if (libc.symbols.ioctl(fd, KDSKBLED, flags) !== 0) continue;
+      libc.symbols.ioctl(fd, KDSETLED, 0x80);
+      consoles.push(path);
+    } catch {
+      // This console keeps whatever state it had; the others still get set.
+    } finally {
+      if (fd >= 0) {
+        try { libc.symbols.close(fd); } catch {}
+      }
+    }
+  }
+  return consoles;
+};
+
+globalThis.numlock = setNumLock;
+try {
+  const consoles = setNumLock(true);
+  console.log(consoles.length
+    ? `init.js: num lock on (${consoles.join(" ")})`
+    : "init.js: no virtual console accepted a num lock setting");
+} catch (error) {
+  console.error(`init.js: num lock: ${error?.message ?? error}`);
+}
+
 const { default: repl } = await import("node:repl");
 const { mkdirSync, writeFileSync } = await import("node:fs");
 

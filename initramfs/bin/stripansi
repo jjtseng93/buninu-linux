@@ -1,0 +1,27 @@
+#!/bin/bun
+// stripansi — concatenate text inputs after removing ANSI escape sequences.
+
+const operands = process.argv.slice(2);
+const inputs = operands.length === 0
+  ? ["-"]
+  : operands[0] === "--" ? operands.slice(1) : operands;
+
+let stdinText;
+let failed = false;
+
+const readInput = async (operand) => {
+  if (operand !== "-") return Bun.file(operand).text();
+  stdinText ??= Bun.stdin.text();
+  return stdinText;
+};
+
+for (const operand of inputs) {
+  try {
+    process.stdout.write(Bun.stripANSI(await readInput(operand)));
+  } catch (error) {
+    console.error(`stripansi: ${operand}: ${error.message}`);
+    failed = true;
+  }
+}
+
+if (failed) process.exitCode = 1;

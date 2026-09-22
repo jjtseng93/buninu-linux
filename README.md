@@ -333,10 +333,11 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+| `stripansi` | remove ANSI escape sequences from stdin, `-`, or one or more files and concatenate the results | — |
 | `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
 | `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images; xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes ten commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eleven commands
 implemented as Bun scripts.
 
 The small `tar` reads the archive's own headers for links and listing, so
@@ -361,6 +362,9 @@ umount -R /mnt
 
 # Clone a Git repository through bunproot
 bun x bunproot --git clone https://github.com/jjtseng93/bunproot
+
+# Read bunproot's Git manual without ANSI formatting in jmi
+bun x bunproot --git --readme | stripansi | jmi
 
 # Download and enter an x64 Alpine minirootfs
 bun x bunproot --download-alpine-x64
@@ -834,7 +838,13 @@ was found.
 It installs signal handlers, loads a separate physical copy of musl through
 `bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without
 the devpts mount every pty open fails with `ENODEV`, since `/dev/ptmx`
-resolves through `/dev/pts/ptmx`), prints a greeting, and starts `node:repl`.
+resolves through `/dev/pts/ptmx`), turns Num Lock on, prints a greeting, and
+starts `node:repl`. The kernel starts every virtual console with Num Lock
+off, so the keypad would type arrows instead of digits; init sets it through
+`KDSKBLED` on each console that exists, as the current state and as the state
+a console is reset to. A console first activated later — `Ctrl-Alt-F3` on a
+fresh boot — starts from the kernel default again, and `numlock()` in the REPL
+(or `numlock(false)`) applies the setting to every console again.
 Submitting an empty or whitespace-only REPL line prints the welcome message
 and the available `cfg` getters again. The loader and libc paths
 contain identical bytes but are deliberately distinct inodes:
