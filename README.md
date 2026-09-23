@@ -505,6 +505,7 @@ bun x bunproot --git --readme | stripansi | jmi
 
 
 # Download and enter an x64 Debian rootfs
+# Make sure you have run bunterm already
 bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
 cd js-udocker
 bun udocker.js pull --platform=linux/amd64 debian:13
@@ -529,6 +530,7 @@ cp $(which bun) /bin/node
 # !!!Use at your own risk!!!
 # !!!Use at your own risk!!!
 bun i -g @sanohiro/casty
+# When clicking around, don’t release the mouse button immediately after pressing it, to make sure the mouse-down event is triggered
 casty https://buninu.org
 
 
