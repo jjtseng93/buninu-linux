@@ -3,14 +3,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-linux_flavor=${LINUX_FLAVOR:-virt}
-kernel_release="6.18.52-0-$linux_flavor"
-kernel_image="kernel/vmlinuz-$linux_flavor"
+. ./scripts/arch.sh
 
-if [ ! -s "$kernel_image" ] || [ ! -s "initramfs/lib/modules/$kernel_release/modules.dep" ] || \
+if [ ! -s "$kernel_image" ] || [ ! -s "$kernel_dir/$efi_stub" ] || [ ! -s "$modules_root/modules.dep" ] || \
     { [ "${REAL_MACHINE:-}" = 1 ] && \
-    { [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/hid/usbhid/usbhid.ko" ] || \
-      [ ! -s "initramfs/lib/modules/$kernel_release/kernel/drivers/acpi/battery.ko" ]; }; }; then
+    { [ ! -s "$modules_root/kernel/drivers/hid/usbhid/usbhid.ko" ] || \
+      [ ! -s "$modules_root/kernel/drivers/acpi/battery.ko" ]; }; }; then
     ./fetch-alpine.sh
 fi
 ./scripts/pack-initramfs.sh
@@ -31,35 +29,53 @@ printf '%s\n' \
 # kernel does not care about the order of the parameters, so `rdinit=` goes
 # last and the tail of the line reads as the `bun -e ...` it turns into.
 #
-# ttyS0 is listed last so it, not tty0, is the console the kernel opens as the
-# init process's fd 0/1/2. `-display none` leaves tty0 with nowhere to go.
+# The serial port (ttyS0, or ttyAMA0 on aarch64) is listed last so it, not
+# tty0, is the console the kernel opens as the init process's fd 0/1/2.
+# `-display none` leaves tty0 with nowhere to go.
 if [ "${REAL_MACHINE:-}" = 1 ]; then
-    consoles="console=ttyS0,115200 console=tty0 REAL_MACHINE=1"
+    consoles="console=$serial_console,115200 console=tty0 REAL_MACHINE=1"
 else
-    consoles="console=tty0 console=ttyS0,115200"
+    consoles="console=tty0 console=$serial_console,115200"
 fi
 printf '%s' "$consoles panic=0 PATH=/bin KERNEL_RELEASE=$kernel_release rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
 
-if command -v x86_64-w64-mingw32-objcopy >/dev/null; then
-    objcopy_command=x86_64-w64-mingw32-objcopy
-    objdump_command=x86_64-w64-mingw32-objdump
-else
-    echo "error: build stage needs x86_64-w64-mingw32-objcopy (Debian binutils-mingw-w64-x86-64)" >&2
-    echo "run inside PRoot; see README section 0" >&2
+if ! command -v "$uki_objcopy" >/dev/null || ! command -v "$uki_objdump" >/dev/null; then
+    echo "error: build stage needs $uki_objcopy and $uki_objdump (Debian $uki_binutils_package)" >&2
+    echo "run inside PRoot or with ./index.js --docker; see README Build environment" >&2
     exit 1
 fi
 
-image_base_hex="$($objdump_command -p kernel/linuxx64.efi.stub \
-    | awk '$1 == "ImageBase" { print $2; exit }')"
-image_base=$((16#$image_base_hex))
-osrel_vma=$((image_base + 0x20000))
-cmdline_vma=$((image_base + 0x30000))
-linux_vma=$((image_base + 0x2000000))
-initrd_vma=$((image_base + 0x3000000))
+stub="$kernel_dir/$efi_stub"
+pe_header() { "$uki_objdump" -p "$stub" | awk -v key="$1" '$1 == key { print $2; exit }'; }
+align_up() { echo $(( ($1 + $2 - 1) / $2 * $2 )); }
+max() { echo $(( $1 > $2 ? $1 : $2 )); }
 
-# These are the conventional non-overlapping VMAs used for x86-64 UKIs.
-# Both supported Alpine kernels are below 16 MiB, so .linux ends before .initrd.
-"$objcopy_command" \
+# The conventional x86-64 UKI offsets from the image base: .osrel +0x20000,
+# .cmdline +0x30000, .linux +0x2000000, .initrd +0x3000000. The stub's own
+# sections (SizeOfImage) and the kernel are measured rather than assumed, so
+# a larger stub or a kernel of 16 MiB or more moves the later sections up
+# instead of overlapping them. The x86_64 stub and both kernels fit the
+# conventional layout; the aarch64 stub ends at +0x38000, which puts .osrel
+# and .cmdline at +0x40000 and +0x50000 there.
+image_base=$((16#$(pe_header ImageBase)))
+stub_size=$((16#$(pe_header SizeOfImage)))
+kernel_size=$(wc -c < "$kernel_image")
+osrel_offset=$(max 0x20000 "$(align_up "$stub_size" 0x10000)")
+cmdline_offset=$((osrel_offset + 0x10000))
+linux_offset=$(max 0x2000000 "$(align_up $((cmdline_offset + 0x10000)) 0x1000000)")
+initrd_offset=$(max 0x3000000 "$(align_up $((linux_offset + kernel_size)) 0x1000000)")
+osrel_vma=$((image_base + osrel_offset))
+cmdline_vma=$((image_base + cmdline_offset))
+linux_vma=$((image_base + linux_offset))
+initrd_vma=$((image_base + initrd_offset))
+
+# Only this architecture's removable-media name may remain: firmware of the
+# other architecture ignores it, but run-qemu.sh reads the guest from it.
+for efi in vda/EFI/BOOT/*.EFI; do
+    [ "$efi" = "vda/EFI/BOOT/$efi_boot_name" ] || rm -f "$efi"
+done
+
+"$uki_objcopy" \
     --add-section .osrel=build/os-release \
     --change-section-vma .osrel="$osrel_vma" \
     --set-section-flags .osrel=contents,alloc,load,readonly,data \
@@ -72,6 +88,6 @@ initrd_vma=$((image_base + 0x3000000))
     --add-section .initrd=build/initramfs.cpio.gz \
     --change-section-vma .initrd="$initrd_vma" \
     --set-section-flags .initrd=contents,alloc,load,readonly,data \
-    kernel/linuxx64.efi.stub vda/EFI/BOOT/BOOTX64.EFI
+    "$stub" "vda/EFI/BOOT/$efi_boot_name"
 
-echo "Built UKI with Alpine linux-$linux_flavor at vda/EFI/BOOT/BOOTX64.EFI"
+echo "Built $arch UKI with Alpine linux-$linux_flavor at vda/EFI/BOOT/$efi_boot_name"

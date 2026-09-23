@@ -4,8 +4,9 @@ Buninu Linux is licensed under the MIT License; see `LICENSE`.
 
 It redistributes the third-party components below under their own licenses.
 The full license texts are in `LICENSES/`. Every SHA-256 here was checked
-byte-for-byte against the official Alpine Linux v3.24 x86_64 package (or the
-official Bun release) it came from.
+byte-for-byte against the official Alpine Linux v3.24 x86_64 or aarch64
+package (or the official Bun release) it came from. The x86_64 guest is the
+default build; `--arch aarch64` builds the other one from the same versions.
 
 The sections below cover the platform: the kernel, the C library, the GCC
 runtime, the UEFI stub and Bun. The Buninu userspace under `initramfs/buninu/`
@@ -17,16 +18,17 @@ are permanent and are the Corresponding Source for each exact build.
 
 ## Components tracked in this repository
 
-These files are committed under `initramfs/lib/`.
+These files are committed under `native/x86_64/lib/` and
+`native/aarch64/lib/`.
 
-### ld-musl-x86_64.so.1 and libc.musl-x86_64.so.1
+### ld-musl-x86_64.so.1, libc.musl-x86_64.so.1 and their aarch64 pair
 
 - License: MIT
 - See: `LICENSES/musl-COPYRIGHT.txt`
 
 The musl C library and dynamic loader, version 1.2.6, as packaged by Alpine
-Linux 3.24 (package `musl`, version 1.2.6-r2, x86_64). The two files are
-byte-identical; the second is a separate copy so that `bun:ffi` can `dlopen`
+Linux 3.24 (package `musl`, version 1.2.6-r2, x86_64 and aarch64). The two
+files of each architecture are byte-identical; the second is a separate copy so that `bun:ffi` can `dlopen`
 libc without touching the inode that is already acting as Bun's loader (see
 `README.md`).
 
@@ -34,14 +36,19 @@ libc without touching the inode that is already acting as Bun's loader (see
 - Alpine build recipe (Corresponding Source), pinned to the commit shipping
   pkgrel=2:
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/f5640d3a10f664c9119720c60515265d3d6f6d01/main/musl/APKBUILD
-- Package: https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r2.apk
+- Packages:
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r2.apk
   SHA-256 `573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r2.apk
+  SHA-256 `5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e`
 
 SHA-256 of the shipped files:
 
 ```text
-ld-musl-x86_64.so.1   38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
-libc.musl-x86_64.so.1 38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
+ld-musl-x86_64.so.1    38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
+libc.musl-x86_64.so.1  38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
+ld-musl-aarch64.so.1   32377e6d71725bb019e9ff6d5e9f16b4d5156d6f2c36504191c2d6a7c4d4a44d
+libc.musl-aarch64.so.1 32377e6d71725bb019e9ff6d5e9f16b4d5156d6f2c36504191c2d6a7c4d4a44d
 ```
 
 ### libgcc_s.so.1 and libstdc++.so.6
@@ -51,7 +58,7 @@ libc.musl-x86_64.so.1 38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9
 
 The GCC runtime support library and the GNU C++ standard library, built from
 GCC 15.2.0, as packaged by Alpine Linux 3.24 (packages `libgcc` and
-`libstdc++`, version 15.2.0-r5, x86_64). `libstdc++.so.6` is the package's
+`libstdc++`, version 15.2.0-r5, x86_64 and aarch64). `libstdc++.so.6` is the package's
 `libstdc++.so.6.0.34` under its SONAME.
 
 The GCC Runtime Library Exception is what allows these libraries to be linked
@@ -70,19 +77,25 @@ libraries' own sources.
   SHA-256 `393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637`
   https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libstdc++-15.2.0-r5.apk
   SHA-256 `14c987b556f5385a5db18376e788c75f37d85321b8dc1920d926ea7daac1d6f6`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libgcc-15.2.0-r5.apk
+  SHA-256 `369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libstdc++-15.2.0-r5.apk
+  SHA-256 `2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7`
 
 SHA-256 of the shipped files:
 
 ```text
-libgcc_s.so.1    5ea51dd885b6fc691eccc569d0bda739204204f6161e97075b26dc9c050d1ca1
-libstdc++.so.6   67a940194aec6c44c3eb47a98e44c53d248e4dac5f4eb57c0971c0d6286eafe5
+x86_64/lib/libgcc_s.so.1    5ea51dd885b6fc691eccc569d0bda739204204f6161e97075b26dc9c050d1ca1
+x86_64/lib/libstdc++.so.6   67a940194aec6c44c3eb47a98e44c53d248e4dac5f4eb57c0971c0d6286eafe5
+aarch64/lib/libgcc_s.so.1   b83bc14b3e1660d66b0387077aea7e104fce3ed93bb56d05e30e4e2cdb37b473
+aarch64/lib/libstdc++.so.6  bc958507db0cacf75cbf7298c395fbc7596667b17e1283d98bd6cfe3e59df951
 ```
 
 ## Components fetched at build time
 
 These are not committed (see `.gitignore`). `fetch-plus-build.sh` downloads each
-one, verifies the SHA-256 pinned in `fetch-alpine.sh` / `fetch-bun.sh`,
-and packs it into the UKI and the disk image. They are listed here because
+one, verifies the SHA-256 pinned in `scripts/arch.sh`, and packs it into the
+UKI and the disk image. They are listed here because
 the built image redistributes them.
 
 ### Linux kernels and modules
@@ -90,80 +103,110 @@ the built image redistributes them.
 - License: GPL-2.0-only WITH Linux-syscall-note
 - See: `LICENSES/GPL-2.0.txt` and `LICENSES/Linux-syscall-note.txt`
 
-Linux 6.18.52 as packaged by Alpine Linux 3.24 from the `linux-lts` aport.
-The default build uses package `linux-virt`, version 6.18.52-r0, x86_64.
-`--linux-lts` and `--real` use package `linux-lts`, version 6.18.52-r0,
-x86_64. All listed modules are the selected package's `.ko.gz` files
-decompressed without modification.
+Linux 6.18.53 as packaged by Alpine Linux 3.24 from the `linux-lts` aport.
+The default build uses package `linux-virt`, version 6.18.53-r0.
+`--linux-lts` and `--real` use package `linux-lts`, version 6.18.53-r0.
+Each comes from the x86_64 or aarch64 repository to match `--arch`. All
+listed modules are the selected package's `.ko.gz` files decompressed without
+modification.
 
-- Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.52.tar.xz
+- Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.53.tar.xz
 - Alpine build recipe, configuration and patches (Corresponding Source),
-  pinned to the commit shipping 6.18.52-r0:
-  https://gitlab.alpinelinux.org/alpine/aports/-/blob/09a165f4c951edf370eddde03b2d1d5fd71805ed/main/linux-lts/APKBUILD
+  pinned to the commit shipping 6.18.53-r0 (the same for both architectures):
+  https://gitlab.alpinelinux.org/alpine/aports/-/blob/00abeb21803f818099833e761976a578dd1c0380/main/linux-lts/APKBUILD
 - Packages:
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.52-r0.apk
-  SHA-256 `dff0c365a6d6c0fd015175af08dca0c39048fa39df6ef3150a7ea88d2cfdfa4f`
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-lts-6.18.52-r0.apk
-  SHA-256 `bd81f00522a7c7deb96886811a087c453d48530c0c8f742412ad73e24236037c`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.53-r0.apk
+  SHA-256 `cad859cc46342e18002621fdde166bf2cd520dfec5e781d241de7d13e53970d6`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-lts-6.18.53-r0.apk
+  SHA-256 `8e3cfdd1d98e0e70c2e70a8c299ed3cd1e0939d60ad7bbd1da1cf241d794490b`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-virt-6.18.53-r0.apk
+  SHA-256 `fea61b7fd5e72e626d771f9798df56c83db658d0e221044f06fc28aacf5a118b`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-lts-6.18.53-r0.apk
+  SHA-256 `46885041022ea11afa1e07c40199c74146bf72d362368a844338af0c162e365c`
 
-SHA-256 of files in the default `linux-virt` image:
+SHA-256 of files in the default x86_64 `linux-virt` image:
 
 ```text
-kernel/vmlinuz-virt   40f620bc8c93d952e57dd8dfc0f94fca1759d192a4fc4a260705d50ca378559c
-failover.ko           9637a7ce60a3d8369fa0aabff4dd365c6864d8b81cb85eb6d4fcfef799fe1532
-net_failover.ko       9fe81eb66429aebb33c7cb2f177dcfcd1e3084b466b715e58f131411954948e3
-virtio_net.ko         913a0d5baf407a5d8fe4a97ccc5f1ef40f27d458a1947b562961aeabe6906397
+kernel/x86_64/vmlinuz-virt   3b6e001d41938fdf4fab7d87826fc40dfab733973a5ef96a14c892dbdec87502
+failover.ko                  f52f8dedf68be2a228e84d796170471c7103d88910a14e2307484fe94c4d1a11
+net_failover.ko              8fe715d813a1e795cf0b46d54fd67f6c625dfabf1a4eebfeec96ae34f8aab0b1
+virtio_net.ko                cdf49d6216ba92313d3e40f065c326d86eae654bcbb811ac53e7c2613e686f1e
 ```
 
-SHA-256 of files in a `--linux-lts` image:
+SHA-256 of files in an x86_64 `--linux-lts` image:
 
 ```text
-kernel/vmlinuz-lts          9a52d8cfe1c2d03a550405d1024de213376e1cacfc93081beeb8250456ca2c1f
-failover.ko                 e1c82e9e63d5d402cadcf8fe94541919edeaf5987357675d0a33c07f6625d8e0
-net_failover.ko             821bc61da636ffe0f7f0a89a1c63c5c9bbf732c744fcddd3354988849034c14f
-virtio_net.ko               f207df3fe605c763def3a8a01117d5f5f122117aa552a24c2df9a01259fb2a4b
-virtio_ring.ko              5c086ab5cc80ed21daea85d053e9cca969f024cb40e9a515d75a601be4593433
-virtio.ko                   09f27668ca0e0a0405843cdfa8a9f395e5150f56447fe5f00957081a2b5c2f1e
-virtio_pci_legacy_dev.ko    eff57bee4697f7212bc1535802daefeec450adaaad6400dede197d14ef463fdc
-virtio_pci_modern_dev.ko    556a99dde723a42fd6ab23a99e43d2ffd956432ada960ad24d7122d33d4b0f72
-virtio_pci.ko               3597dd05819e027402b2efe0b1c1d3bba80dca6116692ae78819768f212704f1
+kernel/x86_64/vmlinuz-lts   1b2ba2cad7973637f0f5589f845f7b773e73920e69d26785d2ff21c6c8995dc7
+failover.ko                 0fcd683e5023a3910bac2d2eb02eff349ce00d81b572f4a9093a0c70fc1c77f3
+net_failover.ko             613809bd8d4c283b7a2b9dba5d8466cc36f478772a86e8c89de5e792bce69207
+virtio_net.ko               1fb4ce7a0b546933b1e40d67b3570aec808307dcafead342d3f4bcd5a0523b7c
+virtio_ring.ko              eba2c109827a5d3b0e869505268a68d72cd6f2f9cc68778b66145c0503d9561f
+virtio.ko                   00d107d78dc1d47a4eea335c6d6b28026ae2c783a9b7629f2cc080bdbc8d2dc3
+virtio_pci_legacy_dev.ko    370b8ad3521cbd3934c78eacc5965b20eff29c55c7fcded023c75c5d21424841
+virtio_pci_modern_dev.ko    572d719ccad98342ebce909b8dac65ef64379c3a6c97e2d1fb38ff66950d9322
+virtio_pci.ko               e64039e30729e535b3ce9394249c79147bab27dfd20b7cf9914cd635dda95fc3
 ```
 
 `--real` additionally includes the following modules from that same
-`linux-lts` package for physical xHCI controllers and USB HID keyboards:
+x86_64 `linux-lts` package for physical xHCI controllers and USB HID keyboards:
 
 ```text
-usb-common.ko               cc121fdf8efb9d9db4e15717745fe09248f903d4948f9df806b913177e0e3c66
-usbcore.ko                  1959bb44e32c8e1c071012a0e61e94c3d30db7e66c225f5adbe2987fff693105
-xhci-hcd.ko                 cc4b561dda02a23bd4c6d11a58ba973bcaf6719c3771f4ee948a232fe2d8f5bf
-xhci-pci.ko                 5911a1368deadf9b02e75c9e5d3549e0bd17f8f364e9e54c4b03a66b77c03361
-xhci-pci-renesas.ko         2182381b58e5e2eba8cf7d305f4db7af31582c3c13826e70c7afcf2394a076e7
-hid.ko                      d1a79b51bb1a7e77548985d4e6ad3d9c36d2718bb9f394ebbeeb5267d484f788
-hid-generic.ko              c9933c253b4870bb9578f3950e2daf7cdcb6808837a1b351c3bdd6dde26fd649
-usbhid.ko                   330d5355437e3bf8bf63ccae0692859b05edc66d991e2d2d6bac22e0e39f79da
+usb-common.ko               3c7f2f1de34cafbf64fa3528862539cbe8cd3830cd97110e8401b510835c8761
+usbcore.ko                  0fce52fd1836304d48d25ef322558f27304ea9247c5b234f8ac2ecb9d8f00597
+xhci-hcd.ko                 22e687fe561127ea4cd1aba21058cbf253d0541ccf315555004f5a94ed7ab727
+xhci-pci.ko                 82eb0ea3869da82d1762130a738f2ff3ae6d77b16670f69f7f09cff4e8f3e360
+xhci-pci-renesas.ko         07df52a6ee408723938bc8a32cb4a2bfe4cbcf014ff48d23fd7f7ab41c201f6f
+hid.ko                      fbe4561a8dd65cd26160cbe9b7c5af23c7920044771e2e08a8aee6aa71141053
+hid-generic.ko              acfda4f50e19c055e5d719ebc2b9b8f8c6c076552592dfaabccbe128a9862694
+usbhid.ko                   12d3648467db87c2904a11a076c17768d8d51c28fe8ec41046e7d961592a81f1
 ```
 
-### linuxx64.efi.stub
+SHA-256 of files in the default aarch64 `linux-virt` image:
+
+```text
+kernel/aarch64/vmlinuz-virt  9884ee00ecfff6a0dc9821cc9981b3aca74f741950704776b4335b1e076d96e6
+failover.ko                  61b052e5ed3ef01bc6f71d84acb79bfe8cf2e5168f625fce76630dec14bf8b99
+net_failover.ko              a0b150f46c7e9aa48156a8b94916ab65a4d8947143b381af56da677436584259
+virtio_net.ko                e9c007778d2b0a7d4986cd04b724965a01ffee05ada92f75ce13bf59bef2491c
+```
+
+SHA-256 of files in an aarch64 `--linux-lts` image:
+
+```text
+kernel/aarch64/vmlinuz-lts  00426cce3a4b2b4972043eeb68a3a2af5645eb7a50ca853c375e41944ac66d27
+failover.ko                 b9bea5bb0c956b58faf0f803a205dafd889bfda75e7c59d234f60e65145fbec8
+net_failover.ko             d8eb3087b75aba891e93327c6c43f37362cfe49421b7cabfd12f57a34d5c215a
+virtio_net.ko               10e73397bbb424b4bdb86781297f6fc30b13091e9a77fc7059e4861c09ef609d
+virtio_pci_legacy_dev.ko    476c6762743b9a5789200a31ee339173610f975b42e588914aabf41d8ade2958
+virtio_pci_modern_dev.ko    595618d12b67c67a0f29c406f6578d10d010024ac83014855672fd3fd695d6ed
+virtio_pci.ko               545a599cb7136a509a33cd3b52e80a8cd2bfa10668b0e766dc52872ce07d510b
+```
+
+### linuxx64.efi.stub and linuxaa64.efi.stub
 
 - License: LGPL-2.1-or-later
 - See: `LICENSES/LGPL-2.1.txt`
 
 systemd's UEFI boot stub, version 260.2, as packaged by Alpine Linux 3.24
-(package `systemd-efistub`, version 260.2-r0, x86_64, from the `systemd-boot`
-aport). The UKI is this stub with the kernel, initramfs, command line and
+(package `systemd-efistub`, version 260.2-r0, x86_64 and aarch64, from the
+`systemd-boot` aport). The UKI is this stub with the kernel, initramfs, command line and
 `os-release` appended as PE sections.
 
 - Upstream source: https://github.com/systemd/systemd/archive/refs/tags/v260.2.tar.gz
 - Alpine build recipe (Corresponding Source), pinned to the commit shipping
   260.2-r0:
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/c329463d3dbe6b28360180706f843e605c97575b/main/systemd-boot/APKBUILD
-- Package: https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/systemd-efistub-260.2-r0.apk
+- Packages:
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/systemd-efistub-260.2-r0.apk
   SHA-256 `8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/systemd-efistub-260.2-r0.apk
+  SHA-256 `a1823d2d7082db555d528f82c1809f276c818aeb5b40f198f4565f104e055c38`
 
-SHA-256 of the shipped file:
+SHA-256 of the shipped files:
 
 ```text
-kernel/linuxx64.efi.stub   b9d1e11d11aa7137f9b1d24b530fac00daf58bfcf3a852267ccaec297492c6d3
+kernel/x86_64/linuxx64.efi.stub    b9d1e11d11aa7137f9b1d24b530fac00daf58bfcf3a852267ccaec297492c6d3
+kernel/aarch64/linuxaa64.efi.stub  939a1511162f26ef331b0b6754308b8393c79c94e5b955605f8e89e1821a0d06
 ```
 
 ### bun
@@ -173,19 +216,24 @@ kernel/linuxx64.efi.stub   b9d1e11d11aa7137f9b1d24b530fac00daf58bfcf3a852267ccae
   which lists the licenses of everything statically linked into the binary,
   including JavaScriptCore)
 
-Bun 1.4.2, the official `linux-x64-musl-baseline` release binary. For this
-release the `-baseline` and plain `linux-x64-musl` archives contain the same
-`bun` executable; Bun ships one x64 build and keeps the `-baseline` name as an
-alias.
+Bun 1.4.2, the official `linux-x64-musl-baseline` release binary for
+x86_64 and `linux-aarch64-musl` for aarch64. For this release the `-baseline`
+and plain `linux-x64-musl` archives contain the same `bun` executable; Bun
+ships one x64 build and keeps the `-baseline` name as an alias.
 
 - Upstream source: https://github.com/oven-sh/bun/tree/bun-v1.4.2
-- Release archive: https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl-baseline.zip
+- Release archives:
+  https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl-baseline.zip
   SHA-256 `76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18`
+  https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64-musl.zip
+  SHA-256 `71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df`
+  (both as listed in the release's `SHASUMS256.txt`)
 
-SHA-256 of the shipped file:
+SHA-256 of the shipped files:
 
 ```text
-initramfs/bin/bun   16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d
+native/x86_64/bin/bun    16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d
+native/aarch64/bin/bun   1101cd0aa92ea214c2aaf4bb3761ca3c76a90aae0e6f94c07efb4e8c4f18a8fc
 ```
 
 ## Graphics stack

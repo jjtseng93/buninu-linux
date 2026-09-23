@@ -80,7 +80,9 @@ hidden while it is scrolled out of view.
 `/dev/input` and never loads the mouse module.
 
 `init.js` loads `evdev` and `psmouse` at boot, so a PS/2 mouse — which is
-what QEMU's q35 machine and most PCs present — has a device node ready. A USB
+what QEMU's q35 machine and most PCs present — has a device node ready. The
+aarch64 image loads `virtio_input` in place of `psmouse`, for QEMU's
+`virtio-tablet-pci` and `virtio-keyboard-pci`. A USB
 mouse also needs the `usbhid` stack, which a `--real` image carries and
 `cfg.all` loads. The pointer follows relative devices (a mouse) and absolute
 ones (a tablet or touchscreen) alike; a device that cannot be opened is
@@ -91,6 +93,8 @@ reported and the session continues without it.
 - Needs a framebuffer: `linux-lts` has one built in, while the default
   `linux-virt` builds it as modules the image does not ship, so build with
   `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
+- The aarch64 image has no framebuffer yet: `run-qemu.sh` gives QEMU's
+  `virt` machine no display device, so there is no `/dev/fb0` to draw on.
 - No selection, and no keyboard way to scroll back: the wheel is it. The
   buffer keeps 1000 lines. A program that does not enable mouse reporting
   sees no clicks — the arrow still moves, so the pointer is visibly alive.

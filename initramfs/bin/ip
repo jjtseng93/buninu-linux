@@ -498,8 +498,9 @@ const commandAddress = (words, options) => {
   });
 };
 
-// struct rtentry on x86_64: rt_dst @8, rt_gateway @24, rt_genmask @40 (each a
-// 16-byte sockaddr), rt_flags u16 @56, rt_metric i16 @80, rt_dev char* @88.
+// struct rtentry on 64-bit Linux, x86_64 and aarch64 alike: rt_dst @8,
+// rt_gateway @24, rt_genmask @40 (each a 16-byte sockaddr), rt_flags u16 @56,
+// rt_metric i16 @80, rt_dev char* @88.
 const rtentry = ({ destination, prefix, gateway, device, metric }) => {
   const route = new Uint8Array(120);
   const routeView = view(route);

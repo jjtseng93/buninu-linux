@@ -3,9 +3,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+. ./scripts/arch.sh
+
 mkdir -p vda/EFI/BOOT
-test -s vda/EFI/BOOT/BOOTX64.EFI || {
-    echo "error: build stage: no EFI payload yet; run ./build-uki.sh (./index.js -b) or ./hello/build-hello.sh first" >&2
+test -s "vda/EFI/BOOT/$efi_boot_name" || {
+    hint="./build-uki.sh (./index.js -b)"
+    [ "$arch" = x86_64 ] && hint="$hint or ./hello/build-hello.sh"
+    echo "error: build stage: no $arch EFI payload vda/EFI/BOOT/$efi_boot_name yet; run $hint first" >&2
     exit 1
 }
 
@@ -13,7 +17,7 @@ test -s vda/EFI/BOOT/BOOTX64.EFI || {
 # it into a GPT disk.  No mount, loop device, or root privilege is required.
 for required_tool in parted mkfs.fat mmd mcopy; do
     command -v "$required_tool" >/dev/null || {
-        echo "error: build stage needs $required_tool; run inside PRoot, see README section 0" >&2
+        echo "error: build stage needs $required_tool; run inside PRoot or with ./index.js --docker, see README Build environment" >&2
         exit 1
     }
 done
@@ -29,7 +33,7 @@ esp_sectors=$((esp_end - esp_start + 1))
 truncate -s $((esp_sectors * 512)) "$temporary_esp"
 mkfs.fat -F 32 -h "$esp_start" -n EFIBOOT "$temporary_esp" >/dev/null
 mmd -i "$temporary_esp" ::/EFI ::/EFI/BOOT
-mcopy -i "$temporary_esp" vda/EFI/BOOT/BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i "$temporary_esp" "vda/EFI/BOOT/$efi_boot_name" "::/EFI/BOOT/$efi_boot_name"
 
 rm -f vda.img
 truncate -s $((disk_sectors * 512)) vda.img
@@ -41,4 +45,4 @@ dd if="$temporary_esp" of=vda.img bs=512 \
     seek="$esp_start" count="$esp_sectors" \
     conv=notrunc,sparse status=none
 
-echo "Packed vda/EFI/BOOT/BOOTX64.EFI into vda.img"
+echo "Packed vda/EFI/BOOT/$efi_boot_name into vda.img"
