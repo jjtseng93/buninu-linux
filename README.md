@@ -514,10 +514,9 @@ bun udocker.js create --name db debian:13
 cd ~/.udocker/containers/db/ROOT
 chroot . /bin/bash
 apt update
-apt install curl unzip chromium fonts-noto-cjk fonts-noto-color-emoji
+apt install curl unzip chromium fonts-noto-cjk fonts-noto-color-emoji npm
 curl -fsSL https://bun.sh/install | bash
 bun x bunmsh
-cp $(which bun) /bin/node
 # We haven't fully reviewed
 # @sanohiro/casty's safety
 # !!!Use at your own risk!!!
@@ -532,7 +531,7 @@ cp $(which bun) /bin/node
 # !!!Use at your own risk!!!
 bun i -g @sanohiro/casty
 # When clicking around, don’t release the mouse button immediately after pressing it, to make sure the mouse-down event is triggered
-casty https://buninu.org
+casty https://github.com/jjtseng93/buninu-linux
 
 
 
