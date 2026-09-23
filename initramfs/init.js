@@ -583,6 +583,18 @@ const startRepl = () => {
     output: process.stdout,
     terminal: true,
   });
+  // `start()` returns a promise so PID 1's event loop can keep reaping
+  // children. Make the two convenient whole-line forms foreground commands;
+  // otherwise the REPL finishes evaluating the pending promise and resumes
+  // itself, competing with Buninu for the console input.
+  const defaultEval = server.eval.bind(server);
+  server.eval = (command, context, filename, callback) => {
+    const trimmed = command.trim();
+    if (trimmed === "start" || /^start\s*\(\s*\)\s*;?$/.test(trimmed)) {
+      command = "await start()\n";
+    }
+    return defaultEval(command, context, filename, callback);
+  };
   // Run before REPL's own line listener so its next prompt is printed after
   // the repeated welcome. Empty and whitespace-only lines both trigger it.
   server.prependListener("line", (line) => {
