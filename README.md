@@ -477,9 +477,11 @@ only regular files. Creation still follows the `Bun.Archive` boundary: it
 stores regular files but not Unix metadata, links, or empty directories. It
 supports gzip and Bun's built-in zstd, not xz or bzip2.
 
-`--help` renders each Markdown manual in the terminal. The `bun x` examples
-below require network access: `bun x` downloads the requested program from the
-npm registry and runs it without installing it permanently. Common examples:
+- `--help` renders each Markdown manual in the terminal.
+- The `bun x` examples below require network access: 
+  * `bun x` downloads the requested program from the npm registry and runs it without installing it permanently. 
+  * If they fail the 1st time, try `bun pm cache rm`
+- Common examples:
 
 ```sh
 mount /dev/sda1 /mnt --mkdir
@@ -502,7 +504,10 @@ bun x bunproot --git --readme | stripansi | jmi
 # Download and enter an x64 Debian rootfs
 bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
 cd js-udocker
-bun udocker.js pull --platform=
+bun udocker.js pull --platform=linux/amd64 debian:13
+bun udocker.js create --name db debian:13
+cd ~/.udocker/containers/db/ROOT
+chroot .
 
 
 # Download and enter an x64 Alpine minirootfs
