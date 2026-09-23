@@ -5,7 +5,7 @@
   * a prebuilt kernel from Alpine
   * a prebuilt systemd EFI stub from Alpine
   * initramfs JavaScript components:
-  * `/init.js` and other modules
+  * `/init.js`, Buninu userspace, and other modules
   * initramfs Native components:
   * Official `bun-linux-x64-musl` (or `bun-linux-aarch64-musl`) and its dependencies
     + ld-musl-x86_64.so.1 (ld-musl-aarch64.so.1)
@@ -1065,6 +1065,7 @@ for the userspace session.
 - [Using Buninu Linux](#using-buninu-linux)
   * [Basic configuration](#basic-configuration)
   * [Editor quick start](#editor-quick-start)
+    + [jsmdcui](#jsmdcui)
   * [Panes, terminals, and tabs](#panes-terminals-and-tabs)
     + [Pane and tab controls](#pane-and-tab-controls)
   * [Using Bun Modern Shell](#using-bun-modern-shell)
