@@ -2,8 +2,9 @@
 #
 # fetch <url> <name> <sha256>
 #
-# Downloads to downloads/<name>, unless a file with that exact SHA-256 is
-# already sitting there. The hash is both the cache key and the integrity
+# Downloads to $downloads_dir/<name> (downloads/<arch>/, set by
+# scripts/arch.sh), unless a file with that exact SHA-256 is already sitting
+# there. The hash is both the cache key and the integrity
 # check, so there is no weaker "file exists" path: a truncated, stale or
 # tampered file fails the first comparison, gets fetched again, and still has
 # to pass the second one before any script extracts from it.
@@ -12,7 +13,7 @@
 # a version (which changes both the name and the hash) always refetches.
 fetch() {
     local url=$1 name=$2 sha=$3
-    local path="downloads/$name"
+    local path="$downloads_dir/$name"
 
     if [ -f "$path" ] && printf '%s  %s\n' "$sha" "$path" | sha256sum --check --status; then
         echo "cached $name"
@@ -20,6 +21,7 @@ fetch() {
     fi
 
     echo "fetch  $name"
+    mkdir -p "$downloads_dir"
     curl -fL "$url" -o "$path"
     # --quiet prints only failures; a mismatch exits non-zero under `set -e`.
     printf '%s  %s\n' "$sha" "$path" | sha256sum --check --quiet

@@ -2,9 +2,19 @@ console.log("init.js: Bun runtime entered JavaScript");
 
 const { dlopen, FFIType, ptr, read } = await import("bun:ffi");
 
-console.log("init.js: loading physical musl libc for FFI");
+// The musl file name and the number of finit_module, which musl has no
+// wrapper for, are all that differs per CPU in this file. /lib/dlopen.js has
+// the same table for the commands; it is repeated rather than imported so
+// that nothing but bun:ffi loads before the mounts below.
+const architecture = {
+  x64: { libc: "libc.musl-x86_64.so.1", SYS_finit_module: 313 },
+  arm64: { libc: "libc.musl-aarch64.so.1", SYS_finit_module: 273 },
+}[process.arch];
+if (!architecture) throw new Error(`init.js: unsupported CPU architecture ${process.arch}`);
 
-const libc = dlopen("/lib/libc.musl-x86_64.so.1", {
+console.log(`init.js: loading physical musl libc /lib/${architecture.libc} for FFI`);
+
+const libc = dlopen(`/lib/${architecture.libc}`, {
   mount: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
@@ -152,11 +162,13 @@ try {
 // The input layer's character devices, so a pointing device has a
 // /dev/input/event* node for `bunterm --mouse` to read. Loading them only
 // creates those nodes: the console keyboard is unaffected, and nothing reads
-// a pointer unless it is asked to. A USB mouse also needs the usbhid stack,
-// which `cfg.all` or a --real boot brings in.
+// a pointer unless it is asked to. psmouse is the PS/2 mouse of a PC or q35;
+// QEMU's aarch64 virt machine has virtio-input instead. Each image ships only
+// the one its machine has, and tryModprobe skips the other. A USB mouse also
+// needs the usbhid stack, which `cfg.all` or a --real boot brings in.
 try {
   const { tryModprobe } = await import("/lib/modprobe.js");
-  const loaded = ["evdev", "psmouse"].filter((module) => tryModprobe(module) !== null);
+  const loaded = ["evdev", "psmouse", "virtio_input"].filter((module) => tryModprobe(module) !== null);
   const { readdirSync } = await import("node:fs");
   const devices = (() => {
     try { return readdirSync("/dev/input").filter((name) => name.startsWith("event")); } catch { return []; }
@@ -190,7 +202,11 @@ const loadModule = (path) => {
     const parameters = cString("");
     // -EEXIST is harmless when firmware or another module loaded it first.
     // musl has no finit_module wrapper, so use its generic syscall(2).
-    check(`finit_module(${path})`, libc.symbols.syscall(313, fd, ptr(parameters), 0), [-17]);
+    check(
+      `finit_module(${path})`,
+      libc.symbols.syscall(architecture.SYS_finit_module, fd, ptr(parameters), 0),
+      [-17],
+    );
   } finally {
     libc.symbols.close(fd);
   }
@@ -231,21 +247,14 @@ const bringUpLoopback = () => {
   }
 };
 
-const configureQemuNetwork = () => {
-  const release = process.env.KERNEL_RELEASE ?? "6.18.52-0-virt";
-  const modules = [
-    `lib/modules/${release}/kernel/net/core/failover.ko`,
-    `lib/modules/${release}/kernel/drivers/net/net_failover.ko`,
-    `lib/modules/${release}/kernel/drivers/net/virtio_net.ko`,
-  ];
-  if (release.endsWith("-lts")) modules.unshift(
-    `lib/modules/${release}/kernel/drivers/virtio/virtio_ring.ko`,
-    `lib/modules/${release}/kernel/drivers/virtio/virtio.ko`,
-    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci_legacy_dev.ko`,
-    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci_modern_dev.ko`,
-    `lib/modules/${release}/kernel/drivers/virtio/virtio_pci.ko`,
-  );
-  for (const module of modules) loadModule(`/${module}`);
+// Which virtio pieces are modules differs per kernel flavor and CPU (linux-lts
+// has virtio_pci as a module, linux-virt builds it in), so /lib/modprobe.js
+// resolves them from the shipped modules.dep and modules.builtin: the PCI
+// transport first, since nothing in modules.dep depends on it, then the NIC.
+const configureQemuNetwork = async () => {
+  const { modprobe, tryModprobe } = await import("/lib/modprobe.js");
+  tryModprobe("virtio_pci");
+  modprobe("virtio_net");
 
   const fd = check("socket(AF_INET, SOCK_DGRAM)", libc.symbols.socket(2, 2, 0));
   const ioctl = (request, value, operation) =>
@@ -264,8 +273,9 @@ const configureQemuNetwork = () => {
 
     bringUp(ioctl, "eth0");
 
-    // struct rtentry on Linux x86_64. Only gateway and flags are needed for
-    // the default route; rt_dst and rt_genmask remain 0.0.0.0.
+    // struct rtentry on 64-bit Linux, the same on x86_64 and aarch64. Only
+    // gateway and flags are needed for the default route; rt_dst and
+    // rt_genmask remain 0.0.0.0.
     const route = new Uint8Array(120);
     const routeView = new DataView(route.buffer);
     writeSockaddrIpv4(route, 8, "0.0.0.0");
@@ -359,7 +369,7 @@ try {
 
 
 try {
-  configureQemuNetwork();
+  await configureQemuNetwork();
   console.log("network: eth0 10.0.2.15/24 via 10.0.2.2");
   const response = await fetch("http://example.com");
   console.log(`fetch example.com: HTTP ${response.status}, ${response.headers.get("content-type")}`);

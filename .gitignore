@@ -5,11 +5,17 @@
 
 
 # Downloaded archives and the files
-# extracted from them. scripts/fetch.sh
+# extracted from them, per guest
+# architecture. scripts/fetch.sh
 # re-fetches anything missing and
 # verifies the pinned SHA-256.
 /downloads/
 /kernel/
+/native/*/bin/bun
+/native/*/lib/modules/
+
+# Where fetches put Bun and the modules
+# before native/<arch>/ existed.
 /initramfs/bin/bun
 /initramfs/lib/modules/
 

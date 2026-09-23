@@ -1,0 +1,70 @@
+#!/usr/bin/expect -f
+# Boots vda.img with `node ./index.js -r --arch <arch>` and drives the serial
+# console: the REPL, the Buninu shell, eth0, PID 1, a tmpfs mount, a fetch from
+# inside the guest and poweroff. Each step waits for the output it expects, so
+# a hang or a wrong answer fails with a message instead of racing ahead.
+#
+# Usage: boot-test.exp <checkout> x86_64|aarch64 [boot timeout in seconds]
+
+set checkout [lindex $argv 0]
+set arch [lindex $argv 1]
+set boot_timeout [expr {[llength $argv] > 2 ? [lindex $argv 2] : 900}]
+switch -- $arch {
+    x86_64 { set js_arch x64 }
+    aarch64 { set js_arch arm64 }
+    default {
+        puts "usage: boot-test.exp <checkout> x86_64|aarch64 \[boot timeout\]"
+        exit 2
+    }
+}
+
+proc fail {message} {
+    puts "\n### FAIL: $message"
+    exit 1
+}
+
+# Sends one line to the guest, then waits for a regular expression in the
+# output. The patterns match what the command prints, not its echo.
+proc step {what line pattern} {
+    send -- "$line\r"
+    expect {
+        -re $pattern { puts "\n### ok: $what" }
+        timeout { fail "$what: no match for /$pattern/ within $::timeout s" }
+        eof { fail "$what: QEMU exited" }
+    }
+}
+
+cd $checkout
+set start [clock seconds]
+spawn node ./index.js -r --arch $arch
+
+set timeout $boot_timeout
+expect {
+    "bun-repl>" { puts "\n### ok: REPL after [expr {[clock seconds] - $start}] s" }
+    "Kernel panic" { fail "kernel panic before the REPL" }
+    timeout { fail "no REPL within $boot_timeout s" }
+    eof { fail "QEMU exited before the REPL" }
+}
+
+# bunmsh switches bracketed paste off (ESC[?2004l) before a command's output
+# and Bun colours the numbers it prints, so a line of output can carry escape
+# sequences around the text.
+set esc {(?:\x1b\[[0-9;?]*[a-zA-Z])*}
+
+set timeout 180
+step "process.arch is $js_arch" "process.arch" "'$js_arch'"
+step "Buninu shell" "start()" {\$ }
+step "uname reports $arch" "uname -a" "Linux \\(none\\) \[^\r\n\]* $arch"
+step "eth0 is 10.0.2.15" "ip -br addr" {eth0 +UP +10\.0\.2\.15/24}
+step "PID 1 is bun" "ps -eo pid,args" {\n +1 /bin/bun -e import}
+step "tmpfs mount" \
+    "mount -t tmpfs -o size=8M tmpfs /tmp/x --mkdir && echo hi > /tmp/x/f && cat /tmp/x/f && umount /tmp/x" \
+    "\n${esc}hi${esc}\r"
+step "fetch from the guest" \
+    {bun -e 'console.log((await fetch("http://example.com")).status)'} \
+    "\n${esc}200${esc}\r"
+step "poweroff" "poweroff" "reboot: Power down"
+expect {
+    eof { puts "\n### ok: QEMU exited, [expr {[clock seconds] - $start}] s in total" }
+    timeout { fail "QEMU still running after poweroff" }
+}

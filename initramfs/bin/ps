@@ -16,6 +16,9 @@ const ttyName = (number) => {
   const minor = (device & 0xff) | ((device >>> 12) & 0xfff00);
   if (major >= 136 && major <= 143) return `pts/${minor}`;
   if (major === 4 && minor < 64) return `tty${minor}`;
+  // Serial ports: the 8250 UARTs of a PC and the PL011 of QEMU's aarch64 virt.
+  if (major === 4) return `ttyS${minor - 64}`;
+  if (major === 204 && minor >= 64) return `ttyAMA${minor - 64}`;
   if (major === 5 && minor === 0) return "tty";
   return `${major}:${minor}`;
 };

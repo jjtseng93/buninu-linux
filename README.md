@@ -7,11 +7,13 @@
   * initramfs JavaScript components:
   * `/init.js` and other modules
   * initramfs Native components:
-  * Official `bun-linux-x64-musl` and its dependencies
-    + ld-musl-x86_64.so.1
-    + libc.musl-x86_64.so.1 (intentional copy)
+  * Official `bun-linux-x64-musl` (or `bun-linux-aarch64-musl`) and its dependencies
+    + ld-musl-x86_64.so.1 (ld-musl-aarch64.so.1)
+    + libc.musl-x86_64.so.1 (libc.musl-aarch64.so.1; intentional copy)
     + libgcc_s.so.1
     + libstdc++.so.6
+- Two guest architectures: x86_64 (PCs and QEMU q35, the default) and aarch64
+  (QEMU `virt`, native speed on Apple Silicon Macs); see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc)
 - The kernel runs `bun` as PID 1
   * Everything an init would normally do — mounting filesystems, loading modules, configuring the network, reaping children
   * happens in JavaScript through `bun:ffi`
@@ -49,6 +51,8 @@
 - This guide builds a bootable `buninu-linux-<version>.img`
 - The documented build environment is Debian 13 under Termux PRoot
 - A regular Debian installation works as well.
+- On macOS, or to keep the toolchain off the host, the build runs in Docker:
+  see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc)
 - For a source checkout, clone into the Termux home so native Termux and PRoot
   can share it; `~` differs between them, but the absolute path is the same.
 
@@ -145,6 +149,103 @@ There is no DHCP client yet; configure a detected wired interface with `ip` as
 described under [Basic configuration](#basic-configuration). Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
+
+### Build and run on macOS or an amd64 Linux PC
+
+The same `index.js` builds and boots Buninu Linux in QEMU on a Mac or an
+ordinary x86-64 Linux machine. `--arch` picks the guest:
+
+| host | `--arch x86_64` (default) | `--arch aarch64` (alias `arm64`) |
+| --- | --- | --- |
+| Apple Silicon Mac | q35, emulated (TCG) | `virt`, native (Hypervisor.framework) |
+| Intel Mac | q35, native (Hypervisor.framework) | `virt`, emulated (TCG) |
+| x86-64 Linux | q35, native (KVM) when `/dev/kvm` is usable | `virt`, emulated (TCG) |
+| arm64 Linux | q35, emulated (TCG) | `virt`, native (KVM) when `/dev/kvm` is usable |
+| Android Termux | q35, emulated (TCG) | `virt`, emulated (TCG) |
+
+`run-qemu.sh` chooses the accelerator itself; `ACCEL=tcg` forces emulation.
+
+#### macOS
+
+macOS has no native build toolchain (GNU cpio and tar, `fakeroot`, `parted`,
+PE-aware binutils), so on a Mac `index.js` always runs the fetch and build
+stages in a Debian 13 container built from [`Dockerfile`](Dockerfile), with
+the checkout bind-mounted. The image is built on first use and tagged with a
+hash of the Dockerfile. Only the run stage uses the Mac itself:
+
+```sh
+# Docker Desktop (running) for -f/-b, QEMU and its UEFI firmware for -r
+brew install qemu
+
+# Apple Silicon: the aarch64 guest boots at native speed
+bun ./index.js -fbr --arch arm64
+
+# The x86_64 guest works too, emulated
+bun ./index.js -fbr
+```
+
+The first boot line from `run-qemu.sh` names the guest, machine, accelerator
+and firmware it picked. A bare `-r` boots whichever architecture `vda.img`
+was last built for; `-br --arch arm64` is the aarch64 edit-and-boot loop.
+
+#### amd64 Linux
+
+On Debian or Ubuntu the build runs on the host exactly as in PRoot, and QEMU
+uses KVM for the x86_64 guest when the user can open `/dev/kvm`:
+
+```sh
+apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+apt install qemu-system-x86 ovmf
+bun ./index.js -fbr
+```
+
+Pass `--docker` to build in the same container as macOS instead of installing
+the build packages; the aarch64 guest additionally needs
+`binutils-aarch64-linux-gnu` for a host build and `qemu-system-arm
+qemu-efi-aarch64` to run.
+
+#### What differs on aarch64
+
+* The image is `vda/EFI/BOOT/BOOTAA64.EFI` on the same GPT disk, built from
+  Alpine's aarch64 packages and `bun-linux-aarch64-musl`.
+* The serial console is `ttyAMA0` (QEMU `virt`'s PL011) instead of `ttyS0`.
+* `--real` is x86_64 only: its module set is PC hardware.
+* `virt` has no framebuffer or PS/2 devices, so `bunterm` has nothing to draw on
+  yet; the serial REPL and the Buninu shell work as on x86_64.
+* `--export` writes `buninu-linux-<version>-aarch64.img`.
+* Before the kernel starts, Homebrew's aarch64 EDK2 prints a few
+  `Error: Image at … start failed` lines (its own drivers for hardware `virt`
+  does not have) and `ConvertPages: failed to find range …` (it cannot place
+  the UKI at the stub's preferred address and relocates it). Both are
+  harmless; `BdsDxe: starting Boot0001` follows and the boot continues.
+
+#### Testing on a Linux host in Docker
+
+`test/host/host-test.sh` checks the Linux-host path from any machine with
+Docker: it starts a fresh Debian 13 container of the chosen CPU with the
+build packages above and QEMU, clones the committed `HEAD` of this checkout,
+builds both guests with that toolchain (not `--docker`) and boots each one,
+driving the serial console through `test/host/boot-test.exp`:
+
+```sh
+test/host/host-test.sh arm64     # a Linux arm64 host (native on Apple Silicon)
+test/host/host-test.sh amd64     # a Linux x86-64 host (emulated there)
+```
+
+Every step — REPL, `start()`, `uname`, eth0, PID 1, a tmpfs mount, a fetch
+from the guest, `poweroff` — waits for its expected output, and the run ends
+with `### PASS` and exit status 0 or `### FAIL` and 1. Uncommitted changes to
+the project are not tested; commit first. `GUESTS=aarch64` limits the guests,
+`BUILD_FLAGS=--linux-lts` adds build flags, and `downloads/` is used read-only
+as the download cache. Docker Desktop exposes no `/dev/kvm`, so there both
+guests run under TCG; on a Linux host with KVM the script passes it through
+and the matching guest boots with `accel=kvm`. On macOS the same
+`boot-test.exp` also drives a local boot: `expect test/host/boot-test.exp
+"$PWD" aarch64` after `bun ./index.js -b --arch arm64`.
+
+`ALPINE_MIRROR` swaps the Alpine CDN for a mirror, e.g.
+`ALPINE_MIRROR=https://mirrors.edge.kernel.org/alpine`; every download is still
+checked against its pinned SHA-256.
 
 ## Using Buninu Linux
 
@@ -536,10 +637,13 @@ it too). Its physical-image stages run as fetch → build:
 | --- | --- | --- |
 | `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh` | first clone, or after bumping a pinned version |
 | `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
+| `--arch ARCH` | selects `x86_64` (default) or `aarch64` for every stage | building the Apple Silicon / QEMU `virt` guest |
+| `--docker` | `-f`/`-b` inside the container from `Dockerfile` (always on macOS) | no Debian toolchain on the host |
 
 `--export` is a post-build option: after `-b` finishes, it copies `vda.img` to
 the directory where the command was invoked as
-`buninu-linux-<version>.img`. It therefore requires `-b`/`--build` and is the
+`buninu-linux-<version>.img` (`buninu-linux-<version>-aarch64.img` for
+`--arch aarch64`). It therefore requires `-b`/`--build` and is the
 recommended way to retain an image produced through npx/bunx:
 
 ```sh
@@ -558,26 +662,32 @@ failing halfway. The shell scripts do the actual work and each still runs on
 its own.
 
 ```text
-index.js                  entry point: -f / -b / --export / --linux-lts / --real
+index.js                  entry point: -f / -b / -r / --arch / --docker / --export / --linux-lts / --real
+Dockerfile                the Debian 13 build toolchain for --docker (and macOS)
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with the hello-world EFI
+run-qemu.sh               [run]    QEMU q35 (x86_64) or virt (aarch64), KVM/HVF/TCG
+scripts/arch.sh           per-architecture pins, hashes and names, sourced by all of the above
 scripts/fetch.sh          hash-checked download helper, sourced by fetch-*.sh
 scripts/pack-initramfs.sh cpio archive with the device nodes
-hello/                    hello-world EFI: hello.c and build-hello.sh
-test/                     the retired C bootstrap and its build script
-initramfs/                init.js and the committed libraries; rest fetched
+hello/                    hello-world EFI: hello.c and build-hello.sh (x86_64 only)
+test/                     the retired C bootstrap and its build script (x86_64 only)
+test/host/                build-and-boot test on a fresh Linux amd64/arm64 host, in Docker
+initramfs/                init.js, commands, userspace: the same for every architecture
+native/<arch>/            musl and the GCC runtime (committed); bun and modules (fetched)
 ```
 
-The `--real` inputs are Alpine v3.24 `linux-lts-6.18.52-r0`, musl `1.2.6-r2`,
+The `--real` inputs are Alpine v3.24 `linux-lts-6.18.53-r0`, musl `1.2.6-r2`,
 `systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
-`linux-x64-musl-baseline`. There is no BusyBox and no userland beyond Bun
-itself.
+`linux-x64-musl-baseline`. The aarch64 guest uses the same versions from
+Alpine's aarch64 repository and Bun's `linux-aarch64-musl`. There is no BusyBox
+and no userland beyond Bun itself.
 
 Every step is idempotent and `-f` re-downloads nothing: `scripts/fetch.sh`
-treats each pinned SHA-256 as the cache key, so a file already in `downloads/`
-with the right hash is used as-is, and anything missing, truncated, stale or
+treats each pinned SHA-256 as the cache key, so a file already in
+`downloads/<arch>/` with the right hash is used as-is, and anything missing, truncated, stale or
 tampered with is fetched again and has to pass the same hash before a script
 extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
@@ -592,11 +702,11 @@ and copies the final `vda.img` to the invocation directory.
 
 | script | reads | writes |
 | --- | --- | --- |
-| `fetch-alpine.sh` | Alpine CDN | `kernel/vmlinuz-lts`, `kernel/linuxx64.efi.stub`, musl, and the selected network, storage, input, power and filesystem modules with trimmed module indexes |
-| `fetch-bun.sh` | GitHub, Alpine CDN | `initramfs/bin/bun`, `initramfs/lib/{libc.musl-x86_64.so.1,libstdc++.so.6,libgcc_s.so.1}` |
-| `scripts/pack-initramfs.sh` | `initramfs/` | `build/initramfs.cpio.gz` |
-| `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` |
-| `build-image.sh` | `vda/EFI/BOOT/BOOTX64.EFI` | `vda.img` |
+| `fetch-alpine.sh` | Alpine CDN | `kernel/<arch>/vmlinuz-lts`, `kernel/<arch>/linuxx64.efi.stub` (`linuxaa64.efi.stub`), `native/<arch>/lib/ld-musl-<arch>.so.1`, and the selected network, storage, input, power and filesystem modules under `native/<arch>/lib/modules/` with trimmed module indexes |
+| `fetch-bun.sh` | GitHub, Alpine CDN | `native/<arch>/bin/bun`, `native/<arch>/lib/{libc.musl-<arch>.so.1,libstdc++.so.6,libgcc_s.so.1}` |
+| `scripts/pack-initramfs.sh` | `initramfs/`, then `native/<arch>/` over it | `build/initramfs.cpio.gz` |
+| `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) |
+| `build-image.sh` | `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) | `vda.img` |
 
 `build-uki.sh` calls `scripts/pack-initramfs.sh` itself, so that one is rarely
 run directly.
@@ -659,7 +769,7 @@ The physical boot chain is firmware → the UKI stub → its embedded
 and, with the currently pinned kernel, embeds this complete command line:
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 Serial kernel logging is retained, while the final console makes
@@ -676,12 +786,14 @@ runner separately from the PRoot build dependencies:
 pkg install qemu-system-x86-64
 ```
 
-That package supplies OVMF at `$PREFIX/share/qemu/edk2-x86_64-code.fd`. Build
-without `--real`; this selects Alpine `linux-virt`, omits the physical-hardware
+That package supplies OVMF at `$PREFIX/share/qemu/edk2-x86_64-code.fd`, next to
+QEMU's own binary, which is where `run-qemu.sh` looks after `OVMF_FILE` and
+Debian's `/usr/share/OVMF/OVMF_CODE_4M.fd` (Homebrew's `share/qemu` is found
+the same way). Build without `--real`; this selects Alpine `linux-virt`, omits the physical-hardware
 module set, and puts `ttyS0` last so serial stdio owns `/dev/console`:
 
 ```text
-console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-virt rdinit=/bin/bun -- -e import('/init.js')
+console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-virt rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 Build and boot it with:
@@ -690,8 +802,7 @@ Build and boot it with:
 bun ./index.js -fb
 
 # When running inside PRoot with Termux's native qemu-system-x86_64,
-# expose both the native executable and its OVMF path:
-PREFIX=/data/data/com.termux/files/usr \
+# put it on PATH; its OVMF is found next to it:
 PATH="/data/data/com.termux/files/usr/bin:$PATH" \
 bun ./index.js -r
 ```
@@ -699,9 +810,11 @@ bun ./index.js -r
 If QEMU is installed inside the current Debian environment instead, plain
 `bun ./index.js -r` is sufficient; `run-qemu.sh` will use Debian's OVMF path.
 
-`bun ./index.js -r` runs `run-qemu.sh`, which boots `vda.img` on q35 under TCG
-with 512 MiB, a virtio disk, virtio-net user networking, no display, and COM1
-on stdio. Anything after `--` is appended to the QEMU command line. Ctrl-C
+`bun ./index.js -r` runs `run-qemu.sh`, which boots `vda.img` on q35 (the
+aarch64 image on `virt`) with 1 GiB, a virtio disk, virtio-net user
+networking, no display, and the first serial port on stdio. It uses KVM or
+Hypervisor.framework when the guest matches the host CPU and TCG otherwise;
+see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc). Anything after `--` is appended to the QEMU command line. Ctrl-C
 quits QEMU. Leaving the REPL does not end the session: `init.js` restarts it,
 because a PID 1 that exits panics the kernel.
 
@@ -717,7 +830,7 @@ For an even shorter initramfs loop, bypass the UKI and disk image:
 
 ```sh
 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512M \
-    -kernel kernel/vmlinuz-virt -initrd build/initramfs.cpio.gz \
+    -kernel kernel/x86_64/vmlinuz-virt -initrd build/initramfs.cpio.gz \
     -append "console=ttyS0,115200 panic=0 PATH=/bin rdinit=/bin/bun -- -e console.log(1+1)" \
     -nic user,model=virtio-net-pci -display none -serial stdio -no-reboot
 ```
@@ -771,10 +884,11 @@ modules in `/lib`. `--help` uses `Bun.markdown.ansi` to render the Markdown
 manual with hyperlinks, and prints the page's absolute path at the end so it
 can be read or edited directly. The shared pieces are:
 
-* `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-x86_64.so.1`
+* `/lib/dlopen.js` — one `bun:ffi` binding to `/lib/libc.musl-<arch>.so.1`
   (`mount`, `umount2`, `ioctl`, `socket`, `sync`, `reboot`, `syscall`, …), `errno`/`strerror`,
   a `SysError` class and the `showDocument()` helper behind every `--help`.
-  `init.js` keeps its own copy of the binding because it runs before `/proc`
+  `process.arch` picks the libc file name and the `finit_module` syscall
+  number, the only raw syscall the commands make. `init.js` keeps its own copy of the binding because it runs before `/proc`
   exists and cannot import anything.
 * `/lib/modprobe.js` — `modprobe(name)` resolves `modules.alias` and
   `modules.dep` under `/lib/modules/<release>/` and calls `finit_module`
@@ -796,7 +910,7 @@ The default `--real` image embeds this kernel command line (shown for the
 currently pinned LTS release):
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.52-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 The physical display (`tty0`) is the final console and therefore owns PID 1's
@@ -863,8 +977,8 @@ and the available `cfg` getters again. The loader and libc paths
 contain identical bytes but are deliberately distinct inodes:
 
 ```text
-/lib/ld-musl-x86_64.so.1
-/lib/libc.musl-x86_64.so.1
+/lib/ld-musl-x86_64.so.1      /lib/ld-musl-aarch64.so.1
+/lib/libc.musl-x86_64.so.1    /lib/libc.musl-aarch64.so.1
 ```
 
 Calling `dlopen` on the same musl inode that is already acting as Bun's loader
@@ -959,15 +1073,16 @@ MIT License; see [LICENSE](LICENSE). The Buninu userspace under
 `initramfs/buninu/` is also MIT (`initramfs/buninu/LICENSE`) and carries its
 own third-party notices, listed at the end of [NOTICE.md](NOTICE.md).
 
-The repository also commits four third-party platform binaries under
-`initramfs/lib/`, and the built image redistributes several more. Each stays
+The repository also commits four third-party platform binaries per guest
+architecture under `native/<arch>/lib/`, and the built image redistributes
+several more. Each stays
 under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
 
 ### Bundled component licenses
 
 | Component | License | Where |
 |---|---|---|
-| musl (`ld-musl-x86_64.so.1`, `libc.musl-x86_64.so.1`) | MIT | committed |
+| musl (`ld-musl-x86_64.so.1`, `libc.musl-x86_64.so.1`, and the `aarch64` pair) | MIT | committed |
 | GCC runtime (`libgcc_s.so.1`, `libstdc++.so.6`) | GPL-3.0-or-later with the GCC Runtime Library Exception | committed |
 | Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
