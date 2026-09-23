@@ -53,6 +53,7 @@ export class ImageStore {
     this.term = term;
     this.renderer = renderer;
     this.images = new Map();      // image id → Skia Image
+    this.imageSources = new Map(); // image id → parser image object
     this.placements = new Map();  // placement key → placement
     this.counter = 0;
     this.coveredKey = "";
@@ -70,14 +71,26 @@ export class ImageStore {
     if (graphic.kind !== "placement") return "";
     const { control, image } = graphic;
     let decoded = this.images.get(image.id);
-    if (!decoded) {
+    const replacesImage = decoded && this.imageSources.get(image.id) !== image;
+    if (!decoded || replacesImage) {
       try {
-        decoded = await decodeImage(this.CanvasKit, image);
+        const replacement = await decodeImage(this.CanvasKit, image);
+        if (replacesImage) {
+          // Kitty requires retransmitting a non-zero image id to delete the
+          // old image and all its placements.  Screen-streaming clients such
+          // as casty deliberately reuse one id for every frame.
+          for (const placement of [...this.placements.values()]) {
+            if (placement.imageId === image.id) this.dispose(placement);
+          }
+          decoded.delete();
+        }
+        decoded = replacement;
       } catch (error) {
         graphic.responseMessage = `EBADPNG:${error.message}`;
         return "";
       }
       this.images.set(image.id, decoded);
+      this.imageSources.set(image.id, image);
     }
     const { cellWidth, cellHeight } = this.renderer;
     const buffer = this.term.buffer.active;
@@ -169,6 +182,7 @@ export class ImageStore {
         if (!used.has(id)) {
           image.delete();
           this.images.delete(id);
+          this.imageSources.delete(id);
         }
       }
     }
@@ -221,5 +235,6 @@ export class ImageStore {
     this.placements.clear();
     for (const image of this.images.values()) image.delete();
     this.images.clear();
+    this.imageSources.clear();
   }
 }
