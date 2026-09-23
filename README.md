@@ -79,9 +79,11 @@ apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parte
 mkdir -p /data/data/com.termux/files/home/buninu-build
 cd /data/data/com.termux/files/home/buninu-build
 
-$HOME/.bun/bin/bun x buninu-linux --version
+export PATH=$HOME/.bun/bin:$PATH
 
-$HOME/.bun/bin/bun x buninu-linux -fb --real --export
+bun x buninu-linux --version
+
+bun x buninu-linux -fb --real --export
 ```
 
 `--export` copies the completed `vda.img` out of bunx's package directory and
