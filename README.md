@@ -160,6 +160,7 @@ ordinary x86-64 Linux machine. `--arch` picks the guest:
 | Apple Silicon Mac | q35, emulated (TCG) | `virt`, native (Hypervisor.framework) |
 | Intel Mac | q35, native (Hypervisor.framework) | `virt`, emulated (TCG) |
 | x86-64 Linux | q35, native (KVM) when `/dev/kvm` is usable | `virt`, emulated (TCG) |
+| arm64 Linux | q35, emulated (TCG) | `virt`, native (KVM) when `/dev/kvm` is usable |
 | Android Termux | q35, emulated (TCG) | `virt`, emulated (TCG) |
 
 `run-qemu.sh` chooses the accelerator itself; `ACCEL=tcg` forces emulation.
@@ -217,6 +218,30 @@ qemu-efi-aarch64` to run.
   does not have) and `ConvertPages: failed to find range …` (it cannot place
   the UKI at the stub's preferred address and relocates it). Both are
   harmless; `BdsDxe: starting Boot0001` follows and the boot continues.
+
+#### Testing on a Linux host in Docker
+
+`test/host/host-test.sh` checks the Linux-host path from any machine with
+Docker: it starts a fresh Debian 13 container of the chosen CPU with the
+build packages above and QEMU, clones the committed `HEAD` of this checkout,
+builds both guests with that toolchain (not `--docker`) and boots each one,
+driving the serial console through `test/host/boot-test.exp`:
+
+```sh
+test/host/host-test.sh arm64     # a Linux arm64 host (native on Apple Silicon)
+test/host/host-test.sh amd64     # a Linux x86-64 host (emulated there)
+```
+
+Every step — REPL, `start()`, `uname`, eth0, PID 1, a tmpfs mount, a fetch
+from the guest, `poweroff` — waits for its expected output, and the run ends
+with `### PASS` and exit status 0 or `### FAIL` and 1. Uncommitted changes to
+the project are not tested; commit first. `GUESTS=aarch64` limits the guests,
+`BUILD_FLAGS=--linux-lts` adds build flags, and `downloads/` is used read-only
+as the download cache. Docker Desktop exposes no `/dev/kvm`, so there both
+guests run under TCG; on a Linux host with KVM the script passes it through
+and the matching guest boots with `accel=kvm`. On macOS the same
+`boot-test.exp` also drives a local boot: `expect test/host/boot-test.exp
+"$PWD" aarch64` after `bun ./index.js -b --arch arm64`.
 
 `ALPINE_MIRROR` swaps the Alpine CDN for a mirror, e.g.
 `ALPINE_MIRROR=https://mirrors.edge.kernel.org/alpine`; every download is still
@@ -649,6 +674,7 @@ scripts/fetch.sh          hash-checked download helper, sourced by fetch-*.sh
 scripts/pack-initramfs.sh cpio archive with the device nodes
 hello/                    hello-world EFI: hello.c and build-hello.sh (x86_64 only)
 test/                     the retired C bootstrap and its build script (x86_64 only)
+test/host/                build-and-boot test on a fresh Linux amd64/arm64 host, in Docker
 initramfs/                init.js, commands, userspace: the same for every architecture
 native/<arch>/            musl and the GCC runtime (committed); bun and modules (fetched)
 ```
