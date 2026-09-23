@@ -20,7 +20,7 @@
   * There is no BusyBox and no C bootstrap.
 
 - Homepage: <https://buninu.org>
-- Souce: [github.com/jjtseng93/buninu-linux](https://github.com/jjtseng93/buninu-linux)
+- Source: [github.com/jjtseng93/buninu-linux](https://github.com/jjtseng93/buninu-linux)
 - Buninu userspace source: [github.com/jjtseng93/buninu](https://github.com/jjtseng93/buninu)
   + **BUNinu Is Not Unix** 🐮
   + **幫你牛** 🐂 ・ **Bunに入魂** 🔥
