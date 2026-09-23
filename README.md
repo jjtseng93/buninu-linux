@@ -41,9 +41,9 @@
   * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
   * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
     + Also has mouse click, wheel, and cursor drawing
-    + Browser works: @sanohiro/casty in chroot debian
-    + (Use at your own risk)
-    + See [Commands inside `/bin`](#commands-inside-bin) for usage instructions
+    + Simplified browser works: @sanohiro/casty in chroot debian
+    + (Use at your own risk: We haven't fully examined its code)
+    + See [Commands inside `/bin`](#commands-inside-bin) for browser usage instructions
 
 ---
 
@@ -505,7 +505,8 @@ bun x bunproot --git --readme | stripansi | jmi
 
 
 # Download and enter an x64 Debian rootfs
-# Make sure you have run bunterm already
+# Make sure you have run this already:
+#   bunterm --font-size 13
 bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
 cd js-udocker
 bun udocker.js pull --platform=linux/amd64 debian:13
