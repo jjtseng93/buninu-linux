@@ -430,6 +430,10 @@ Type bunterm in bunmsh: Graphical Terminal
   Supports Kitty Graphics Protocol
 `)
 
+  const classic_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  
+  const buninu_path = "/buninu/.local/bin:/buninu/.bun/bin:/buninu/bin"
+
   const entry = `/buninu/bin/init.js`;
   console.log(`buninu: Starting ${entry} --local`);
   const shell = Bun.spawnSync([
@@ -437,7 +441,8 @@ Type bunterm in bunmsh: Graphical Terminal
   ], {
     env: {
       ...process.env,
-      PATH:"/bin:/sbin:/usr/bin:/usr/sbin:/buninu/.bun/bin:/buninu/bin",
+      PATH:  classic_path + ":" + 
+             buninu_path,
       HOME:"/buninu"
     },
     stdin: "inherit",
