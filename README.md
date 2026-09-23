@@ -12,8 +12,8 @@
     + libc.musl-x86_64.so.1 (libc.musl-aarch64.so.1; intentional copy)
     + libgcc_s.so.1
     + libstdc++.so.6
-- Two guest architectures: x86_64 (PCs and QEMU q35, the default) and aarch64
-  (QEMU `virt`, native speed on Apple Silicon Macs); see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc)
+- Boots on real x86-64 UEFI hardware; QEMU system testing supports both x86_64
+  and aarch64 guests.
 - The kernel runs `bun` as PID 1
   * Everything an init would normally do — mounting filesystems, loading modules, configuring the network, reaping children
   * happens in JavaScript through `bun:ffi`
@@ -48,11 +48,14 @@
 
 ## Quick start
 
+> [!IMPORTANT]
+> This section builds an image for real x86-64 UEFI hardware. To build and
+> test either an x86_64 or aarch64 guest with `qemu-system` instead, see
+> [Build and test with QEMU on macOS or Linux](#build-and-test-with-qemu-on-macos-or-linux).
+
 - This guide builds a bootable `buninu-linux-<version>.img`
 - The documented build environment is Debian 13 under Termux PRoot
 - A regular Debian installation works as well.
-- On macOS, or to keep the toolchain off the host, the build runs in Docker:
-  see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc)
 - For a source checkout, clone into the Termux home so native Termux and PRoot
   can share it; `~` differs between them, but the absolute path is the same.
 
@@ -152,34 +155,40 @@ described under [Basic configuration](#basic-configuration). Run `poweroff` for 
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
-### Build and run on macOS or an amd64 Linux PC
+### Build and test with QEMU on macOS or Linux
 
-The same `index.js` builds and boots Buninu Linux in QEMU on a Mac or an
-ordinary x86-64 Linux machine. `--arch` picks the guest:
+> [!IMPORTANT]
+> This section covers guests built and run with `qemu-system` only. To build
+> an image for real x86-64 UEFI hardware, follow [Quick start](#quick-start)
+> above and use `-fb --real --export`.
+
+The same `index.js` builds and boots Buninu Linux in QEMU on a Mac or Linux
+host. `--arch` picks the guest:
 
 | host | `--arch x86_64` (default) | `--arch aarch64` (alias `arm64`) |
 | --- | --- | --- |
-| Apple Silicon Mac | q35, emulated (TCG) | `virt`, native (Hypervisor.framework) |
-| Intel Mac | q35, native (Hypervisor.framework) | `virt`, emulated (TCG) |
-| x86-64 Linux | q35, native (KVM) when `/dev/kvm` is usable | `virt`, emulated (TCG) |
-| arm64 Linux | q35, emulated (TCG) | `virt`, native (KVM) when `/dev/kvm` is usable |
-| Android Termux | q35, emulated (TCG) | `virt`, emulated (TCG) |
+| Apple Silicon Mac | q35, emulated (TCG) | `virt`, hardware-accelerated (Hypervisor.framework) |
+| Intel Mac | q35, hardware-accelerated (Hypervisor.framework) | `virt`, emulated (TCG) |
+| x86-64 Linux | q35, hardware-accelerated (KVM) when `/dev/kvm` is usable | `virt`, emulated (TCG) |
+| arm64 Linux | q35, emulated (TCG) | `virt`, hardware-accelerated (KVM) when `/dev/kvm` is usable |
+| Android Termux | q35, emulated (TCG) | `virt`, KVM when `/dev/kvm` is usable, otherwise TCG |
 
 `run-qemu.sh` chooses the accelerator itself; `ACCEL=tcg` forces emulation.
 
 #### macOS
 
-macOS has no native build toolchain (GNU cpio and tar, `fakeroot`, `parted`,
-PE-aware binutils), so on a Mac `index.js` always runs the fetch and build
-stages in a Debian 13 container built from [`Dockerfile`](Dockerfile), with
-the checkout bind-mounted. The image is built on first use and tagged with a
-hash of the Dockerfile. Only the run stage uses the Mac itself:
+This project does not currently support a native macOS build toolchain (GNU
+cpio and tar, `fakeroot`, `parted`, PE-aware binutils), so on a Mac `index.js`
+always runs the fetch and build stages in a Debian 13 container built from
+[`Dockerfile`](Dockerfile), with the checkout bind-mounted. The image is built
+on first use and tagged with a hash of the Dockerfile. Only the run stage uses
+the Mac itself:
 
 ```sh
 # Docker Desktop (running) for -f/-b, QEMU and its UEFI firmware for -r
 brew install qemu
 
-# Apple Silicon: the aarch64 guest boots at native speed
+# Apple Silicon: Hypervisor.framework accelerates the aarch64 guest
 bun ./index.js -fbr --arch arm64
 
 # The x86_64 guest works too, emulated
@@ -212,8 +221,9 @@ qemu-efi-aarch64` to run.
   Alpine's aarch64 packages and `bun-linux-aarch64-musl`.
 * The serial console is `ttyAMA0` (QEMU `virt`'s PL011) instead of `ttyS0`.
 * `--real` is x86_64 only: its module set is PC hardware.
-* `virt` has no framebuffer or PS/2 devices, so `bunterm` has nothing to draw on
-  yet; the serial REPL and the Buninu shell work as on x86_64.
+* The current aarch64 QEMU configuration supplies no framebuffer or PS/2
+  devices, so `bunterm` has nothing to draw on yet; the serial REPL and the
+  Buninu shell work as on x86_64.
 * `--export` writes `buninu-linux-<version>-aarch64.img`.
 * Before the kernel starts, Homebrew's aarch64 EDK2 prints a few
   `Error: Image at … start failed` lines (its own drivers for hardware `virt`
@@ -315,6 +325,13 @@ bun hlw.js
 
 If `Enter` is not recognized in a particular terminal, try `Ctrl-J` or
 `Ctrl-M`.
+
+#### jsmdcui
+- `jsmdcui` is the same editor, but by default executes markdown files as interactive Apps
+- Be careful not to run markdown files from strangers
+  * Otherwise it can run any command on your PC
+- `jsmdcui --cdp-maze` runs a self-solving maze game
+  * Run `bunterm` first to show its Emojis
 
 ### Panes, terminals, and tabs
 
@@ -475,6 +492,12 @@ bun x bunproot --git clone https://github.com/jjtseng93/bunproot
 bunterm
 bun x bunproot --git --readme | stripansi | jmi
 
+
+
+# Download and enter an x64 Debian rootfs
+bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
+cd js-udocker
+bun udocker.js pull --platform=
 
 
 # Download and enter an x64 Alpine minirootfs
@@ -639,7 +662,7 @@ it too). Its physical-image stages run as fetch → build:
 | --- | --- | --- |
 | `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh` | first clone, or after bumping a pinned version |
 | `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
-| `--arch ARCH` | selects `x86_64` (default) or `aarch64` for every stage | building the Apple Silicon / QEMU `virt` guest |
+| `--arch ARCH` | explicitly selects `x86_64` (default for fetch/build) or `aarch64`; a bare `-r` detects the last built UKI | building or running a particular guest architecture |
 | `--docker` | `-f`/`-b` inside the container from `Dockerfile` (always on macOS) | no Debian toolchain on the host |
 
 `--export` is a post-build option: after `-b` finishes, it copies `vda.img` to
@@ -685,7 +708,8 @@ The `--real` inputs are Alpine v3.24 `linux-lts-6.18.53-r0`, musl `1.2.6-r2`,
 `systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
 `linux-x64-musl-baseline`. The aarch64 guest uses the same versions from
 Alpine's aarch64 repository and Bun's `linux-aarch64-musl`. There is no BusyBox
-and no userland beyond Bun itself.
+or conventional native userland; Bun and the JavaScript-based Buninu userspace
+provide the commands.
 
 Every step is idempotent and `-f` re-downloads nothing: `scripts/fetch.sh`
 treats each pinned SHA-256 as the cache key, so a file already in
@@ -704,7 +728,7 @@ and copies the final `vda.img` to the invocation directory.
 
 | script | reads | writes |
 | --- | --- | --- |
-| `fetch-alpine.sh` | Alpine CDN | `kernel/<arch>/vmlinuz-lts`, `kernel/<arch>/linuxx64.efi.stub` (`linuxaa64.efi.stub`), `native/<arch>/lib/ld-musl-<arch>.so.1`, and the selected network, storage, input, power and filesystem modules under `native/<arch>/lib/modules/` with trimmed module indexes |
+| `fetch-alpine.sh` | Alpine CDN | `kernel/<arch>/vmlinuz-<flavor>`, `kernel/<arch>/linuxx64.efi.stub` (`linuxaa64.efi.stub`), `native/<arch>/lib/ld-musl-<arch>.so.1`, and the selected network, storage, input, power and filesystem modules under `native/<arch>/lib/modules/` with trimmed module indexes |
 | `fetch-bun.sh` | GitHub, Alpine CDN | `native/<arch>/bin/bun`, `native/<arch>/lib/{libc.musl-<arch>.so.1,libstdc++.so.6,libgcc_s.so.1}` |
 | `scripts/pack-initramfs.sh` | `initramfs/`, then `native/<arch>/` over it | `build/initramfs.cpio.gz` |
 | `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) |
@@ -726,8 +750,11 @@ boot.
 
 #### UKI layout
 
-`build-uki.sh` appends sections to systemd's `linuxx64.efi.stub` with
-`objcopy`, at hand-picked VMAs because `objcopy` will not lay them out for you:
+`build-uki.sh` appends sections to systemd's architecture-specific EFI stub
+with `objcopy`, at calculated VMAs because `objcopy` will not lay them out for
+you. The following sizes and offsets describe the current x86_64 `--real`
+image; aarch64 uses `linuxaa64.efi.stub`, whose larger stub moves `.osrel` and
+`.cmdline`, and every build measures the inputs to prevent overlap:
 
 ##### UKI sections
 
@@ -736,11 +763,12 @@ boot.
 | `.text` | +0x0 | the stub itself | 66 KB |
 | `.osrel` | +0x20000 | `build/os-release` | 78 B |
 | `.cmdline` | +0x30000 | `build/cmdline` | 136 B |
-| `.linux` | +0x2000000 | `kernel/vmlinuz-lts` | 14.5 MB |
+| `.linux` | +0x2000000 | `kernel/x86_64/vmlinuz-lts` | 14.5 MB |
 | `.initrd` | +0x3000000 | `build/initramfs.cpio.gz` | 44.6 MB |
 
-The current `--real` result is a single 59.3 MB PE32+ file holding kernel, initramfs and command
-line.
+The current x86_64 `--real` result is a single 59.3 MB PE32+ file holding the
+kernel, initramfs and command line. Other architectures, flavors and source
+revisions can produce different sizes.
 
 #### Disk layout
 
@@ -755,13 +783,15 @@ rejects the volume.
 LBA 0              protective MBR
 LBA 1..33          primary GPT
 LBA 2048..262110   ESP, FAT32 "EFIBOOT", type GUID C12A7328-F81F-11D2-BA4B-00A0C93EC93B
-                     /EFI/BOOT/BOOTX64.EFI     the UKI
+                     /EFI/BOOT/BOOTX64.EFI     x86_64 UKI
+                     /EFI/BOOT/BOOTAA64.EFI    aarch64 UKI (in an aarch64 image)
 LBA 262111..       backup GPT
 ```
 
 128 MiB sparse, 1 MiB-aligned, with 34 sectors reserved at the end for the
-backup GPT. `EFI/BOOT/BOOTX64.EFI` is the removable-media fallback path, so the
-firmware runs it without any NVRAM boot entry.
+backup GPT. `EFI/BOOT/BOOTX64.EFI` and `EFI/BOOT/BOOTAA64.EFI` are the
+architecture-specific removable-media fallback paths, so matching firmware
+runs the one present in the image without any NVRAM boot entry.
 
 #### Real-hardware boot details
 
@@ -816,7 +846,7 @@ If QEMU is installed inside the current Debian environment instead, plain
 aarch64 image on `virt`) with 1 GiB, a virtio disk, virtio-net user
 networking, no display, and the first serial port on stdio. It uses KVM or
 Hypervisor.framework when the guest matches the host CPU and TCG otherwise;
-see [Build and run on macOS or an amd64 Linux PC](#build-and-run-on-macos-or-an-amd64-linux-pc). Anything after `--` is appended to the QEMU command line. Ctrl-C
+see [Build and test with QEMU on macOS or Linux](#build-and-test-with-qemu-on-macos-or-linux). Anything after `--` is appended to the QEMU command line. Ctrl-C
 quits QEMU. Leaving the REPL does not end the session: `init.js` restarts it,
 because a PID 1 that exits panics the kernel.
 
@@ -1027,6 +1057,11 @@ for the userspace session.
     + [Or build from a source checkout](#or-build-from-a-source-checkout)
     + [Write the image to a USB drive](#write-the-image-to-a-usb-drive)
     + [Booting from the USB drive](#booting-from-the-usb-drive)
+  * [Build and test with QEMU on macOS or Linux](#build-and-test-with-qemu-on-macos-or-linux)
+    + [macOS](#macos)
+    + [amd64 Linux](#amd64-linux)
+    + [What differs on aarch64](#what-differs-on-aarch64)
+    + [Testing on a Linux host in Docker](#testing-on-a-linux-host-in-docker)
 - [Using Buninu Linux](#using-buninu-linux)
   * [Basic configuration](#basic-configuration)
   * [Editor quick start](#editor-quick-start)
@@ -1103,4 +1138,5 @@ lets them ship next to MIT-licensed code, so nothing here changes Buninu
 Linux's own terms — but if your organisation screens for GPL, these are the
 components it will find. [NOTICE.md](NOTICE.md) records the
 exact Alpine build of every component, the pinned aports commit that is its
-Corresponding Source, and SHA-256 sums for every binary.
+Corresponding Source, package SHA-256 sums and selected extracted-file
+SHA-256 sums.
