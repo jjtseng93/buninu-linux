@@ -19,6 +19,7 @@
   * happens in JavaScript through `bun:ffi`
   * There is no BusyBox and no C bootstrap.
 
+- Homepage: <https://buninu.org>
 - Souce: [github.com/jjtseng93/buninu-linux](https://github.com/jjtseng93/buninu-linux)
 - Buninu userspace source: [github.com/jjtseng93/buninu](https://github.com/jjtseng93/buninu)
   + **BUNinu Is Not Unix** 🐮
@@ -121,6 +122,10 @@ this overwrites it completely.
 ```sh
 sudo dd if='buninu-linux-<version>.img' of=/dev/sdX bs=4M conv=fsync status=progress
 ```
+
+Alternatively, copy the exported `.img` file to a
+[Ventoy](https://www.ventoy.net/en/index.html) USB drive and select it from
+Ventoy's boot menu.
 
 #### Booting from the USB drive
 
