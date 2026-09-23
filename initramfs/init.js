@@ -422,7 +422,9 @@ const launchBunmsh = () => {
 
 
 
-const launchBuninu = () => {
+let replServer = null;
+
+const launchBuninu = async () => {
 
   console.log(`
 Type bunterm in bunmsh: Graphical Terminal
@@ -436,21 +438,30 @@ Type bunterm in bunmsh: Graphical Terminal
 
   const entry = `/buninu/bin/init.js`;
   console.log(`buninu: Starting ${entry} --local`);
-  const shell = Bun.spawnSync([
-    "/bin/bun", entry, "--local"
-  ], {
-    env: {
-      ...process.env,
-      PATH:  classic_path + ":" + 
-             buninu_path,
-      HOME:"/buninu"
-    },
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  console.log(`buninu exited with status ${shell.exitCode}; returning to Bun REPL.`);
-  return shell.exitCode;
+  replServer?.pause();
+  try {
+    const shell = Bun.spawn([
+      "/bin/bun", entry, "--local"
+    ], {
+      env: {
+        ...process.env,
+        PATH:  classic_path + ":" +
+               buninu_path,
+        HOME:"/buninu"
+      },
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const exitCode = await shell.exited;
+    console.log(`buninu exited with status ${exitCode}; returning to Bun REPL.`);
+    return exitCode;
+  } finally {
+    // The child inherits the console directly. Keep the REPL from consuming
+    // the same input while it runs, but leave PID 1's event loop alive so its
+    // SIGCHLD handler can reap orphaned grandchildren such as Chromium.
+    replServer?.resume();
+  }
   
 }
 
@@ -566,7 +577,7 @@ Type start() to run buninu --local`);
 showWelcome();
 
 const startRepl = () => {
-  const server = repl.start({
+  const server = replServer = repl.start({
     prompt: "bun-repl> ",
     input: process.stdin,
     output: process.stdout,
