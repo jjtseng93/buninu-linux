@@ -507,7 +507,22 @@ cd js-udocker
 bun udocker.js pull --platform=linux/amd64 debian:13
 bun udocker.js create --name db debian:13
 cd ~/.udocker/containers/db/ROOT
-chroot .
+chroot . /bin/bash
+apt update
+apt install curl unzip chromium
+curl -fsSL https://bun.sh/install | bash
+bun x bunmsh
+cp $(which bun) /bin/node
+# We haven't fully reviewed
+# @sanohiro/casty's safety
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+bun i -g @sanohiro/casty
+casty https://buninu.org
+
 
 
 # Download and enter an x64 Alpine minirootfs
