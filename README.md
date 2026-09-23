@@ -512,7 +512,7 @@ bun udocker.js create --name db debian:13
 cd ~/.udocker/containers/db/ROOT
 chroot . /bin/bash
 apt update
-apt install curl unzip chromium
+apt install curl unzip chromium fonts-noto-cjk fonts-noto-color-emoji
 curl -fsSL https://bun.sh/install | bash
 bun x bunmsh
 cp $(which bun) /bin/node
