@@ -41,6 +41,9 @@
   * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
   * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
     + Also has mouse click, wheel, and cursor drawing
+    + Browser works: @sanohiro/casty in chroot debian
+    + (Use at your own risk)
+    + See [Commands inside `/bin`](#commands-inside-bin) for usage instructions
 
 ---
 
@@ -515,6 +518,11 @@ bun x bunmsh
 cp $(which bun) /bin/node
 # We haven't fully reviewed
 # @sanohiro/casty's safety
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
+# !!!Use at your own risk!!!
 # !!!Use at your own risk!!!
 # !!!Use at your own risk!!!
 # !!!Use at your own risk!!!
