@@ -33,12 +33,14 @@
 - Still in the early stages
 - [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`:
   * Bun reaches its interactive REPL
-  * start() starts the Buninu userspace shell
+  * `start` starts the Buninu userspace shell
   * `cfg.disk` + shell `mount` mounts local disks
   * `cfg.net` loads common wired NIC and Android USB-tethering drivers
   * Android phone USB tethering over RNDIS has been tested successfully, allowing Buninu Linux to access the Internet through an Android phone
   * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
-  * The bundled `jmi` editor, jsmdcui editor/terminal multitasking, and local JavaScript execution also work.
+  * The bundled `jmi` editor, jsmdcui App runtime, and local JavaScript execution also work.
+  * Multi-tasking with kernel VT or jsmdcui
+    + See [Multitasking modes](#multitasking-modes)
   * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
     + Also has mouse click, wheel, and cursor drawing
     + Simplified browser works: @sanohiro/casty in chroot debian
@@ -341,7 +343,29 @@ If `Enter` is not recognized in a particular terminal, try `Ctrl-J` or
 - `jsmdcui --cdp-maze` runs a self-solving maze game
   * Run `bunterm` first to show its Emojis
 
-### Panes, terminals, and tabs
+### Multitasking modes
+
+#### Multiple virtual consoles with bunterm
+
+Run a separate `bunterm` on each Linux virtual console. A numeric positional
+argument is a short form of the corresponding device, so `bunterm 2` means
+`bunterm /dev/tty2`:
+
+```sh
+bunterm 2
+bunterm 3 -s 20
+```
+
+When the named VT is not the active one, `bunterm` starts there as a detached
+session, switches the display to it, and immediately returns control to the
+calling shell. Switch among VTs with `Ctrl+Alt+F1` through `Ctrl+Alt+F12`, or
+move to the previous or next VT with `Alt+Left` and `Alt+Right`. Each VT keeps
+its own terminal session; an inactive bunterm continues processing its PTY but
+stops drawing until its VT becomes active again. Only one bunterm can control a
+given VT. If one is already in use, the error identifies its PID and suggests
+another VT number.
+
+#### Panes, terminals, and tabs with jsmdcui
 
 `jmi` and jsmdcui can keep editors and terminal sessions open together. Press
 `Ctrl-E`, type `term`, and press `Enter` to open the default Buninu shell in a
@@ -350,7 +374,7 @@ terminal pane. `term COMMAND` starts a specific command instead. Use `vsplit`,
 editor pane or tab; each command optionally accepts a filename. From an editor
 pane, `Ctrl-T` is the direct shortcut for a new empty tab.
 
-#### Pane and tab controls
+##### Pane and tab controls
 
 | Input | Result |
 | --- | --- |
@@ -1101,8 +1125,10 @@ for the userspace session.
   * [Basic configuration](#basic-configuration)
   * [Editor quick start](#editor-quick-start)
     + [jsmdcui](#jsmdcui)
-  * [Panes, terminals, and tabs](#panes-terminals-and-tabs)
-    + [Pane and tab controls](#pane-and-tab-controls)
+  * [Multitasking modes](#multitasking-modes)
+    + [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)
+    + [Panes, terminals, and tabs with jsmdcui](#panes-terminals-and-tabs-with-jsmdcui)
+      - [Pane and tab controls](#pane-and-tab-controls)
   * [Using Bun Modern Shell](#using-bun-modern-shell)
   * [Showing images](#showing-images)
 - [Commands inside /bin](#commands-inside-bin)

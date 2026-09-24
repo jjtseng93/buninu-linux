@@ -76,6 +76,8 @@ ${consoleDevice.path} is occupied
   Controlled by bunterm pid: ${pid}
 See --help or try another VT:
   bunterm ${number- -1}
+Switch between TTYs by Ctrl+Alt+F1-12
+  or Alt-Left / Alt-Right
 `);
     }
   } catch (error) {
