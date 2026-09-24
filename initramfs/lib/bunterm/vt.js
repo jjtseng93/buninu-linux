@@ -70,7 +70,13 @@ export const claimVirtualConsole = (consoleDevice) => {
         continue;
       }
       if (otherName !== name || !processHoldsDevice(pid, deviceId)) continue;
-      throw new Error(`${consoleDevice.path} appears to be controlled by bunterm pid ${pid}`);
+
+      throw new Error(`
+${consoleDevice.path} is occupied
+  Controlled by bunterm pid: ${pid}
+See --help or try another VT:
+  bunterm ${number- -1}
+`);
     }
   } catch (error) {
     try { setTaskName(previousName); } catch {}
