@@ -7,8 +7,9 @@ box drawing and kitty graphics protocol images — no X11, Wayland or GPU.
 
 ```sh
 bunterm                      # run /bin/sh on the console you are on
-bunterm /dev/tty1            # use virtual console 1 for graphics and keys
-bunterm --font-size 20
+bunterm 2                    # start a detached bunterm on /dev/tty2
+bunterm /dev/tty1            # the full virtual-console spelling also works
+bunterm -s 20                # short for --font-size 20
 bunterm -e bun /buninu/apps/jsmdcui/src/index.js --demo
 bunterm --no-mouse          # keyboard only
 bunterm -h
@@ -19,13 +20,21 @@ The program's `TERM` is `xterm-256color`, `COLORTERM=truecolor`,
 Markdown images without `--kitty`). When it exits, the console returns to
 text mode and `bunterm` exits with its status.
 
+Every live session has a canonical `/bin/bunterm /dev/ttyN ...` command line.
+When no console is named, the currently active VT is used in the foreground.
+Naming a different VT starts bunterm as a detached session and returns
+immediately to the calling shell. Only one bunterm may control a given VT;
+ownership is
+identified from the process task name and its open console descriptor under
+`/proc`, so it disappears automatically when the process exits.
+
 ## Options
 
 | Option | Meaning |
 | --- | --- |
-| `/dev/ttyN` | The virtual console to use for graphics and the keyboard. If another console is on screen, the display switches to this one first and back when `bunterm` exits. Without it the process's own console and stdin are used, so run it from a VT (not a serial line or a PTY). |
+| `N`, `/dev/ttyN` | The virtual console to use for graphics and the keyboard; for example, `2` means `/dev/tty2`. Naming a VT other than the active one starts a detached bunterm there, switches the display to it, and immediately returns control to the calling shell. Without this argument, bunterm uses the active VT in the foreground. |
 | `-e command [argument...]` | The program to run; everything after `-e` belongs to it. Default `/bin/sh`. |
-| `--font-size N` | Font size in pixels (default 16). The cell is 0.6 × N wide and 1.16 × N tall with DejaVu Sans Mono, so 1024×768 at 16 px gives 106 × 41 cells. |
+| `-s N`, `--font-size N` | Font size in pixels (default 16). The cell is 0.6 × N wide and 1.16 × N tall with DejaVu Sans Mono, so 1024×768 at 16 px gives 106 × 41 cells. |
 | `--line-height F` | Multiplies the cell height (default 1). |
 | `--fb /dev/fbN` | The framebuffer device (default `/dev/fb0`). |
 | `--no-blink` | A steady cursor. |
@@ -57,7 +66,11 @@ text mode and `bunterm` exits with its status.
 
 The console stays in the kernel's translated keyboard mode, so
 `Ctrl-Alt-F2` and friends still switch consoles; coming back repaints the
-screen. A few console-specific
+screen. While its VT is inactive, bunterm continues consuming PTY output and
+updating its scrollback and kitty images, but neither writes the framebuffer
+nor forwards global `/dev/input` mouse events. This allows separate bunterm
+processes on `/dev/tty1`, `/dev/tty2`, and so on to hand the display back and
+forth through the normal Linux VT switch. A few console-specific
 sequences are rewritten to xterm's (`F1`–`F5`, `Home`, `End`), and arrow keys
 follow the program's application cursor mode.
 
@@ -104,7 +117,8 @@ reported and the session continues without it.
 - Kitty images are drawn above text; `z` ordering below text and animation
   frames are not implemented, and file transmission (`t=f`/`t=t`) works only
   for files under `/tmp`, `/dev/shm` or `$TMPDIR`.
-- One framebuffer, one session. For panes and tabs run `jsmdcui` inside it.
+- One bunterm per virtual console may use the framebuffer; only the active VT
+  draws. For panes and tabs within one VT, run `jsmdcui` inside it.
 
 ## See also
 

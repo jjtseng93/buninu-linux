@@ -85,6 +85,10 @@ export const libc = dlopen(libcPath, {
     args: [FFIType.i32, FFIType.ptr, FFIType.i32],
     returns: FFIType.i32,
   },
+  prctl: {
+    args: [FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.u64, FFIType.u64],
+    returns: FFIType.i32,
+  },
   chroot: {
     args: [FFIType.ptr],
     returns: FFIType.i32,

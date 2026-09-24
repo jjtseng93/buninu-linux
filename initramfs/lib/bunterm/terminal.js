@@ -20,6 +20,7 @@ import { UnicodeGraphemesAddon } from "../xterm/addon-unicode-graphemes.mjs";
 import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
+import { claimVirtualConsole } from "./vt.js";
 
 const require = createRequire(import.meta.url);
 
@@ -81,6 +82,7 @@ export const createSession = ({
   });
 
   let frameTimer = null;
+  let active = true;
   let blinkOn = true;
   const cursorHidden = () => Boolean(term._core?.coreService?.isCursorHidden);
   // Only set when a pointer is attached; without one the renderer is called
@@ -89,6 +91,7 @@ export const createSession = ({
   const paint = () => {
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
+    if (!active) return false;
     const buffer = term.buffer.active;
     // cursorY counts from the buffer's base, so a scrolled-back viewport
     // moves the cursor down the screen and eventually off it.
@@ -104,7 +107,19 @@ export const createSession = ({
     });
   };
   const requestFrame = () => {
+    if (!active) return;
     frameTimer ??= setTimeout(paint, 16);
+  };
+  const suspend = () => {
+    active = false;
+    if (frameTimer) clearTimeout(frameTimer);
+    frameTimer = null;
+  };
+  const resume = () => {
+    if (active) return;
+    active = true;
+    renderer.invalidate();
+    paint();
   };
   const blinkTimer = cursorBlink
     ? setInterval(() => { blinkOn = !blinkOn; requestFrame(); }, 500)
@@ -193,6 +208,9 @@ export const createSession = ({
   };
 
   const reportMouse = (report) => {
+    // /dev/input is global rather than routed through the active VT.  Do not
+    // draw or send mouse input to a terminal whose console is off-screen.
+    if (!active) return;
     pointer = { x: report.x, y: report.y };
     requestFrame();
     const service = term._core?.coreMouseService;
@@ -268,7 +286,7 @@ export const createSession = ({
   paint();
   return {
     term, backend, renderer, images, kitty,
-    paint, requestFrame, settle, input, exited, close, attachPointer, reportMouse, wheelScroll,
+    paint, requestFrame, suspend, resume, settle, input, exited, close, attachPointer, reportMouse, wheelScroll,
   };
 };
 
@@ -282,15 +300,13 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
   const fonts = loadFontSet(CanvasKit, "terminal");
   const consolePaths = consoleDevice ? [consoleDevice] : undefined;
 
-  return runGraphics(async (display, { onRestore, onAcquire }) => {
+  return runGraphics(async (display, { onRestore, onRelease, onAcquire }) => {
     const screen = openCanvas(CanvasKit, display);
     const session = createSession({ CanvasKit, screen, fonts, ...options });
-    // Coming back from another console (Ctrl-Alt-Fn): fbcon has drawn over
-    // the framebuffer, so repaint everything.
-    onAcquire(() => {
-      session.renderer.invalidate();
-      session.paint();
-    });
+    onRelease(session.suspend);
+    // Coming back from another console (Ctrl-Alt-Fn): fbcon or another
+    // bunterm has drawn over the framebuffer, so repaint everything.
+    onAcquire(session.resume);
     let keyboard = null;
     try {
       keyboard = openKeyboard({
@@ -320,5 +336,5 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
       session.close();
       screen.close();
     }
-  }, { device, console: consolePaths });
+  }, { device, console: consolePaths, prepareConsole: claimVirtualConsole });
 };

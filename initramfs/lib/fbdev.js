@@ -355,8 +355,12 @@ const setConsoleSwitchMode = (consoleDevice, mode) => {
 // when it comes back (answered with VT_ACKACQ), at which point `onAcquire`
 // runs so the caller can repaint what fbcon left on the screen. Returns a
 // function that puts the console back into automatic switching.
-export const watchConsoleSwitches = (consoleDevice, onAcquire) => {
+export const watchConsoleSwitches = (consoleDevice, callbacks) => {
+  // Keep the original (console, onAcquire) public form working.
+  const onRelease = typeof callbacks === "function" ? () => {} : callbacks.onRelease;
+  const onAcquire = typeof callbacks === "function" ? callbacks : callbacks.onAcquire;
   const release = () => {
+    try { onRelease(); } catch {}
     try { ioctlValue(consoleDevice.fd, VT_RELDISP, 1, "VT_RELDISP"); } catch {}
   };
   const acquire = () => {
@@ -429,6 +433,7 @@ const defaultTriangle = (display) => [
 // before text mode returns, such as putting a keyboard back into cooked mode.
 export const runGraphics = async (draw, {
   device = "/dev/fb0", console: consolePaths, switchConsole = true,
+  prepareConsole = null,
 } = {}) => {
   const display = openFramebuffer(device);
   let consoleDevice;
@@ -442,6 +447,7 @@ export const runGraphics = async (draw, {
   let previousConsole = null;
   let unwatch = null;
   const restoreCallbacks = [];
+  const releaseCallbacks = [];
   const acquireCallbacks = [];
   const restore = () => {
     while (restoreCallbacks.length) {
@@ -470,6 +476,10 @@ export const runGraphics = async (draw, {
   for (const [signal, handler] of signalHandlers) process.on(signal, handler);
   process.on("exit", restore);
   try {
+    if (prepareConsole) {
+      const cleanup = await prepareConsole(consoleDevice);
+      if (typeof cleanup === "function") restoreCallbacks.push(cleanup);
+    }
     const target = switchConsole ? consoleNumber(consoleDevice.path) : null;
     if (target !== null) {
       const active = activeConsole(consoleDevice);
@@ -480,22 +490,35 @@ export const runGraphics = async (draw, {
     }
     setConsoleGraphics(consoleDevice);
     graphics = true;
+    // An async draw callback runs synchronously until its first await.  Start
+    // it before enabling VT_PROCESS so it can register release/acquire hooks;
+    // otherwise a switch in that small window could be acknowledged without
+    // giving the renderer a chance to stop.
+    const drawing = draw(display, {
+      console: consoleDevice,
+      onRestore: (callback) => { restoreCallbacks.push(callback); },
+      onRelease: (callback) => { releaseCallbacks.push(callback); },
+      onAcquire: (callback) => { acquireCallbacks.push(callback); },
+    });
     if (switchConsole) {
       try {
-        unwatch = watchConsoleSwitches(consoleDevice, () => {
-          for (const callback of acquireCallbacks) {
-            try { callback(); } catch {}
-          }
+        unwatch = watchConsoleSwitches(consoleDevice, {
+          onRelease: () => {
+            for (const callback of releaseCallbacks) {
+              try { callback(); } catch {}
+            }
+          },
+          onAcquire: () => {
+            for (const callback of acquireCallbacks) {
+              try { callback(); } catch {}
+            }
+          },
         });
       } catch {
         // Not a virtual console (or no permission): switches stay automatic.
       }
     }
-    return await draw(display, {
-      console: consoleDevice,
-      onRestore: (callback) => { restoreCallbacks.push(callback); },
-      onAcquire: (callback) => { acquireCallbacks.push(callback); },
-    });
+    return await drawing;
   } finally {
     restore();
     process.off("exit", restore);

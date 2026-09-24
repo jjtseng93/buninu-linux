@@ -3,16 +3,22 @@
 
 import { showDocument } from "../lib/document.js";
 import { runTerminal } from "../lib/bunterm/terminal.js";
+import { activeConsole, openConsole } from "../lib/fbdev.js";
+import { virtualConsoleNumber } from "../lib/bunterm/vt.js";
+import { closeSync, openSync, readFileSync } from "node:fs";
+
+const CANONICAL_BUNTERM = "/bin/bunterm";
 
 const usage = () => {
   console.error(`Usage:
-  bunterm [/dev/ttyN] [--font-size N] [--fb /dev/fb0] [--no-mouse] [-e command [argument...]]
+  bunterm [N | /dev/ttyN] [-s N | --font-size N] [--fb /dev/fb0] [--no-mouse] [-e command [argument...]]
   bunterm -h | --help`);
 };
 
 const main = async () => {
   const options = { argv: [] };
   const arguments_ = process.argv.slice(2);
+  let consoleArgumentIndex = -1;
   for (let index = 0; index < arguments_.length; index++) {
     const argument = arguments_[index];
     if (argument === "-h" || argument === "--help") {
@@ -36,8 +42,10 @@ const main = async () => {
       }
       return value;
     };
-    if (argument === "--font-size" || argument.startsWith("--font-size=")) {
-      options.fontSize = Number(valued("--font-size"));
+    if (argument === "-s" || argument.startsWith("-s=")
+        || argument === "--font-size" || argument.startsWith("--font-size=")) {
+      const name = argument === "-s" || argument.startsWith("-s=") ? "-s" : "--font-size";
+      options.fontSize = Number(valued(name));
       if (!Number.isFinite(options.fontSize) || options.fontSize < 6) throw new Error("--font-size must be a number of at least 6");
     } else if (argument === "--line-height" || argument.startsWith("--line-height=")) {
       options.lineHeight = Number(valued("--line-height"));
@@ -50,13 +58,64 @@ const main = async () => {
       options.mouse = true;
     } else if (argument === "--no-mouse") {
       options.mouse = false;
-    } else if (argument.startsWith("/dev/")) {
-      options.console = argument;
+    } else if (/^[1-9][0-9]*$/.test(argument) || argument.startsWith("/dev/")) {
+      const number = /^[1-9][0-9]*$/.test(argument) ? Number(argument) : virtualConsoleNumber(argument);
+      if (number === null) throw new Error(`expected N or /dev/ttyN, got ${argument}`);
+      if (consoleArgumentIndex !== -1) throw new Error("only one virtual console may be specified");
+      options.console = `/dev/tty${number}`;
+      consoleArgumentIndex = index;
     } else {
       usage();
       throw new Error(`unexpected argument: ${argument}`);
     }
   }
+
+  const probe = openConsole(["/dev/tty0"]);
+  let activeConsoleNumber;
+  try {
+    activeConsoleNumber = activeConsole(probe);
+  } finally {
+    probe.close();
+  }
+  if (!options.console) options.console = `/dev/tty${activeConsoleNumber}`;
+
+  // Every live bunterm converges on one unambiguous /proc/<pid>/cmdline:
+  //   /bin/bunterm /bin/bunterm /dev/ttyN [options...]
+  // execve replaces the original process, so no forwarding parent remains.
+  const remaining = arguments_.filter((_argument, index) => index !== consoleArgumentIndex);
+  const canonicalArgv = [CANONICAL_BUNTERM, CANONICAL_BUNTERM, options.console, ...remaining];
+  const currentArgv = readFileSync("/proc/self/cmdline").toString("utf8").split("\0");
+  if (currentArgv.at(-1) === "") currentArgv.pop();
+  if (currentArgv.length !== canonicalArgv.length
+      || currentArgv.some((argument, index) => argument !== canonicalArgv[index])) {
+    const environment = Object.fromEntries(
+      Object.entries(process.env).filter((entry) => typeof entry[1] === "string"),
+    );
+    const targetConsoleNumber = virtualConsoleNumber(options.console);
+    if (consoleArgumentIndex !== -1 && targetConsoleNumber !== activeConsoleNumber) {
+      const consoleFd = openSync(options.console, "r+");
+      try {
+        const child = Bun.spawn(
+          [process.execPath, CANONICAL_BUNTERM, options.console, ...remaining],
+          {
+            argv0: CANONICAL_BUNTERM,
+            detached: true,
+            env: environment,
+            stdin: "ignore",
+            stdout: consoleFd,
+            stderr: consoleFd,
+          },
+        );
+        child.unref();
+      } finally {
+        closeSync(consoleFd);
+      }
+      return 0;
+    }
+    process.execve(process.execPath, canonicalArgv, environment);
+    throw new Error("process.execve returned unexpectedly");
+  }
+
   return runTerminal(options);
 };
 
