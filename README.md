@@ -481,6 +481,7 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 
 | command | does | manual |
 | --- | --- | --- |
+| `buninu-linux-help` | render this buninu-linux README from `/usr/share/doc/buninu-linux/README.md` | `buninu-linux-help` |
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
@@ -493,7 +494,7 @@ needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 | `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
 | `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images, with the mouse working, wheel scrollback included (`--no-mouse` turns it off); xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes eleven commands
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes twelve commands
 implemented as Bun scripts.
 
 The small `tar` reads the archive's own headers for links and listing, so

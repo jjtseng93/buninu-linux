@@ -22,6 +22,9 @@ trap 'rm -rf "$staging"; rm -f "$archive"' EXIT
 cp -a --reflink=auto initramfs/. "$staging/"
 rm -rf "$staging/bin/bun" "$staging/lib/modules"
 cp -a --reflink=auto "$native_dir/." "$staging/"
+# Keep the project README canonical while making it available to
+# buninu-linux-help from the conventional installed-document path.
+cp README.md "$staging/usr/share/doc/buninu-linux/README.md"
 
 # fakeroot lets cpio record the character devices without real root. Nothing
 # has mounted devtmpfs when the kernel execs Bun as PID 1, so every device

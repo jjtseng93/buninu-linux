@@ -1,0 +1,12 @@
+#!/bin/bun
+
+import { resolve } from "node:path";
+import { showDocument } from "../lib/document.js";
+
+// The packed image has README.md under /usr/share/doc/buninu-linux. During
+// development, address the checkout's canonical copy relative to that same
+// document directory so this command runs as-is and still uses showDocument.
+const installedReadme = resolve(import.meta.dir, "../usr/share/doc/buninu-linux/README.md");
+await showDocument(await Bun.file(installedReadme).exists()
+  ? "README"
+  : "../../../../../README");
