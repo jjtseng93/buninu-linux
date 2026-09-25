@@ -11,7 +11,7 @@ const CANONICAL_BUNTERM = "/bin/bunterm";
 
 const usage = () => {
   console.error(`Usage:
-  bunterm [N | /dev/ttyN] [-s N | --font-size N] [--fb /dev/fb0] [--no-mouse] [-e command [argument...]]
+  bunterm [N | /dev/ttyN] [-s N | --font-size N] [--fb /dev/fb0] [--no-mouse] [--no-clipboard] [-e command [argument...]]
   bunterm -h | --help`);
 };
 
@@ -58,6 +58,8 @@ const main = async () => {
       options.mouse = true;
     } else if (argument === "--no-mouse") {
       options.mouse = false;
+    } else if (argument === "--no-clipboard") {
+      options.clipboard = false;
     } else if (/^[1-9][0-9]*$/.test(argument) || argument.startsWith("/dev/")) {
       const number = /^[1-9][0-9]*$/.test(argument) ? Number(argument) : virtualConsoleNumber(argument);
       if (number === null) throw new Error(`expected N or /dev/ttyN, got ${argument}`);

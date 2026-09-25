@@ -12,6 +12,7 @@ bunterm /dev/tty1            # the full virtual-console spelling also works
 bunterm -s 20                # short for --font-size 20
 bunterm -e bun /buninu/apps/jsmdcui/src/index.js --demo
 bunterm --no-mouse          # keyboard only
+bunterm --no-clipboard      # ignore OSC 52 copy and paste
 bunterm -h
 ```
 
@@ -39,6 +40,7 @@ identified from the process task name and its open console descriptor under
 | `--fb /dev/fbN` | The framebuffer device (default `/dev/fb0`). |
 | `--no-blink` | A steady cursor. |
 | `--no-mouse` | Do not attach a pointing device; nothing then reads `/dev/input`. |
+| `--no-clipboard` | Ignore OSC 52: programs can neither copy to nor read from the clipboard, and `xclip` is never run. |
 
 ## What is drawn
 
@@ -100,6 +102,16 @@ mouse also needs the `usbhid` stack, which a `--real` image carries and
 `cfg.all` loads. The pointer follows relative devices (a mouse) and absolute
 ones (a tablet or touchscreen) alike; a device that cannot be opened is
 reported and the session continues without it.
+
+## Clipboard
+
+Programs copy and paste through OSC 52, as `casty` and `jsmdcui` do.
+bunterm keeps no clipboard of its own: `ESC ] 52 ; c ; <base64>` is passed to
+`xclip -selection clipboard`, and a query (`ESC ] 52 ; c ; ?`) is answered
+with the output of `xclip -selection clipboard -o`, so every bunterm session
+shares the same clipboard as `xclip`. A query xclip cannot answer is replied
+to with empty contents. `--no-clipboard` turns this off, so a program can
+neither set nor read the clipboard through the terminal.
 
 ## Limits
 

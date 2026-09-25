@@ -21,6 +21,7 @@ import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
 import { claimVirtualConsole } from "./vt.js";
+import { attachClipboard } from "./clipboard.js";
 
 const require = createRequire(import.meta.url);
 
@@ -52,6 +53,7 @@ export const createSession = ({
   scrollback = 1000,
   cursorBlink = true,
   mouse = true,
+  clipboard = true,
   env = {},
   onError = (error) => console.error(`bunterm: ${error?.stack ?? error}`),
 }) => {
@@ -158,6 +160,9 @@ export const createSession = ({
   });
   backend.onData(pump);
   term.onData((data) => backend.write(Buffer.from(data, "utf8")));
+  // OSC 52 copy and paste go straight to xclip; replies return to the program.
+  // Without it (--no-clipboard) xterm.js ignores OSC 52 and nothing reaches xclip.
+  if (clipboard) attachClipboard({ term, reply: (text) => backend.write(Buffer.from(text, "utf8")), onError });
 
   // Keyboard bytes from the console, rewritten for the program's key mode.
   const input = (bytes) => {
