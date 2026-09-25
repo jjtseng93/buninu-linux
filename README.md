@@ -477,6 +477,15 @@ options; [graphics.md](graphics.md) describes how it is built. The image
 needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
 (the default `linux-virt` builds one only as modules the image omits).
 
+### Clipboard
+
+`bunterm` supports copy and paste through OSC 52, so programs such as
+`casty` and `jsmdcui` can use the clipboard. bunterm keeps nothing itself; it
+passes every copy and paste to Buninu's `xclip -selection clipboard`. For
+now that clipboard is a file, `$HOME/.xclip.clipboard`, read and written in
+the ramdisk, so all bunterm sessions share it and it is gone after a reboot.
+`bunterm --no-clipboard` turns OSC 52 off.
+
 ## Commands inside /bin
 
 | command | does | manual |
@@ -1136,6 +1145,7 @@ for the userspace session.
       - [Pane and tab controls](#pane-and-tab-controls)
   * [Using Bun Modern Shell](#using-bun-modern-shell)
   * [Showing images](#showing-images)
+  * [Clipboard](#clipboard)
 - [Commands inside /bin](#commands-inside-bin)
 - [Environment and dependencies](#environment-and-dependencies)
   * [Build environment](#build-environment)
