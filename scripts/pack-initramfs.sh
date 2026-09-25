@@ -25,6 +25,7 @@ cp -a --reflink=auto "$native_dir/." "$staging/"
 # Keep the project README canonical while making it available to
 # buninu-linux-help from the conventional installed-document path.
 cp README.md "$staging/usr/share/doc/buninu-linux/README.md"
+cp -a LICENSE NOTICE.md LICENSES "$staging/usr/share/licenses/"
 
 # fakeroot lets cpio record the character devices without real root. Nothing
 # has mounted devtmpfs when the kernel execs Bun as PID 1, so every device
