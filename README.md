@@ -353,7 +353,7 @@ argument is a short form of the corresponding device, so `bunterm 2` means
 
 ```sh
 bunterm 2
-bunterm 3 -s 20
+bunterm 3 -s 13
 ```
 
 When the named VT is not the active one, `bunterm` starts there as a detached
@@ -610,7 +610,7 @@ tar czvf /tmp/buninu.tar.gz README.md package.json
 
 # On a virtual console: a graphical terminal with CJK, emoji and images
 bunterm
-bunterm /dev/tty1 --font-size 20 -e bun /buninu/apps/jsmdcui/src/index.js --demo
+bunterm /dev/tty1 --font-size 13 -e bun /buninu/apps/jsmdcui/src/index.js --demo
 ```
 
 The graphics stack behind `bunterm` — the framebuffer module, CanvasKit,
