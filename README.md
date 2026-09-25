@@ -486,6 +486,20 @@ now that clipboard is a file, `$HOME/.xclip.clipboard`, read and written in
 the ramdisk, so all bunterm sessions share it and it is gone after a reboot.
 `bunterm --no-clipboard` turns OSC 52 off.
 
+For Chinese input, run the pinyin input method
+[jspinyin](https://www.npmjs.com/package/@drxiaozhi/jspinyin) in a bunterm
+that is not inside a chroot, so it uses Buninu's `xclip`:
+
+```sh
+bun x @drxiaozhi/jspinyin
+```
+
+- jspinyin → casty: press `Ctrl-C` in jspinyin to copy its result box, then
+  `Ctrl-V` in casty pastes it through OSC 52.
+- casty → jsmdcui / jspinyin: `Alt-C` in casty copies the selection through
+  OSC 52, and `Ctrl-V` pastes it in jsmdcui or jspinyin, since jsmdcui reads
+  from `xclip` first by default.
+
 ## Commands inside /bin
 
 | command | does | manual |
