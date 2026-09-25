@@ -36,9 +36,13 @@ export const attachClipboard = ({ term, reply, onError = () => {} }) =>
     const payload = data.slice(separator + 1);
 
     if (payload === "?") {
+      // The reply is sent after xclip returns, when the program may have exited
+      // and the PTY closed; writing then throws, and an unhandled rejection
+      // would end bunterm before it restores the console.
       runXclip(["-o"])
         .catch((error) => { onError(error); return new ArrayBuffer(0); })
-        .then((bytes) => reply(`\u001b]52;${target};${Buffer.from(bytes).toString("base64")}\u0007`));
+        .then((bytes) => reply(`\u001b]52;${target};${Buffer.from(bytes).toString("base64")}\u0007`))
+        .catch(onError);
       return true;
     }
 
