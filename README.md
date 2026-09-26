@@ -208,6 +208,8 @@ bun ./index.js -fbr
 The first boot line from `run-qemu.sh` names the guest, machine, accelerator
 and firmware it picked. A bare `-r` boots whichever architecture `vda.img`
 was last built for; `-br --arch arm64` is the aarch64 edit-and-boot loop.
+To run `bunterm` in a QEMU window on the aarch64 guest, see
+[What differs on aarch64](#what-differs-on-aarch64).
 
 #### amd64 Linux
 
@@ -231,9 +233,32 @@ qemu-efi-aarch64` to run.
   Alpine's aarch64 packages and `bun-linux-aarch64-musl`.
 * The serial console is `ttyAMA0` (QEMU `virt`'s PL011) instead of `ttyS0`.
 * `--real` is x86_64 only: its module set is PC hardware.
-* The current aarch64 QEMU configuration supplies no framebuffer or PS/2
-  devices, so `bunterm` has nothing to draw on yet; the serial REPL and the
-  Buninu shell work as on x86_64.
+* QEMU's `virt` machine has no display or PS/2 devices, so by default
+  `bunterm` has nothing to draw on; the serial REPL and the Buninu shell work
+  as on x86_64. To run `bunterm`, build with `--linux-lts` and give QEMU a
+  `ramfb` display and virtio input devices. On a Mac, `-display cocoa` opens
+  the window:
+
+  ```sh
+  bun ./index.js -fbr --arch arm64 --linux-lts -- \
+      -device ramfb -device virtio-keyboard-pci -device virtio-mouse-pci -display cocoa
+  ```
+
+  Once that image is built, boot it again without rebuilding (and without
+  Docker). `--linux-lts` belongs to the build, so leave it off `-r`:
+
+  ```sh
+  bun ./index.js -r --arch arm64 -- \
+      -device ramfb -device virtio-keyboard-pci -device virtio-mouse-pci -display cocoa
+  ```
+
+  `start()` in the serial REPL, then `bunterm 2` opens bunterm on VT 2 in the
+  QEMU window and returns to the serial shell; type into the window. The
+  serial console is not a VT, so a bare `bunterm` there takes the active VT 1
+  and holds the serial shell until it exits; naming another VT starts it
+  detached (see [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)). The
+  firmware sets up ramfb at 800×600, and `init.js` loads `simpledrm` so it
+  becomes `/dev/fb0` (see [graphics.md](graphics.md#trying-it)).
 * `--export` writes `buninu-linux-<version>-aarch64.img`.
 * Before the kernel starts, Homebrew's aarch64 EDK2 prints a few
   `Error: Image at … start failed` lines (its own drivers for hardware `virt`
@@ -475,7 +500,9 @@ below a shown image, and images scroll with the text. When the program you
 started exits, the console returns to text mode. `bunterm --help` has the
 options; [graphics.md](graphics.md) describes how it is built. The image
 needs a kernel with a framebuffer: build with `--linux-lts` or `--real`
-(the default `linux-virt` builds one only as modules the image omits).
+(the default `linux-virt` builds one only as modules the image omits). The
+aarch64 guest also needs a QEMU display; see
+[What differs on aarch64](#what-differs-on-aarch64).
 
 ### Clipboard
 
@@ -776,7 +803,7 @@ its own.
 ```text
 index.js                  entry point: -f / -b / -r / --arch / --docker / --export / --linux-lts / --real
 Dockerfile                the Debian 13 build toolchain for --docker (and macOS)
-fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input modules
+fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with the hello-world EFI

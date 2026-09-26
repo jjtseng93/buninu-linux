@@ -179,6 +179,16 @@ try {
   console.error(`init.js: input modules: ${error?.message ?? error}`);
 }
 
+// The framebuffer for bunterm: the firmware's GOP is a simple-framebuffer
+// device, and simpledrm turns it into /dev/fb0. x86_64 linux-lts builds it
+// in and linux-virt images do not ship it; tryModprobe skips both.
+try {
+  const { tryModprobe } = await import("/lib/modprobe.js");
+  if (tryModprobe("simpledrm")?.length) console.log("init.js: loaded simpledrm");
+} catch (error) {
+  console.error(`init.js: simpledrm: ${error?.message ?? error}`);
+}
+
 const { default: repl } = await import("node:repl");
 const { mkdirSync, writeFileSync } = await import("node:fs");
 
