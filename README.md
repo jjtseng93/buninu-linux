@@ -208,6 +208,8 @@ bun ./index.js -fbr
 The first boot line from `run-qemu.sh` names the guest, machine, accelerator
 and firmware it picked. A bare `-r` boots whichever architecture `vda.img`
 was last built for; `-br --arch arm64` is the aarch64 edit-and-boot loop.
+To run `bunterm` in a QEMU window on the aarch64 guest, see
+[What differs on aarch64](#what-differs-on-aarch64).
 
 #### amd64 Linux
 
@@ -242,8 +244,19 @@ qemu-efi-aarch64` to run.
       -device ramfb -device virtio-keyboard-pci -device virtio-mouse-pci -display cocoa
   ```
 
+  Once that image is built, boot it again without rebuilding (and without
+  Docker). `--linux-lts` belongs to the build, so leave it off `-r`:
+
+  ```sh
+  bun ./index.js -r --arch arm64 -- \
+      -device ramfb -device virtio-keyboard-pci -device virtio-mouse-pci -display cocoa
+  ```
+
   `start()` in the serial REPL, then `bunterm 2` opens bunterm on VT 2 in the
   QEMU window and returns to the serial shell; type into the window. The
+  serial console is not a VT, so a bare `bunterm` there takes the active VT 1
+  and holds the serial shell until it exits; naming another VT starts it
+  detached (see [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)). The
   firmware sets up ramfb at 800×600, and `init.js` loads `simpledrm` so it
   becomes `/dev/fb0` (see [graphics.md](graphics.md#trying-it)).
 * `--export` writes `buninu-linux-<version>-aarch64.img`.
