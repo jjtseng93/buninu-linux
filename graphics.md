@@ -174,13 +174,22 @@ needs about 1 GB.
 
 ## Trying it
 
-The framebuffer needs a kernel that provides one. Alpine's `linux-lts` has
-`CONFIG_FB`, `CONFIG_FB_EFI` and `CONFIG_DRM_SIMPLEDRM` built in; the default
-`linux-virt` builds them as modules, and the image ships only the network,
-storage, USB and HID modules, so there `/dev/fb0` never appears. Build with
-`./index.js -b --linux-lts` (or `--real`); under QEMU the lts kernel gets a
-1280×800 `simpledrm` framebuffer from the UEFI GOP even with `-display none`,
-and the monitor's `screendump` shows it. From a virtual console in the guest:
+The framebuffer needs a kernel that provides one. Both `linux-lts` kernels
+set `CONFIG_SYSFB_SIMPLEFB`, so the UEFI GOP becomes a `simple-framebuffer`
+device, which only `simpledrm` drives (`efifb` never sees it). The x86_64
+`linux-lts` builds `simpledrm` in. The aarch64 one has it as a module:
+`fetch-alpine.sh` ships it and its DRM dependencies for lts builds, and
+`init.js` loads it at boot. The default `linux-virt` builds the framebuffer
+drivers as modules, and the image ships only the network, storage, USB and
+HID modules, so there `/dev/fb0` never appears. Build with
+`./index.js -b --linux-lts` (or `--real` on x86_64). Under QEMU, the x86_64
+lts kernel gets a 1280×800 `simpledrm` framebuffer from the UEFI GOP even
+with `-display none`, and the monitor's `screendump` shows it. QEMU's aarch64
+`virt` machine has no display until you add `-device ramfb`; EDK2 then
+provides an 800×600 GOP, and `virtio-keyboard-pci` gives the VTs a keyboard
+(see the README's
+[What differs on aarch64](README.md#what-differs-on-aarch64)). From a virtual
+console in the guest:
 
 ```sh
 bunterm                                  # /bin/sh on this console
@@ -205,6 +214,13 @@ switch away and repaint on return. On the
 host, `jsmdcui --tui` on a Markdown file with a JPEG (bunterm sets
 `JSMDCUI_KITTY_MODE=extended` for the program it runs) places the image
 through its transmit / `a=p` / `a=d` sequence exactly as in the browser.
+
+Verified on aarch64 (lts kernel, Hypervisor.framework, `-device ramfb
+-device virtio-keyboard-pci -device virtio-mouse-pci`, `-display none`):
+`/proc/fb` lists `simpledrmdrmfb`; `bunterm 2` from the serial shell returns
+at once and draws on VT 2; and keys sent with the monitor's `sendkey` reach
+it: `showimg /buninu/icon.png` places the kitty image, and the prompt's
+colour emoji and the pointer render, all checked with `screendump`.
 
 ## Not done yet
 

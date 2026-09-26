@@ -81,6 +81,13 @@ if [ "$arch" = x86_64 ]; then
 else
     select_module virtio_input
 fi
+# The framebuffer for bunterm. Both lts kernels set CONFIG_SYSFB_SIMPLEFB, so
+# the UEFI GOP (QEMU's ramfb on aarch64 virt) becomes a simple-framebuffer
+# device that only simpledrm drives: x86_64 lts builds it in, aarch64 lts has
+# it as a module. init.js loads it at boot, which is what makes /dev/fb0.
+if [ "$linux_flavor" = lts ]; then
+    select_optional_module simpledrm
+fi
 
 if [ "${REAL_MACHINE:-}" = 1 ]; then
     # USB keyboard for the console; common storage paths (SATA/AHCI HDD and
