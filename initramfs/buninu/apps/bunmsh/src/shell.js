@@ -283,7 +283,6 @@ export function tokenize(source, options = {}) {
       while (i < source.length && source[i] !== "\n") i++;
       continue;
     }
-
     const two = source.slice(i, i + 2);
     const fdDup = source.slice(i, i + 4);
     const operatorAhead =
@@ -448,6 +447,7 @@ function emptyCommand() {
 }
 
 export function parse(source) {
+  source = normalizeSource(source);
   const tokens = tokenize(source);
   const jobs = [];
   let i = 0;
@@ -513,8 +513,8 @@ export function parse(source) {
         throw new ShellSyntaxError("! requires a command", firstWord.offset);
       negate = true;
     }
-    jobs.push({ connector, pipeline, negate });
     const separator = tokens[i]?.value;
+    jobs.push({ connector, pipeline, negate, background: false });
     if (!separator) break;
     if (![";", "&&", "||"].includes(separator))
       throw new ShellSyntaxError(`unexpected operator ${separator}`, tokens[i].offset);
@@ -522,6 +522,20 @@ export function parse(source) {
     i++;
     skipSemicolons();
     if (i >= tokens.length) break;
+  }
+  const lastJob = jobs.at(-1);
+  const lastCommand = lastJob?.pipeline.at(-1);
+  const lastWord = lastCommand?.words.at(-1);
+  const lastToken = tokens.findLast((token) =>
+    token.type !== "op" || token.value !== ";" || source[token.offset] !== "\n");
+  if (lastWord === lastToken &&
+      lastWord?.fragments.length === 1 &&
+      lastWord.fragments[0].quote === "none" &&
+      lastWord.fragments[0].text === "&") {
+    lastCommand.words.pop();
+    if (lastCommand.words.length === 0 && lastCommand.redirects.length === 0)
+      throw new ShellSyntaxError("expected a command", lastWord.offset);
+    lastJob.background = true;
   }
   return jobs;
 }
@@ -1223,33 +1237,37 @@ const builtins = {
     const format = argv[1];
     let ai = 2;
     let output = "";
-    for (let i = 0; i < format.length; i++) {
-      if (format[i] === "\\" && i + 1 < format.length) {
-        const parsed = parsePrintEscapes(format.slice(i, i + 2));
-        output += parsed.text;
-        i++;
-        continue;
+    let previous;
+    do {
+      previous = ai;
+      for (let i = 0; i < format.length; i++) {
+        if (format[i] === "\\" && i + 1 < format.length) {
+          const parsed = parsePrintEscapes(format.slice(i, i + 2));
+          output += parsed.text;
+          i++;
+          continue;
+        }
+        if (format[i] !== "%") {
+          output += format[i];
+          continue;
+        }
+        if (format[i + 1] === "%") {
+          output += "%";
+          i++;
+          continue;
+        }
+        const match = /^%([0-9]*)([sdi])/.exec(format.slice(i));
+        if (!match) return result(2, "", `bunmsh: printf: unsupported format near ${format.slice(i)}\n`);
+        const width = Number(match[1] || 0);
+        const kind = match[2];
+        const value = argv[ai++] ?? (kind === "s" ? "" : "0");
+        let rendered = kind === "s" ? value : String(Number.parseInt(value, 10) || 0);
+        if (width > rendered.length)
+          rendered = (match[1]?.startsWith("0") ? "0" : " ").repeat(width - rendered.length) + rendered;
+        output += rendered;
+        i += match[0].length - 1;
       }
-      if (format[i] !== "%") {
-        output += format[i];
-        continue;
-      }
-      if (format[i + 1] === "%") {
-        output += "%";
-        i++;
-        continue;
-      }
-      const match = /^%([0-9]*)([sdi])/.exec(format.slice(i));
-      if (!match) return result(2, "", `bunmsh: printf: unsupported format near ${format.slice(i)}\n`);
-      const width = Number(match[1] || 0);
-      const kind = match[2];
-      const value = argv[ai++] ?? (kind === "s" ? "" : "0");
-      let rendered = kind === "s" ? value : String(Number.parseInt(value, 10) || 0);
-      if (width > rendered.length)
-        rendered = (match[1]?.startsWith("0") ? "0" : " ").repeat(width - rendered.length) + rendered;
-      output += rendered;
-      i += match[0].length - 1;
-    }
+    } while (ai > previous && ai < argv.length);
     return result(0, output);
   },
   read: async (argv, state, input) => {
@@ -1821,11 +1839,19 @@ async function runHeadFallback(argv, state, input) {
     return result(1, "", "bunmsh: head: invalid line count\n");
   const operands = argv.slice(i);
   if (operands.length) {
-    try {
-      const data = await readFallbackFiles(operands, state, input);
-      if (bytesMode) return result(0, data.slice(0, count));
-      return result(0, decoder.decode(data).split(/(?<=\n)/).slice(0, count).join(""));
-    } catch (error) { return result(1, "", `bunmsh: head: ${error.message}\n`); }
+    const output = [];
+    let status = 0, stderr = "";
+    for (const operand of operands) {
+      if (operands.length > 1)
+        output.push(`${output.length ? "\n" : ""}==> ${operand} <==\n`);
+      try {
+        const data = await readFallbackFiles([operand], state, input);
+        output.push(bytesMode
+          ? data.slice(0, count)
+          : decoder.decode(data).split(/(?<=\n)/).slice(0, count).join(""));
+      } catch (error) { status = 1; stderr += `bunmsh: head: ${operand}: ${error.message}\n`; }
+    }
+    return result(status, concatBytes(output), stderr);
   }
   const reader = fallbackInput(input).getReader();
   const output = [];
@@ -1873,19 +1899,32 @@ async function runTextFilter(argv, state, input, kind) {
         reverse ||= option.includes("r"); numeric ||= option.includes("n"); unique ||= option.includes("u");
       }
     }
+    if (kind === "tail") {
+      const operands = args.length ? args : ["-"];
+      const output = [];
+      let status = 0, stderr = "";
+      for (const operand of operands) {
+        try {
+          const text = decoder.decode(await readFallbackFiles([operand], state, input));
+          const lines = text.split("\n");
+          const trailing = lines.at(-1) === "";
+          if (trailing) lines.pop();
+          const selected = tailFromStart
+            ? lines.slice(Math.max(0, tailCount - 1))
+            : tailCount === 0 ? [] : lines.slice(-tailCount);
+          if (operands.length > 1 && (tailFromStart || tailCount !== 0))
+            output.push(`${output.length ? "\n" : ""}==> ${operand === "-" ? "standard input" : operand} <==\n`);
+          if (selected.length) output.push(`${selected.join("\n")}${trailing ? "\n" : ""}`);
+        } catch (error) { status = 1; stderr += `bunmsh: tail: ${operand}: ${error.message}\n`; }
+      }
+      return result(status, output.join(""), stderr);
+    }
     const text = decoder.decode(await readFallbackFiles(args, state, input));
     let lines = text.split("\n");
-    const trailing = lines.at(-1) === "";
-    if (trailing) lines.pop();
-    if (kind === "tail") {
-      lines = tailFromStart
-        ? lines.slice(Math.max(0, tailCount - 1))
-        : lines.slice(-tailCount);
-    } else {
-      lines.sort((a, b) => numeric ? Number(a) - Number(b) : a.localeCompare(b));
-      if (unique) lines = lines.filter((line, index) => index === 0 || line !== lines[index - 1]);
-      if (reverse) lines.reverse();
-    }
+    if (lines.at(-1) === "") lines.pop();
+    lines.sort((a, b) => numeric ? Number(a) - Number(b) : a.localeCompare(b));
+    if (unique) lines = lines.filter((line, index) => index === 0 || line !== lines[index - 1]);
+    if (reverse) lines.reverse();
     return result(0, lines.length ? `${lines.join("\n")}\n` : "");
   } catch (error) { return result(1, "", `bunmsh: ${kind}: ${error.message}\n`); }
 }
@@ -1894,15 +1933,27 @@ async function runWcFallback(argv, state, input) {
   let flags = "", i = 1;
   while (/^-[lwc]+$/.test(argv[i] ?? "")) flags += argv[i++].slice(1);
   if (!flags) flags = "lwc";
-  try {
-    const data = await readFallbackFiles(argv.slice(i), state, input);
+  const operands = argv.slice(i);
+  const files = operands.length ? operands : ["-"];
+  const rows = [];
+  let status = 0, stderr = "";
+  let totalBytes = 0;
+  for (const operand of files) try {
+    const data = await readFallbackFiles([operand], state, input);
     const text = decoder.decode(data);
     const values = [];
     if (flags.includes("l")) values.push((text.match(/\n/g) ?? []).length);
     if (flags.includes("w")) values.push(text.trim() ? text.trim().split(/\s+/).length : 0);
     if (flags.includes("c")) values.push(data.byteLength);
-    return result(0, `${values.join(" ")}\n`);
-  } catch (error) { return result(1, "", `bunmsh: wc: ${error.message}\n`); }
+    totalBytes += data.byteLength;
+    rows.push({ values, operand });
+  } catch (error) { status = 1; stderr += `bunmsh: wc: ${operand}: ${error.message}\n`; }
+  if (operands.length > 1 && rows.length)
+    rows.push({ values: rows.reduce((total, row) => total.map((n, index) => n + row.values[index]),
+      rows[0].values.map(() => 0)), operand: "total" });
+  const width = operands.length > 1 ? String(totalBytes).length : 0;
+  return result(status, rows.map(({ values, operand }) =>
+    `${values.map((value) => String(value).padStart(width)).join(" ")}${operands.length ? ` ${operand}` : ""}\n`).join(""), stderr);
 }
 
 function expandTrSet(value) {
@@ -2007,11 +2058,14 @@ async function runTeeFallback(argv, state, input) {
 
 async function runHashFallback(argv, state, input, algorithm) {
   const operands = argv.slice(1);
-  try {
-    const data = await readFallbackFiles(operands, state, input);
+  const output = [];
+  let status = 0, stderr = "";
+  for (const operand of operands.length ? operands : ["-"]) try {
+    const data = await readFallbackFiles([operand], state, input);
     const digest = createHash(algorithm).update(data).digest("hex");
-    return result(0, `${digest}${operands.length === 1 && operands[0] !== "-" ? `  ${operands[0]}` : ""}\n`);
-  } catch (error) { return result(1, "", `bunmsh: ${algorithm}sum: ${error.message}\n`); }
+    output.push(`${digest}  ${operand}\n`);
+  } catch (error) { status = 1; stderr += `bunmsh: ${algorithm}sum: ${operand}: ${error.message}\n`; }
+  return result(status, output.join(""), stderr);
 }
 
 function runMktempFallback(argv, state) {
@@ -2173,6 +2227,8 @@ async function runGrepFallback(argv, state, input, context = {}) {
   };
 
   const operands = argv.slice(i);
+  const implicitCwd = !operands.length && flags.includes("r");
+  if (implicitCwd) operands.push(".");
   if (operands.length) {
     try {
       const files = grepFiles(operands, state, flags.includes("r"));
@@ -2181,7 +2237,8 @@ async function runGrepFallback(argv, state, input, context = {}) {
         const lines = (await Bun.file(file.path).text()).split("\n");
         if (lines.at(-1) === "") lines.pop();
         for (let line = 0; line < lines.length; line++)
-          if (processLine(lines[line], line + 1, file.shown, showLabel)) return result(0);
+          if (processLine(lines[line], line + 1,
+            implicitCwd ? file.shown.replace(/^\.\//, "") : file.shown, showLabel)) return result(0);
       }
     } catch (error) { return result(2, "", `bunmsh: grep: ${error.message}\n`); }
   } else {
@@ -2341,20 +2398,26 @@ function cutCharacterRanges(spec) {
   return ranges;
 }
 
-async function runCutFallback(argv, _state, input) {
+async function runCutFallback(argv, state, input) {
   let spec, i = 1;
   if (argv[i] === "-c") spec = argv[++i], i++;
   else if (argv[i]?.startsWith("-c")) spec = argv[i++].slice(2);
-  if (!spec || i !== argv.length) return result(1, "", "bunmsh: cut: usage: cut -c LIST\n");
+  if (!spec) return result(1, "", "bunmsh: cut: usage: cut -c LIST [FILE ...]\n");
   try {
     const ranges = cutCharacterRanges(spec);
-    const text = decoder.decode(await readFallbackInput(input));
-    const trailing = text.endsWith("\n");
-    const lines = text.split("\n");
-    if (trailing) lines.pop();
-    const output = lines.map((line) => [...line].filter((_ch, index) =>
-      ranges.some(([start, end]) => index + 1 >= start && index + 1 <= end)).join("")).join("\n");
-    return result(0, output + (trailing ? "\n" : ""));
+    const output = [];
+    let status = 0, stderr = "";
+    const operands = argv.slice(i);
+    for (const operand of operands.length ? operands : ["-"]) try {
+      const text = decoder.decode(await readFallbackFiles([operand], state, input));
+      const trailing = text.endsWith("\n");
+      const lines = text.split("\n");
+      if (trailing) lines.pop();
+      output.push(lines.map((line) => [...line].filter((_ch, index) =>
+        ranges.some(([start, end]) => index + 1 >= start && index + 1 <= end)).join("")).join("\n") +
+        (trailing ? "\n" : ""));
+    } catch (error) { status = 1; stderr += `bunmsh: cut: ${operand}: ${error.message}\n`; }
+    return result(status, output.join(""), stderr);
   } catch (error) { return result(1, "", `bunmsh: cut: ${error.message}\n`); }
 }
 
@@ -2366,24 +2429,27 @@ function runLnFallback(argv, state) {
     noTargetDirectory ||= argv[i].includes("T");
     i++;
   }
-  if (argv.length - i !== 2) return result(1, "", "bunmsh: ln: usage: ln [-sf] target link_name\n");
-  const target = nativePath(argv[i]);
-  let link = isAbsolute(nativePath(argv[i + 1]))
-    ? nativePath(argv[i + 1])
-    : resolvePath(nativePath(state.cwd), nativePath(argv[i + 1]));
-  try {
-    if (!noTargetDirectory) {
-      try {
-        if (statSync(link).isDirectory()) link = resolvePath(link, pathBasename(target));
-      } catch {}
-    }
-    if (force) try { unlinkSync(link); } catch {}
-    if (symbolic) symlinkSync(target, link); else {
-      const source = isAbsolute(target) ? target : resolvePath(nativePath(state.cwd), target);
-      linkSync(source, link);
-    }
-    return result();
-  } catch (error) { return result(1, "", `bunmsh: ln: ${error.message}\n`); }
+  if (argv.length - i < 2) return result(1, "", "bunmsh: ln: usage: ln [-sf] target... link_name\n");
+  const sources = argv.slice(i, -1);
+  const destination = nativePath(argv.at(-1));
+  const targetPath = isAbsolute(destination) ? destination : resolvePath(nativePath(state.cwd), destination);
+  let directory = false;
+  if (!noTargetDirectory) try { directory = statSync(targetPath).isDirectory(); } catch {}
+  if (sources.length > 1 && !directory)
+    return result(1, "", "bunmsh: ln: target is not a directory\n");
+  let status = 0, stderr = "";
+  for (const operand of sources) {
+    const target = nativePath(operand);
+    const link = directory ? resolvePath(targetPath, pathBasename(target)) : targetPath;
+    try {
+      if (force) try { unlinkSync(link); } catch {}
+      if (symbolic) symlinkSync(target, link); else {
+        const source = isAbsolute(target) ? target : resolvePath(nativePath(state.cwd), target);
+        linkSync(source, link);
+      }
+    } catch (error) { status = 1; stderr += `bunmsh: ln: ${operand}: ${error.message}\n`; }
+  }
+  return result(status, "", stderr);
 }
 
 function runChmodFallback(argv, state) {
@@ -3210,15 +3276,22 @@ async function runExternal(
     cmd: spawnArgv,
     cwd: nativePath(state.cwd),
     env: state.env,
-    stdin: input === null ? "inherit" : input,
-    stdout: captureStdout || stdoutSink ? "pipe" : "inherit",
-    stderr: captureStderr || runtimeOptions.stderrSink ? "pipe" : "inherit",
+    stdin: runtimeOptions.background ? "ignore" : input === null ? "inherit" : input,
+    stdout: runtimeOptions.background ? "inherit" : captureStdout || stdoutSink ? "pipe" : "inherit",
+    stderr: runtimeOptions.background ? "inherit" : captureStderr || runtimeOptions.stderrSink ? "pipe" : "inherit",
     onExit(proc, exitCode, signalCode, error) {
       runtimeOptions.onExit?.(proc, exitCode, signalCode, error);
     },
   };
   try {
     const proc = Bun.spawn(options);
+    if (runtimeOptions.background) {
+      if (!Array.isArray(Bun.sha.procs)) Bun.sha.procs = [];
+      Bun.sha.procs.push(proc);
+      proc.unref();
+      const index = Bun.sha.procs.length - 1;
+      return result(0, "", `[${index + 1}] ${proc.pid} Bun.sha.procs[${index}]\n`);
+    }
     const pipelineKillSignal = runtimeOptions.pipelineKillSignal ?? "SIGPIPE";
     // A downstream pipeline stage that closes early (for example `head -n 3`)
     // leaves nothing reading the other end of `stdoutSink`/`stderrSink` (a
@@ -3379,6 +3452,15 @@ async function runCommandArgv(
     if(argv[0] === "&")
       commandArgv = argv.slice(1) ;
   }
+
+  if (options.background && (
+    options.pipelineStage ||
+    ["command", "builtin", "__builtin", "time", "yes"].includes(commandArgv[0]) ||
+    Object.hasOwn(state.functions, commandArgv[0]) ||
+    Object.hasOwn(builtins, commandArgv[0]) ||
+    (!commandArgv[0].includes("/") && Object.hasOwn(fallbackBuiltins, commandArgv[0]) &&
+      !findExecutable(commandArgv[0], state))
+  )) return result(2, "", "bunmsh: &: only a single external command is supported\n");
   
   let commandState = state;
   if (options.pipelineStage && runsInPipelineSubprocess(commandArgv, commandState))
@@ -3674,6 +3756,7 @@ async function runCommand(command, state, options = {}) {
       stderrSink: stderrRedirect,
       onSpawn: options.onSpawn,
       onExit: options.onExit,
+      background: Boolean(options.background),
     },
   );
 
@@ -3690,10 +3773,13 @@ async function runCommand(command, state, options = {}) {
 }
 
 async function runPipeline(pipeline, state, options = {}) {
+  if (options.background && (pipeline.length !== 1 || pipeline[0].redirects.length !== 0))
+    return result(2, "", "bunmsh: &: only a single external command without redirections is supported\n");
   if (pipeline.length === 1)
     return runCommand(pipeline[0], state, {
       captureStdout: Boolean(options.capture),
       captureStderr: Boolean(options.capture),
+      background: Boolean(options.background),
     });
 
   const links = Array.from(
@@ -3876,7 +3962,10 @@ export async function execute(source, state = createState(), io = {}) {
   for (const job of jobs) {
     if (job.connector === "&&" && execution.status !== 0) continue;
     if (job.connector === "||" && execution.status === 0) continue;
-    execution = await runPipeline(job.pipeline, state, { capture: io.capture });
+    execution = await runPipeline(job.pipeline, state, {
+      capture: io.capture,
+      background: job.background,
+    });
     if (job.negate) execution.status = execution.status === 0 ? 1 : 0;
     state.lastStatus = execution.status;
     if (execution.stdout.byteLength) {

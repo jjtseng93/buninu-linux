@@ -19,3 +19,103 @@ Included third-party component:
 
 The bundled file [static/js/zmodem.js] is byte-for-byte identical to the
 upstream npm release zmodem.js version 0.1.10 dist/zmodem.js.
+
+2. ConPTY - Windows pseudoconsole library and console host
+   (conpty/conpty.dll, conpty/OpenConsole.exe), part of Windows Terminal
+   Copyright (c) Microsoft Corporation. All rights reserved.
+   Licensed under the MIT License
+   Upstream: https://github.com/microsoft/terminal
+   Local copy of license text:
+   LICENSES/MIT-microsoft-terminal-conpty.txt
+   Upstream third-party notices for Windows Terminal:
+   LICENSES/NOTICE-microsoft-terminal-conpty.md
+
+The bundled files in [conpty/] are byte-for-byte identical to the win-x64
+binaries in the official NuGet package
+Microsoft.Windows.Console.ConPTY 1.25.260710002-preview, published with the
+Windows Terminal Preview v1.25.1912.0 release
+(https://github.com/microsoft/terminal/releases/tag/v1.25.1912.0):
+
+   conpty/conpty.dll       (runtimes/win-x64/native/conpty.dll)
+     SHA-256 e2fe87e2258c4e46ffc5157f727218cc25f34a174902f72eb8a5b49edd9a6458
+   conpty/OpenConsole.exe  (build/native/runtimes/x64/OpenConsole.exe)
+     SHA-256 2525c351aa136d555e5df9a3c9d6ce9be43f785e37e3c993b8f23b3f0a53c7fa
+
+The license and notice files are taken verbatim from the microsoft/terminal
+repository at tag v1.25.1912.0. The notice file lists third-party components
+used across Windows Terminal; it is included in full because the subset built
+into these two binaries is not documented separately.
+
+3. node-pty 1.1.0 - forkpty(3) bindings for Node.js (lib/node-pty)
+   Copyright (c) 2012-2015, Christopher Jeffrey
+   Copyright (c) 2016, Daniel Imms
+   Copyright (c) 2018 - present Microsoft Corporation
+   Licensed under the MIT License
+   Upstream: https://github.com/microsoft/node-pty
+   License text: lib/node-pty/LICENSE
+
+   node-pty in turn bundles:
+
+   a. winpty 0.4.4-dev (lib/node-pty/deps/winpty,
+      lib/node-pty/prebuilds/win32-*/winpty.dll and winpty-agent.exe)
+      Copyright (c) 2011-2016 Ryan Prichard
+      Licensed under the MIT License
+      Upstream: https://github.com/rprichard/winpty
+      License text: lib/node-pty/deps/winpty/LICENSE
+
+   b. ConPTY 1.23.251008001 from Windows Terminal
+      (lib/node-pty/prebuilds/win32-*/conpty/conpty.dll and OpenConsole.exe)
+      Copyright (c) Microsoft Corporation. All rights reserved.
+      Licensed under the MIT License; see item 2 for the license and
+      Windows Terminal notice files.
+
+The prebuilt binaries under [lib/node-pty/prebuilds] and the license files
+lib/node-pty/LICENSE and lib/node-pty/deps/winpty/LICENSE are byte-for-byte
+identical to those in the upstream npm release node-pty 1.1.0; they are not
+rebuilt by this project.
+
+The files in [patches/] (windowsPtyAgent.js, windowsTerminal.js) are modified
+copies of node-pty source files; they keep node-pty's copyright headers and
+remain under its MIT License.
+
+4. npm dependencies committed under [node_modules/]
+
+   a. ws 8.21.0 - WebSocket client and server
+      Copyright (c) 2011 Einar Otto Stangvik
+      Copyright (c) 2013 Arnout Kazemier and contributors
+      Copyright (c) 2016 Luigi Pinca and contributors
+      Licensed under the MIT License
+      License text: node_modules/ws/LICENSE (also LICENSES/MIT-ws.txt,
+      which single executables carry because ws is bundled into them)
+
+   b. node-addon-api 7.1.1 - C++ headers used to build node-pty
+      Copyright (c) 2017 Node.js API collaborators
+      Licensed under the MIT License
+      License text: node_modules/node-addon-api/LICENSE.md
+
+5. Web client assets under [static/]
+
+   static/js/gotty.js is a webpack bundle. The licenses of every package it
+   contains (xterm.js and its fit, web-links, webgl and unicode11 addons,
+   Bootstrap, Popper, Preact, crc-32, zmodem.js, css-loader, style-loader)
+   are listed in static/js/gotty.licenses.txt, with the retained banners in
+   static/js/gotty.js.LICENSE.txt.
+
+   static/js/xterm-addon-unicode11.js is byte-for-byte identical to
+   lib/addon-unicode11.js of the npm release @xterm/addon-unicode11 0.9.0, and
+   static/css/xterm.css comes from xterm.js
+   (Copyright (c) 2014 The xterm.js authors; Copyright (c) 2012-2013
+   Christopher Jeffrey; MIT License, text in static/js/gotty.licenses.txt).
+
+   static/favicon.ico, static/icon.svg and static/icon_192.png are
+   byte-for-byte identical to the icons of GoTTY
+   (https://github.com/sorenisanerd/gotty), covered by the MIT License and
+   the GoTTY copyright notices in LICENSE.
+
+Single executables built with --build-exe / --build-for embed the Bun
+runtime. Bun is MIT-licensed but statically links JavaScriptCore and WebKit
+(LGPL-2) and other libraries under their own licenses; anyone distributing
+such an executable must also follow Bun's license terms, including the LGPL
+relinking provisions described at
+https://github.com/oven-sh/bun/blob/main/LICENSE.md. The executables carry
+LICENSE, NOTICE and LICENSES/ as embedded assets.

@@ -93,6 +93,28 @@ describe("parser", () => {
     expect(parse("echo hi | tr a-z A-Z")[0].pipeline).toHaveLength(2);
   });
 
+  test("parses a trailing background operator", () => {
+    const [job] = parse("sleep 30 &");
+    expect(job.background).toBe(true);
+    expect(job.pipeline).toHaveLength(1);
+    const [foreground] = parse("echo before & after");
+    expect(foreground.background).toBe(false);
+    expect(foreground.pipeline[0].words[2].fragments[0].text).toBe("&");
+    expect(parse(`echo "&"`)[0].background).toBe(false);
+    expect(parse("echo \\&")[0].background).toBe(false);
+  });
+
+  test("recognizes a trailing & from tokens, independently of comments and redirect targets", () => {
+    for (const source of ["sleep 30 & # comment", "sleep 30 & # comment &", "sleep 30 &\r\n# comment\r\n"]) {
+      const [job] = parse(source);
+      expect(job.background).toBe(true);
+      expect(job.pipeline[0].words).toHaveLength(2);
+    }
+    for (const source of ["echo & > file&", "echo & <<< input&", "echo &; # comment &", "echo hi # &"]) {
+      expect(parse(source)[0].background).toBe(false);
+    }
+  });
+
   test("a bare trailing backslash asks for one more interactive line, then joins", () => {
     // This is what the interactive prompt loop's `pending` string looks like
     // the instant Enter is pressed after typing "echo hi \" -- the next
@@ -924,6 +946,75 @@ fi
     expect(output.stdout).toBe("HELLO");
     expect(output.stderr).toBe("");
     expect(output.status).toBe(0);
+  });
+
+  test("returns immediately and exposes a background external process through Bun.sha.procs", async () => {
+    const previous = Bun.sha.procs;
+    Bun.sha.procs = [];
+    try {
+      const started = performance.now();
+      const output = await run(`${process.execPath} -e 'await Bun.sleep(30000)' &`);
+      const first = Bun.sha.procs.at(-1);
+      const secondOutput = await run(`${process.execPath} -e 'await Bun.sleep(30000)' &`);
+      const proc = Bun.sha.procs.at(-1);
+
+      expect(performance.now() - started).toBeLessThan(1000);
+      expect(output.status).toBe(0);
+      expect(output.stderr).toBe(`[1] ${first.pid} Bun.sha.procs[0]\n`);
+      expect(secondOutput.status).toBe(0);
+      expect(secondOutput.stderr).toBe(`[2] ${proc.pid} Bun.sha.procs[1]\n`);
+      expect(Bun.sha.procs).toHaveLength(2);
+      expect(proc).not.toBe(first);
+      expect(proc.pid).toBeGreaterThan(0);
+      expect(typeof proc.kill).toBe("function");
+      first.kill();
+      proc.kill();
+      await Promise.all([first.exited, proc.exited]);
+    } finally {
+      if (previous === undefined) delete Bun.sha.procs;
+      else Bun.sha.procs = previous;
+    }
+  });
+
+  test("keeps the minimal background form limited to one external command", async () => {
+    const builtin = await run("echo nope &");
+    const pipeline = await run("printf x | cat &");
+    expect(builtin.status).toBe(2);
+    expect(pipeline.status).toBe(2);
+    expect(builtin.stderr).toContain("only a single external command");
+    expect(pipeline.stderr).toContain("only a single external command");
+  });
+
+  test("rejects background redirects before expanding, opening files, or spawning", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-background-redirect-"));
+    const previousProcs = Bun.sha.procs;
+    const previousCount = previousProcs?.length;
+    try {
+      await Bun.write(join(directory, "input"), "input content\n");
+      await Bun.write(join(directory, "output"), "keep this content\n");
+      const command = `'${process.execPath.replaceAll("'", "'\\''")}' -e 'await Bun.write("spawned", "ran")'`;
+      const sources = [
+        ...["> output", ">> output", "2> output", "2>> output", "> new-output", "< input", "< missing-input", "<<< payload", "1>&2", "2>&1"]
+          .map((redirect) => `${command} ${redirect} & # comment`),
+        `${command} <<EOF &\nbody\nEOF\n`,
+        `${command} <<-EOF &\n\tbody\n\tEOF\n`,
+        `${command} > $(echo expanded > expanded-marker; echo output) &`,
+      ];
+      for (const source of sources) {
+        const output = await run(source, { cwd: directory });
+        expect(output.status).toBe(2);
+        expect(output.stdout).toBe("");
+        expect(output.stderr).toContain("without redirections");
+      }
+      expect(await Bun.file(join(directory, "output")).text()).toBe("keep this content\n");
+      expect(await Bun.file(join(directory, "input")).text()).toBe("input content\n");
+      for (const name of ["spawned", "new-output", "expanded-marker"])
+        expect(await Bun.file(join(directory, name)).exists()).toBe(false);
+      expect(Bun.sha.procs).toBe(previousProcs);
+      expect(Bun.sha.procs?.length).toBe(previousCount);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("keeps builtin state outside pipelines", async () => {

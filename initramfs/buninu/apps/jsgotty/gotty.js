@@ -115,6 +115,26 @@ function assetFilePath(key) {
   return assets ? assets.assetDiskPath(key) : path.join(__dirname, key);
 }
 
+function windowsConptyDllPath() {
+  const dll = assetFilePath("conpty/conpty.dll");
+  if (fs.existsSync(dll)) return dll;
+  if (!assets) return null;
+  try {
+    const dllBytes = assets.readAssetBytesSync("conpty/conpty.dll");
+    const hostBytes = assets.readAssetBytesSync("conpty/OpenConsole.exe");
+    const version = crypto.createHash("sha256").update(dllBytes).digest("hex").slice(0, 16);
+    const dir = path.join(os.tmpdir(), `jsgotty-conpty-${version}`);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [name, bytes] of [["conpty.dll", dllBytes], ["OpenConsole.exe", hostBytes]]) {
+      const dest = path.join(dir, name);
+      if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+    }
+    return path.join(dir, "conpty.dll");
+  } catch (error) {
+    throw new Error(`Could not prepare bundled ConPTY: ${error.message}`);
+  }
+}
+
 //  URL-relative path -> asset key, or null when it escapes `static/`.
 //  Normalizing against "/" is what makes "../../etc/passwd" unreachable.
 function staticAssetKey(relativePath) {
@@ -1624,6 +1644,10 @@ function createPtyBackend(options) {
     if (globalThis.Bun?.semver?.satisfies?.(
         globalThis.Bun?.version, ">=1.3.14"
       )) {
+      const conptyDll = windowsConptyDllPath();
+      if (conptyDll) {
+        return new (require("./windows-conpty.js"))(options, conptyDll);
+      }
       return new BunPtyBackend(options);
     }
     return new NodePtyBackend(options);

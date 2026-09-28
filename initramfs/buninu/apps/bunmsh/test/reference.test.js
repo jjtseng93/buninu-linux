@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readlinkSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createState, decode, execute } from "../src/shell.js";
@@ -82,6 +82,15 @@ async function expectBuiltinSedLike(args, input, cwd = root) {
   const [actual, reference] = await Promise.all([
     invokeArgvWithInput([process.execPath, join(root, "src/main.js"), "-cc", "builtin", "sed", ...args], input, cwd),
     invokeArgvWithInput(["/usr/bin/sed", ...args], input, cwd),
+  ]);
+  expect(actual).toEqual(reference);
+}
+
+async function expectBuiltinLikeSystem(name, args, input = "", cwd = root) {
+  const [actual, reference] = await Promise.all([
+    invokeArgvWithInput(
+      [process.execPath, join(root, "src/main.js"), "-cc", "builtin", name, ...args], input, cwd),
+    invokeArgvWithInput([Bun.which(name), ...args], input, cwd),
   ]);
   expect(actual).toEqual(reference);
 }
@@ -402,6 +411,79 @@ printf ':%s' $?
   });
 });
 
+describe("system multi-operand reference", () => {
+  test("printf repeats its format until all arguments are consumed", async () => {
+    await expectBuiltinLikeSystem("printf", ["%s=%d\n", "one", "1", "two", "2"]);
+    await expectBuiltinLikeSystem("printf", ["[%s][%s]\n", "one", "two", "three"]);
+  });
+
+  test("ln links each source into a target directory", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-ln-reference-"));
+    const actualDir = join(directory, "actual");
+    const systemDir = join(directory, "system");
+    try {
+      for (const cwd of [actualDir, systemDir]) {
+        mkdirSync(cwd);
+        mkdirSync(join(cwd, "hard"));
+        mkdirSync(join(cwd, "soft"));
+        await Bun.write(join(cwd, "one"), "first\n");
+        await Bun.write(join(cwd, "two"), "second\n");
+      }
+      for (const args of [["one", "two", "hard"], ["-s", "one", "two", "soft"]]) {
+        const [actual, reference] = await Promise.all([
+          invokeArgvWithInput([process.execPath, join(root, "src/main.js"), "-cc", "builtin", "ln", ...args], "", actualDir),
+          invokeArgvWithInput([Bun.which("ln"), ...args], "", systemDir),
+        ]);
+        expect(actual).toEqual(reference);
+      }
+      for (const name of ["one", "two"]) {
+        expect(readdirSync(join(actualDir, "hard"))).toEqual(readdirSync(join(systemDir, "hard")));
+        expect(statSync(join(actualDir, "hard", name)).ino).toBe(statSync(join(actualDir, name)).ino);
+        expect(readlinkSync(join(actualDir, "soft", name)))
+          .toBe(readlinkSync(join(systemDir, "soft", name)));
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test("head and tail select lines independently from each file", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-parts-reference-"));
+    try {
+      await Bun.write(join(directory, "one"), "alpha\nbeta\n");
+      await Bun.write(join(directory, "two"), "gamma\ndelta\n");
+      for (const args of [["-n", "1", "one", "two"], ["-c", "2", "one", "two"],
+        ["-n", "0", "one", "two"]])
+        await expectBuiltinLikeSystem("head", args, "", directory);
+      for (const args of [["-n", "1", "one", "two"], ["-n", "+2", "one", "two"],
+        ["-n", "0", "one", "two"]])
+        await expectBuiltinLikeSystem("tail", args, "", directory);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test("wc prints each file count and a total; cut reads each file", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-text-reference-"));
+    try {
+      await Bun.write(join(directory, "one"), "alpha beta\ngamma\n");
+      await Bun.write(join(directory, "two"), "delta\nepsilon zeta\n");
+      for (const args of [["-l", "one", "two"], ["-lwc", "one", "two"]])
+        await expectBuiltinLikeSystem("wc", args, "", directory);
+      await expectBuiltinLikeSystem("cut", ["-c", "1-3", "one", "two"], "", directory);
+      await expectBuiltinLikeSystem("cut", ["-c", "1", "one"], "", directory);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test("md5sum and sha256sum hash each file separately", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-hash-reference-"));
+    try {
+      await Bun.write(join(directory, "one"), "alpha\n");
+      await Bun.write(join(directory, "two"), "beta\n");
+      for (const name of ["md5sum", "sha256sum"]) {
+        await expectBuiltinLikeSystem(name, ["one", "two"], "", directory);
+        await expectBuiltinLikeSystem(name, [], "stdin text\n", directory);
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
 describe("system tail reference", () => {
   test("supports -n +N and compact -n+N from-start modes", async () => {
     const input = "one\ntwo\nthree\nfour\n";
@@ -448,6 +530,18 @@ describe("system grep reference", () => {
       await Bun.write(join(directory, "tree", "nested", "b.txt"), "needle two\n");
       await expectBuiltinGrepLike(["-rn", "needle", "tree"], "", directory);
       await expectBuiltinGrepLike(["-n", "needle", "tree/a.txt", "tree/nested/b.txt"], "", directory);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test("searches the current directory for -r without a path", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-grep-cwd-reference-"));
+    try {
+      mkdirSync(join(directory, "nested"));
+      await Bun.write(join(directory, "nested", "a.txt"), "needle one\nnone\n");
+      await expectBuiltinGrepLike(["-r", "needle"], "", directory);
+      await expectBuiltinGrepLike(["-rn", "needle"], "", directory);
+      await expectBuiltinGrepLike(["-r", "missing"], "", directory);
+      await expectBuiltinGrepLike(["-rq", "needle"], "", directory);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.18 - 2026-09-29
+
+- Sync jsgotty to 1.1.14: Kitty for Windows
+- Sync bunmsh to 0.3.10: Fix several posix/gnu/external builtin commands
+
 ## 0.4.17 - 2026-09-26
 
 - readme: Add homepage URL

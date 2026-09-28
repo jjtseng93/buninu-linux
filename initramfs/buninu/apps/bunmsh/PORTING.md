@@ -32,8 +32,12 @@ pseudo-terminal tests.
 
 ### Grammar and execution
 
-- Background jobs (`&`), job control, coprocesses, and asynchronous command
-  lists are not implemented.
+- A final, standalone, unquoted `&` starts a single external command in the
+  background (trailing comments and newlines are allowed). Stdin is ignored;
+  stdout/stderr are inherited, and the process is exposed in `Bun.sha.procs`.
+  Background pipelines, builtins, functions, and all redirections are rejected
+  before files are opened. General asynchronous command lists, job control,
+  and coprocesses are not implemented.
 - Brace command groups, `select`, arithmetic commands, and `[[ ... ]]` are
   not implemented.
 - Functions and subshells cover practical cases but do not yet reproduce every

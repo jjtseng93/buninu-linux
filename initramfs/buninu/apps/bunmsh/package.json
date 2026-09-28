@@ -1,6 +1,6 @@
 {
   "name": "bunmsh",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "Cross-platform command shell for Bun JavaScript",
   "license": "MIT",
   "type": "module",

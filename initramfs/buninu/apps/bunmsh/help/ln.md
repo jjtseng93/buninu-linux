@@ -5,7 +5,8 @@ Create hard or symbolic links.
 ### Usage
 
 ```sh
-ln [-sfT] TARGET LINK
+ln [-sf] TARGET LINK
+ln [-sf] TARGET ... DIRECTORY
 ```
 
 ### Options and forms
@@ -13,6 +14,7 @@ ln [-sfT] TARGET LINK
 - `-s`: Create a symbolic link.
 - `-f`: Replace an existing destination.
 - `-T`: Treat the destination as a normal path, not a directory.
+- Multiple targets may be linked into an existing directory.
 
 ### Example
 

@@ -2,6 +2,21 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.3.10] - 2026-09-29
+
+### Fixed
+
+- Match system utilities when handling multiple operands: `printf` repeats its
+  format for remaining arguments; `ln` links multiple sources into a directory;
+  `head`, `tail`, `wc`, and `cut` process each file separately; and `md5sum` and
+  `sha256sum` print one labelled digest per file. `wc` also prints a total for
+  multiple files. Reference tests compare these results with system commands.
+
+- Make `grep -r PATTERN` without an explicit path search the current directory,
+  as system `grep` does, instead of reading a locked standard-input stream.
+  Reference tests cover recursive matches, line numbers, no matches, and quiet
+  mode.
+
 ## [0.3.9] - 2026-09-22
 
 ### Fixed
