@@ -55,8 +55,11 @@ function cpioSum(bytes) {
 
 // --- UKI: PE image ----------------------------------------------------------
 // The whole file with the COFF TimeDateStamp and optional-header CheckSum
-// zeroed, except that the .initrd section counts by its cpio content sum
-// (its sizes in the section table follow the gzip output, so they are left out).
+// zeroed, except that the .initrd section counts by its cpio content sum.
+// The gzip output's size varies with the mtimes inside, so everything that
+// follows it is left out too: the .initrd sizes in the section table, the
+// file length (its raw data is cut out rather than zeroed), SizeOfImage and
+// SizeOfInitializedData.
 function peSum(bytes) {
   const pe = u32(bytes, 0x3c);
   if (ascii(bytes, pe, 4) !== "PE\0\0") throw new Error("not a PE image");
@@ -68,6 +71,7 @@ function peSum(bytes) {
   copy.fill(0, coff + 4, coff + 8); // TimeDateStamp
   copy.fill(0, optional + 64, optional + 68); // CheckSum
   let initrd = null;
+  let cut = null;
   for (let index = 0; index < sections; index++) {
     const header = table + index * 40;
     const name = ascii(bytes, header, 8).replace(/\0+$/, "");
@@ -75,18 +79,26 @@ function peSum(bytes) {
     const rawSize = u32(bytes, header + 16);
     const start = u32(bytes, header + 20);
     initrd = cpioSum(bytes.subarray(start, start + (u32(bytes, header + 8) || rawSize)));
-    copy.fill(0, start, start + rawSize);
-    copy.fill(0, header + 8, header + 12); // VirtualSize: the compressed size varies with the mtimes
+    cut = [start, start + rawSize];
+    copy.fill(0, header + 8, header + 12); // VirtualSize
     copy.fill(0, header + 16, header + 20); // SizeOfRawData
+    copy.fill(0, optional + 8, optional + 12); // SizeOfInitializedData
+    copy.fill(0, optional + 56, optional + 60); // SizeOfImage
+    // Sections stored after it move with its size.
+    for (let other = 0; other < sections; other++) {
+      const otherHeader = table + other * 40;
+      if (u32(bytes, otherHeader + 20) > start) copy.fill(0, otherHeader + 20, otherHeader + 24);
+    }
   }
-  const sum = sha256(copy, initrd?.sum ?? "");
+  const parts = cut ? [copy.subarray(0, cut[0]), copy.subarray(cut[1])] : [copy];
+  const sum = sha256(...parts, initrd?.sum ?? "");
   return { sum, detail: initrd ? `.initrd ${initrd.sum.slice(0, 16)} (${initrd.detail})` : "no .initrd" };
 }
 
 // --- disk image: GPT with a FAT ESP, or a bare FAT filesystem ----------------
 // GPT: each partition's start, size and type, but not the disk or partition
 // GUIDs. FAT: the file tree (names, sizes, contents), not timestamps, serial
-// or free-space contents. .EFI files inside count by their PE sum.
+// or free-space contents. .EFI files inside count by their PE sum, not their length.
 function diskSum(bytes) {
   if (ascii(bytes, 512, 8) !== "EFI PART") return fatSum(bytes);
   const entriesLba = u64(bytes, 512 + 72);
@@ -156,8 +168,9 @@ function fatSum(bytes) {
         walk(chain(cluster), name + "/");
       } else {
         const data = chain(cluster).subarray(0, u32(directory, offset + 28));
-        const sum = isPE(data) ? peSum(data).sum : sha256(data);
-        files.push(`${name} ${data.length} ${sum}\n`);
+        // A UKI's length follows its .initrd's gzip size; its PE sum covers the rest.
+        const pe = isPE(data);
+        files.push(`${name} ${pe ? "pe" : data.length} ${pe ? peSum(data).sum : sha256(data)}\n`);
       }
     }
   };
