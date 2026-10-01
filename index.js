@@ -52,7 +52,10 @@ const stages = [
     scripts: ["build-uki.sh", "build-image.sh"],
     tools: (arch) => [
       "fakeroot", "cpio", "gzip",
-      `${architectures[arch].binutils}-objcopy`, `${architectures[arch].binutils}-objdump`,
+      // BUNINU_JS_UKI=1: build-uki.sh assembles the UKI with scripts/uki.js.
+      ...(process.env.BUNINU_JS_UKI === "1"
+        ? []
+        : [`${architectures[arch].binutils}-objcopy`, `${architectures[arch].binutils}-objdump`]),
       "parted", "mkfs.fat", "mmd", "mcopy",
     ],
   },
@@ -301,7 +304,7 @@ function dockerImage() {
 // into the bind-mounted checkout stays owned by that user; fakeroot provides
 // the root ownership the initramfs records.
 function dockerRun(script, env) {
-  const passEnv = ["BUNINU_ARCH", "LINUX_FLAVOR", "REAL_MACHINE", "ALPINE_MIRROR"]
+  const passEnv = ["BUNINU_ARCH", "LINUX_FLAVOR", "REAL_MACHINE", "ALPINE_MIRROR", "BUNINU_JS_UKI"]
     .filter((name) => env[name] !== undefined)
     .flatMap((name) => ["--env", `${name}=${env[name]}`]);
   const user = typeof process.getuid === "function"

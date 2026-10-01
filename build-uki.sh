@@ -35,13 +35,33 @@ else
 fi
 printf '%s' "$consoles panic=0 PATH=/bin KERNEL_RELEASE=$kernel_release rdinit=/bin/bun -- -e import('/init.js')" > build/cmdline
 
+# Only this architecture's removable-media name may remain: firmware of the
+# other architecture ignores it, but run-qemu.sh reads the guest from it.
+for efi in vda/EFI/BOOT/*.EFI; do
+    [ "$efi" = "vda/EFI/BOOT/$efi_boot_name" ] || rm -f "$efi"
+done
+
+stub="$kernel_dir/$efi_stub"
+# BUNINU_JS_UKI=1 assembles the UKI with scripts/uki.js (bun or node) instead
+# of binutils; it lays the sections out by the same rules as below.
+if [ "${BUNINU_JS_UKI:-}" = 1 ]; then
+    js=$(command -v bun || command -v node) || {
+        echo "error: BUNINU_JS_UKI=1 needs bun or node on PATH" >&2
+        exit 1
+    }
+    "$js" scripts/uki.js "$stub" "vda/EFI/BOOT/$efi_boot_name" \
+        .osrel=build/os-release .cmdline=build/cmdline \
+        .linux="$kernel_image" .initrd=build/initramfs.cpio.gz
+    echo "Built $arch UKI with Alpine linux-$linux_flavor at vda/EFI/BOOT/$efi_boot_name (scripts/uki.js)"
+    exit 0
+fi
+
 if ! command -v "$uki_objcopy" >/dev/null || ! command -v "$uki_objdump" >/dev/null; then
     echo "error: build stage needs $uki_objcopy and $uki_objdump (Debian $uki_binutils_package)" >&2
     echo "run inside PRoot or with ./index.js --docker; see README Build environment" >&2
     exit 1
 fi
 
-stub="$kernel_dir/$efi_stub"
 pe_header() { "$uki_objdump" -p "$stub" | awk -v key="$1" '$1 == key { print $2; exit }'; }
 align_up() { echo $(( ($1 + $2 - 1) / $2 * $2 )); }
 max() { echo $(( $1 > $2 ? $1 : $2 )); }
@@ -64,12 +84,6 @@ osrel_vma=$((image_base + osrel_offset))
 cmdline_vma=$((image_base + cmdline_offset))
 linux_vma=$((image_base + linux_offset))
 initrd_vma=$((image_base + initrd_offset))
-
-# Only this architecture's removable-media name may remain: firmware of the
-# other architecture ignores it, but run-qemu.sh reads the guest from it.
-for efi in vda/EFI/BOOT/*.EFI; do
-    [ "$efi" = "vda/EFI/BOOT/$efi_boot_name" ] || rm -f "$efi"
-done
 
 "$uki_objcopy" \
     --add-section .osrel=build/os-release \
