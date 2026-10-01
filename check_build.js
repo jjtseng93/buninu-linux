@@ -29,28 +29,34 @@ const ascii = (b, o, n) => String.fromCharCode(...b.subarray(o, o + n));
 
 // --- initramfs: newc cpio, optionally gzipped -------------------------------
 // Kept per entry: name, mode, uid, gid, device numbers of special files, size
-// and data. Dropped: inode, mtime, link count, the containing device.
+// and data. Dropped: inode, mtime, link count, the containing device, and
+// the order of the entries (`sort` follows the locale, and the unpacked tree
+// is the same either way): entries count sorted by name, byte by byte.
 function cpioSum(bytes) {
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
-  const hasher = createHash("sha256");
+  const entries = [];
   let offset = 0;
-  let entries = 0;
   while (offset + 110 <= bytes.length) {
     const magic = ascii(bytes, offset, 6);
     if (magic !== "070701" && magic !== "070702") throw new Error(`not a newc cpio entry at ${offset}`);
     const field = (index) => parseInt(ascii(bytes, offset + 6 + index * 8, 8), 16);
     const [mode, uid, gid, size, rdevMajor, rdevMinor, nameSize] =
       [field(1), field(2), field(3), field(6), field(9), field(10), field(11)];
-    const name = ascii(bytes, offset + 110, nameSize - 1);
-    let data = (offset + 110 + nameSize + 3) & ~3;
+    const name = Buffer.from(bytes.subarray(offset + 110, offset + 110 + nameSize - 1));
+    const data = (offset + 110 + nameSize + 3) & ~3;
     const next = (data + size + 3) & ~3;
-    if (name === "TRAILER!!!") break;
-    hasher.update(`${name}\0${mode.toString(8)} ${uid} ${gid} ${rdevMajor}:${rdevMinor} ${size}\n`);
-    hasher.update(bytes.subarray(data, data + size));
-    entries++;
+    if (name.toString("latin1") === "TRAILER!!!") break;
+    entries.push({ name, header: `\0${mode.toString(8)} ${uid} ${gid} ${rdevMajor}:${rdevMinor} ${size}\n`, data: bytes.subarray(data, data + size) });
     offset = next;
   }
-  return { sum: hasher.digest("hex"), detail: `${entries} entries` };
+  entries.sort((a, b) => Buffer.compare(a.name, b.name));
+  const hasher = createHash("sha256");
+  for (const { name, header, data } of entries) {
+    hasher.update(name);
+    hasher.update(header);
+    hasher.update(data);
+  }
+  return { sum: hasher.digest("hex"), detail: `${entries.length} entries` };
 }
 
 // --- UKI: PE image ----------------------------------------------------------

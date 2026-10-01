@@ -50,6 +50,22 @@ mkdir -p "$staging/usr/share/icons/hicolor/512x512/apps" "$staging/usr/share/pix
 ln -sfn ../../../../../../buninu/icon.png "$staging/usr/share/icons/hicolor/512x512/apps/buninu-linux.png"
 ln -sfn ../../../buninu/icon.png "$staging/usr/share/pixmaps/buninu-linux.png"
 
+# BUNINU_JS_CPIO=1 writes the archive with scripts/cpio.js (bun or node)
+# instead of fakeroot, cpio and gzip: the device nodes below exist only in
+# the archive, so nothing needs root.
+if [ "${BUNINU_JS_CPIO:-}" = 1 ]; then
+    js=$(command -v bun || command -v node) || {
+        echo "error: BUNINU_JS_CPIO=1 needs bun or node on PATH" >&2
+        exit 1
+    }
+    "$js" scripts/cpio.js "$staging" build/initramfs.cpio.gz \
+        dev/console:c:5:1:0600 "dev/$serial_console:c:$serial_major:64:0620" \
+        dev/null:c:1:3:0666 dev/zero:c:1:5:0666 dev/random:c:1:8:0666 \
+        dev/urandom:c:1:9:0666 dev/tty:c:5:0:0666
+    echo "Built build/initramfs.cpio.gz for $arch (scripts/cpio.js)"
+    exit 0
+fi
+
 # fakeroot lets cpio record the character devices without real root. Nothing
 # has mounted devtmpfs when the kernel execs Bun as PID 1, so every device
 # Bun's startup needs has to be in the archive itself:
