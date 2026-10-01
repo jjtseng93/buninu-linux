@@ -75,6 +75,7 @@ function usage() {
 Usage:
   ${pkg.name} [-f] [-b] [-r] [--arch ARCH] [--docker] [--export] [--linux-lts]
                [--real] [-- qemu arguments]
+  ${pkg.name} --check [FILE...]
 
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
@@ -99,6 +100,12 @@ Stages (always run in this order, whichever you pick):
   --real        build for a physical machine: use linux-lts, make tty0 the
                 primary console, and include USB xHCI/HID keyboard modules
                 (x86_64 only)
+
+  --check [FILE...]
+                print content checksums of the build outputs that ignore
+                mtimes, timestamps and GUIDs, and exit (check_build.js; the
+                arguments after it are its own: .img, .efi or .cpio files,
+                by default the initramfs, the UKI and vda.img)
 
   -h, --help    show this
   -V, --version show name, version, runtime and platform
@@ -149,6 +156,8 @@ function parse(argv) {
     } else if (argument === "--readme") {
       printReadme();
       process.exit(0);
+    } else if (argument === "--check") {
+      runCheck(argv.slice(index + 1));
     } else if (argument === "--linux-lts") {
       linuxLts = true;
     } else if (argument === "--real") {
@@ -215,6 +224,14 @@ function printReadme() {
       ? Bun.markdown.ansi(markdown, { hyperlinks: true })
       : markdown;
   process.stdout.write(rendered.endsWith("\n") ? rendered : rendered + "\n");
+}
+
+// --check hands everything after it to check_build.js, under the same
+// runtime, and exits with its status.
+function runCheck(args) {
+  const result = spawnSync(process.execPath, [resolve(rootDir, "check_build.js"), ...args], { stdio: "inherit" });
+  if (result.error) fail(`could not start check_build.js: ${result.error.message}`);
+  process.exit(result.status ?? 1);
 }
 
 // `command -v` without a shell: look for an executable on PATH.
