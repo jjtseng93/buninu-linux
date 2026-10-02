@@ -64,16 +64,23 @@
 - This guide builds a bootable `buninu-linux-<version>.img`
 - The documented build environment is Debian 13 under Termux PRoot
 - A regular Debian installation works as well.
+  * Experimental Alpine support now!
 - For a source checkout, clone into the Termux home so native Termux and PRoot
   can share it; `~` differs between them, but the absolute path is the same.
 
 ### Steps
 
-- Before anything, install Bun in Debian first:
+- Before anything, install Bun in Debian/Alpine first:
 
 ```sh
+# Debian/Ubuntu
 apt update
 apt install curl unzip
+
+# Alpine
+apk update
+apk add curl unzip bash libgcc libstdc++
+
 curl -fsSL https://bun.sh/install | bash
 ```
 
@@ -85,7 +92,11 @@ Install the build tools, enter a directory where
 you want to keep the finished image, then run the published package:
 
 ```sh
+# Debian/Ubuntu
 apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+
+# Alpine
+apk add bash coreutils tar curl unzip parted dosfstools mtools libgcc libstdc++
 
 mkdir -p /data/data/com.termux/files/home/buninu-build
 cd /data/data/com.termux/files/home/buninu-build
@@ -94,7 +105,14 @@ export PATH=$HOME/.bun/bin:$PATH
 
 bun x buninu-linux --version
 
+# Debian/Ubuntu
 bun x buninu-linux -fb --real --export
+
+# Alpine
+export BUNINU_JS_CPIO=1
+export BUNINU_JS_UKI=1
+bun x buninu-linux -fb --real --export
+
 ```
 
 `--export` copies the completed `vda.img` out of bunx's package directory and
