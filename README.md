@@ -908,7 +908,7 @@ initramfs/                init.js, commands, userspace: the same for every archi
 native/<arch>/            musl and the GCC runtime (committed); bun and modules (fetched)
 ```
 
-The `--real` inputs are Alpine v3.24 `linux-lts-6.18.53-r0`, musl `1.2.6-r2`,
+The `--real` inputs are Alpine v3.24 `linux-lts-6.18.54-r0`, musl `1.2.6-r2`,
 `systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
 `linux-x64-musl-baseline`. The aarch64 guest uses the same versions from
 Alpine's aarch64 repository and Bun's `linux-aarch64-musl`. There is no BusyBox
@@ -1005,7 +1005,7 @@ The physical boot chain is firmware → the UKI stub → its embedded
 and, with the currently pinned kernel, embeds this complete command line:
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.54-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 Serial kernel logging is retained, while the final console makes
@@ -1029,7 +1029,7 @@ the same way). Build without `--real`; this selects Alpine `linux-virt`, omits t
 module set, and puts `ttyS0` last so serial stdio owns `/dev/console`:
 
 ```text
-console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-virt rdinit=/bin/bun -- -e import('/init.js')
+console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.54-0-virt rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 Build and boot it with:
@@ -1146,7 +1146,7 @@ The default `--real` image embeds this kernel command line (shown for the
 currently pinned LTS release):
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.53-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.54-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 The physical display (`tty0`) is the final console and therefore owns PID 1's
