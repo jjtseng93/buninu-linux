@@ -1,0 +1,248 @@
+#!/bin/bun
+// unzip — list, test and extract zip archives (stored and deflated members,
+// zip64 included) over node:zlib.
+//
+// Supported: -p (members to standard output), -l (list), -t (test),
+// -d DIR, -o (overwrite), -n (never overwrite), -j (junk paths), -q/-qq;
+// MEMBER operands may be wildcards. Unix modes and symlinks are restored.
+// Runs under node as well as bun.
+
+import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
+import { basename, dirname, join, normalize, resolve } from "node:path";
+import { inflateRawSync } from "node:zlib";
+import { crc32 } from "../lib/crc32.js";
+
+const fail = (message, status = 1) => {
+  console.error(`unzip: ${message}`);
+  process.exit(status);
+};
+
+const usage = () => {
+  console.error(`Usage:
+  unzip [-o|-n] [-j] [-q] ZIP [MEMBER...] [-d DIR]
+  unzip -p ZIP [MEMBER...]
+  unzip -l ZIP [MEMBER...]
+  unzip -t ZIP`);
+  process.exit(10);
+};
+
+let mode = "extract";
+let overwrite = null; // null: refuse, true: -o, false: -n
+let junkPaths = false;
+let quiet = 0;
+let directory = ".";
+const operands = [];
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (argument === "-h" || argument === "--help") usage();
+  if (argument === "-d") {
+    if (index + 1 >= argv.length) fail("-d requires a directory", 10);
+    directory = argv[++index];
+    continue;
+  }
+  if (argument.startsWith("-d") && argument.length > 2) { directory = argument.slice(2); continue; }
+  if (argument.startsWith("-") && argument.length > 1) {
+    for (const letter of argument.slice(1)) {
+      if (letter === "p") mode = "pipe";
+      else if (letter === "l") mode = "list";
+      else if (letter === "t") mode = "test";
+      else if (letter === "o") overwrite = true;
+      else if (letter === "n") overwrite = false;
+      else if (letter === "j") junkPaths = true;
+      else if (letter === "q") quiet++;
+      else fail(`unknown option -${letter}`, 10);
+    }
+    continue;
+  }
+  operands.push(argument);
+}
+if (operands.length === 0) usage();
+const [archive, ...patterns] = operands;
+
+const fd = (() => {
+  try { return openSync(archive, "r"); } catch (error) { return fail(`cannot open ${archive}: ${error.message}`, 9); }
+})();
+const size = fstatSync(fd).size;
+const read = (position, length) => {
+  const buffer = Buffer.alloc(length);
+  let done = 0;
+  while (done < length) {
+    const count = readSync(fd, buffer, done, length - done, position + done);
+    if (count === 0) fail(`${archive}: unexpected end of file`, 3);
+    done += count;
+  }
+  return buffer;
+};
+
+// End of central directory: in the last 64 KiB + 22 bytes, searched backwards.
+const tailLength = Math.min(size, 65557);
+const tail = read(size - tailLength, tailLength);
+let eocd = -1;
+for (let offset = tailLength - 22; offset >= 0; offset--) {
+  if (tail.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
+}
+if (eocd < 0) fail(`${archive}: not a zip archive (no end of central directory)`, 9);
+let entryCount = tail.readUInt16LE(eocd + 10);
+let directorySize = tail.readUInt32LE(eocd + 12);
+let directoryOffset = tail.readUInt32LE(eocd + 16);
+// zip64: the locator sits just before the end of central directory record.
+if (eocd >= 20 && tail.readUInt32LE(eocd - 20) === 0x07064b50) {
+  const record = read(Number(tail.readBigUInt64LE(eocd - 20 + 8)), 56);
+  if (record.readUInt32LE(0) !== 0x06064b50) fail(`${archive}: bad zip64 end of central directory`, 3);
+  entryCount = Number(record.readBigUInt64LE(32));
+  directorySize = Number(record.readBigUInt64LE(40));
+  directoryOffset = Number(record.readBigUInt64LE(48));
+}
+
+const entries = [];
+const central = read(directoryOffset, directorySize);
+for (let offset = 0, index = 0; index < entryCount; index++) {
+  if (central.readUInt32LE(offset) !== 0x02014b50) fail(`${archive}: bad central directory entry ${index}`, 3);
+  const nameLength = central.readUInt16LE(offset + 28);
+  const extraLength = central.readUInt16LE(offset + 30);
+  const commentLength = central.readUInt16LE(offset + 32);
+  const flags = central.readUInt16LE(offset + 8);
+  const entry = {
+    madeBy: central.readUInt16LE(offset + 4) >> 8,
+    flags,
+    method: central.readUInt16LE(offset + 10),
+    time: central.readUInt16LE(offset + 12),
+    date: central.readUInt16LE(offset + 14),
+    crc: central.readUInt32LE(offset + 16),
+    compressedSize: central.readUInt32LE(offset + 20),
+    size: central.readUInt32LE(offset + 24),
+    external: central.readUInt32LE(offset + 38),
+    localOffset: central.readUInt32LE(offset + 42),
+    name: central.toString(flags & 0x800 ? "utf8" : "latin1", offset + 46, offset + 46 + nameLength),
+  };
+  // zip64 extra field: the 0xFFFFFFFF fields follow, in this order.
+  const extra = central.subarray(offset + 46 + nameLength, offset + 46 + nameLength + extraLength);
+  for (let position = 0; position + 4 <= extra.length;) {
+    const id = extra.readUInt16LE(position);
+    const length = extra.readUInt16LE(position + 2);
+    if (id === 0x0001) {
+      let field = position + 4;
+      for (const key of ["size", "compressedSize", "localOffset"]) {
+        if (entry[key] === 0xffffffff) { entry[key] = Number(extra.readBigUInt64LE(field)); field += 8; }
+      }
+    }
+    position += 4 + length;
+  }
+  entries.push(entry);
+  offset += 46 + nameLength + extraLength + commentLength;
+}
+
+// Bun.Glob when running under Bun; elsewhere the wildcards become a RegExp:
+// * and ? match across "/" as in Info-ZIP, [...] is a set.
+const globToRegExp = (pattern) => new RegExp(`^${pattern.replace(/\[[^\]]*\]|[*?]|[.+^${}()|\\]/g, (token) =>
+  token === "*" ? ".*" : token === "?" ? "." : token.startsWith("[") ? token.replace(/^\[!/, "[^") : `\\${token}`)}$`, "s");
+const toMatcher = (pattern) => {
+  if (typeof Bun !== "undefined") {
+    const glob = new Bun.Glob(pattern);
+    return { test: (name) => glob.match(name) };
+  }
+  return globToRegExp(pattern);
+};
+const globs = patterns.map(toMatcher);
+const selected = globs.length ? entries.filter((entry) => globs.some((glob) => glob.test(entry.name))) : entries;
+for (const [index, pattern] of patterns.entries()) {
+  if (!entries.some((entry) => globs[index].test(entry.name))) {
+    console.error(`caution: filename not matched:  ${pattern}`);
+  }
+}
+
+const dosDate = (entry) => {
+  const year = (entry.date >> 9) + 1980;
+  const month = (entry.date >> 5) & 15;
+  const day = entry.date & 31;
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)} ${pad(entry.time >> 11)}:${pad((entry.time >> 5) & 63)}`;
+};
+
+const data = (entry) => {
+  if (entry.flags & 1) throw new Error("encrypted members are not supported");
+  const local = read(entry.localOffset, 30);
+  if (local.readUInt32LE(0) !== 0x04034b50) throw new Error("bad local header");
+  const start = entry.localOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
+  const raw = read(start, entry.compressedSize);
+  let bytes;
+  if (entry.method === 0) bytes = raw;
+  else if (entry.method === 8) bytes = inflateRawSync(raw);
+  else throw new Error(`compression method ${entry.method} is not supported`);
+  if (bytes.length !== entry.size) throw new Error(`size mismatch (${bytes.length} != ${entry.size})`);
+  if (crc32(bytes) !== entry.crc) throw new Error("CRC error");
+  return bytes;
+};
+
+const writeAll = (target, bytes) => {
+  for (let offset = 0; offset < bytes.length;) offset += writeSync(target, bytes, offset, bytes.length - offset);
+};
+
+let status = 0;
+if (mode === "list") {
+  let total = 0;
+  console.log("  Length      Date    Time    Name\n---------  ---------- -----   ----");
+  for (const entry of selected) {
+    total += entry.size;
+    console.log(`${String(entry.size).padStart(9)}  ${dosDate(entry)}   ${entry.name}`);
+  }
+  console.log(`---------                     -------\n${String(total).padStart(9)}                     ${selected.length} file${selected.length === 1 ? "" : "s"}`);
+} else if (mode === "pipe") {
+  for (const entry of selected) {
+    if (entry.name.endsWith("/")) continue;
+    try { writeAll(1, data(entry)); } catch (error) { console.error(`unzip: ${entry.name}: ${error.message}`); status = 2; }
+  }
+} else if (mode === "test") {
+  for (const entry of selected) {
+    if (entry.name.endsWith("/")) continue;
+    try { data(entry); if (!quiet) console.log(`    testing: ${entry.name.padEnd(24)} OK`); }
+    catch (error) { console.log(`    testing: ${entry.name.padEnd(24)} ${error.message}`); status = 2; }
+  }
+  if (status === 0 && quiet < 2) console.log(`No errors detected in compressed data of ${archive}.`);
+} else {
+  if (!quiet) console.log(`Archive:  ${archive}`);
+  const root = resolve(directory);
+  mkdirSync(root, { recursive: true });
+  for (const entry of selected) {
+    const name = junkPaths ? basename(entry.name) : entry.name;
+    if (!name || (junkPaths && entry.name.endsWith("/"))) continue;
+    // No absolute paths or "..": a member never lands outside DIR.
+    const relative = normalize(name.replace(/^\/+/, ""));
+    if (relative.startsWith("..") || relative.split("/").includes("..")) {
+      console.error(`unzip: skipping ${entry.name}: path outside the destination`);
+      status = 1;
+      continue;
+    }
+    const target = join(root, relative);
+    const unixMode = entry.madeBy === 3 ? entry.external >>> 16 : 0;
+    try {
+      if (entry.name.endsWith("/")) {
+        mkdirSync(target, { recursive: true });
+        if (!quiet) console.log(`   creating: ${join(directory, relative)}/`);
+        if (unixMode & 0o7777) chmodSync(target, unixMode & 0o7777);
+        continue;
+      }
+      const exists = (() => { try { lstatSync(target); return true; } catch { return false; } })();
+      if (exists) {
+        if (overwrite === false) continue;
+        if (overwrite === null) { console.error(`unzip: ${join(directory, relative)} exists; use -o to overwrite or -n to skip`); status = 1; continue; }
+        rmSync(target, { force: true });
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      const bytes = data(entry);
+      if ((unixMode & 0o170000) === 0o120000) {
+        symlinkSync(bytes.toString(), target);
+      } else {
+        writeFileSync(target, bytes);
+        if (unixMode & 0o7777) chmodSync(target, unixMode & 0o7777);
+      }
+      if (!quiet) console.log(`  inflating: ${join(directory, relative)}`);
+    } catch (error) {
+      console.error(`unzip: ${entry.name}: ${error.message}`);
+      status = 2;
+    }
+  }
+}
+closeSync(fd);
+process.exit(status);

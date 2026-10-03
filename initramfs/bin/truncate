@@ -1,0 +1,78 @@
+#!/bin/bun
+// truncate — set the size of files, creating them (sparse) when missing.
+//
+//   truncate -s [+|-|<|>|/|%]SIZE [-c] FILE...
+//
+// SIZE takes K, M, G, T (powers of 1024; KiB ... also), KB, MB, GB, TB
+// (powers of 1000) or nothing (bytes), as in coreutils.
+
+import { closeSync, fstatSync, ftruncateSync, openSync } from "node:fs";
+
+const fail = (message) => {
+  console.error(`truncate: ${message}`);
+  process.exit(1);
+};
+
+const usage = () => {
+  console.error(`Usage: truncate -s [+|-|<|>|/|%]SIZE [-c] FILE...`);
+  process.exit(1);
+};
+
+const units = { "": 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
+const parseSize = (text) => {
+  const match = /^([+\-<>/%]?)(\d+)([KMGT]?)(B|iB)?$/i.exec(text);
+  if (!match) fail(`invalid size: '${text}'`);
+  const unit = match[3].toUpperCase() + (match[4] === "B" ? "B" : "");
+  if (!(unit in units)) fail(`invalid size: '${text}'`);
+  return { relation: match[1], bytes: Number(match[2]) * units[unit] };
+};
+
+let size = null;
+let create = true;
+const files = [];
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (argument === "-h" || argument === "--help") usage();
+  else if (argument === "-s" || argument === "--size") {
+    if (index + 1 >= argv.length) fail("option requires an argument -- 's'");
+    size = parseSize(argv[++index]);
+  } else if (argument.startsWith("--size=")) size = parseSize(argument.slice(7));
+  else if (argument.startsWith("-s") && argument.length > 2) size = parseSize(argument.slice(2));
+  else if (argument === "-c" || argument === "--no-create") create = false;
+  else if (argument === "--") files.push(...argv.slice(index + 1)), index = argv.length;
+  else if (argument.startsWith("-") && argument !== "-") fail(`unknown option ${argument}`);
+  else files.push(argument);
+}
+if (size === null || files.length === 0) usage();
+
+let status = 0;
+for (const file of files) {
+  let fd;
+  try {
+    fd = openSync(file, create ? "a+" : "r+");
+  } catch (error) {
+    if (error.code === "ENOENT" && !create) continue;
+    console.error(`truncate: cannot open '${file}' for writing: ${error.message}`);
+    status = 1;
+    continue;
+  }
+  try {
+    const current = fstatSync(fd).size;
+    const { relation, bytes } = size;
+    const target = relation === "+" ? current + bytes
+      : relation === "-" ? Math.max(0, current - bytes)
+      : relation === "<" ? Math.min(current, bytes)
+      : relation === ">" ? Math.max(current, bytes)
+      : relation === "/" ? (bytes ? Math.floor(current / bytes) * bytes : fail("division by zero"))
+      : relation === "%" ? (bytes ? Math.ceil(current / bytes) * bytes : fail("division by zero"))
+      : bytes;
+    ftruncateSync(fd, target);
+  } catch (error) {
+    console.error(`truncate: failed to truncate '${file}': ${error.message}`);
+    status = 1;
+  } finally {
+    closeSync(fd);
+  }
+}
+process.exit(status);

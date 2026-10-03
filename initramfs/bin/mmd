@@ -1,0 +1,6 @@
+#!/bin/bun
+// mmd — see /lib/mtools.js.
+
+import { mmd } from "../lib/mtools.js";
+
+process.exit(mmd(process.argv.slice(2)));

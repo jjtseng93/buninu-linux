@@ -1,0 +1,6 @@
+#!/bin/bun
+// mcopy — see /lib/mtools.js.
+
+import { mcopy } from "../lib/mtools.js";
+
+process.exit(mcopy(process.argv.slice(2)));

@@ -1,0 +1,73 @@
+#!/bin/bun
+// mkfs.fat — make a FAT32 filesystem in an image file, laid out as
+// mkfs.fat 4.2 does (see /lib/fat.js).
+//
+//   mkfs.fat [-F 32] [-n LABEL] [-h HIDDEN] [-i VOLID] [-s SECTORS_PER_CLUSTER]
+//            [--invariant] [-C] FILE [BLOCKS]
+//
+// BLOCKS (1 KiB each) sizes the filesystem; -C creates FILE with that size.
+// SOURCE_DATE_EPOCH, when set, is the volume ID and the label's time, as
+// with mkfs.fat; --invariant fixes both to mkfs.fat's constants.
+
+import { closeSync, fstatSync, ftruncateSync, openSync } from "node:fs";
+import { FatError, format } from "../lib/fat.js";
+
+const fail = (message) => {
+  console.error(`mkfs.fat: ${message}`);
+  process.exit(1);
+};
+
+const usage = () => {
+  console.error(`Usage: mkfs.fat [-F 32] [-n LABEL] [-h HIDDEN] [-i VOLID] [-s SECTORS_PER_CLUSTER] [--invariant] [-C] FILE [BLOCKS]`);
+  process.exit(1);
+};
+
+const options = { label: "NO NAME", hidden: 0, volumeId: null, invariant: false, sectorsPerCluster: undefined, create: false, quiet: false };
+const operands = [];
+const argv = process.argv.slice(2);
+const value = (index, option) => {
+  if (index + 1 >= argv.length) fail(`option ${option} requires an argument`);
+  return argv[index + 1];
+};
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (argument === "--help") usage();
+  else if (argument === "--invariant") options.invariant = true;
+  else if (argument === "-F") { if (value(index++, "-F") !== "32") fail("only -F 32 is supported"); }
+  else if (argument === "-n") options.label = value(index++, "-n");
+  else if (argument === "-h") options.hidden = Number(value(index++, "-h"));
+  else if (argument === "-i") options.volumeId = Number.parseInt(value(index++, "-i"), 16) >>> 0;
+  else if (argument === "-s") options.sectorsPerCluster = Number(value(index++, "-s"));
+  else if (argument === "-C") options.create = true;
+  else if (argument === "-v" || argument === "-I" || argument === "-a") {}
+  else if (argument === "-q") options.quiet = true;
+  else if (argument.startsWith("-") && argument.length > 1) fail(`unknown option ${argument}`);
+  else operands.push(argument);
+}
+if (operands.length < 1 || operands.length > 2) usage();
+const [file, blocks] = operands;
+if (options.label.length > 11) fail("label can be no longer than 11 characters");
+if (!Number.isInteger(options.hidden) || options.hidden < 0) fail(`bad number of hidden sectors: ${options.hidden}`);
+if (options.sectorsPerCluster !== undefined && ![1, 2, 4, 8, 16, 32, 64, 128].includes(options.sectorsPerCluster)) fail("bad number of sectors per cluster");
+
+let fd;
+try {
+  fd = openSync(file, options.create ? "wx" : "r+");
+} catch (error) {
+  fail(`unable to open ${file}: ${error.message}`);
+}
+try {
+  if (options.create) {
+    if (!blocks) fail("-C needs BLOCKS");
+    ftruncateSync(fd, Number(blocks) * 1024);
+  }
+  const bytes = blocks ? Number(blocks) * 1024 : fstatSync(fd).size;
+  if (!Number.isFinite(bytes) || bytes <= 0) fail(`bad size for ${file}`);
+  console.log("mkfs.fat (buninu-linux /bin/mkfs.fat)");
+  format(fd, { sectors: Math.floor(bytes / 512), label: options.label, volumeId: options.volumeId, hidden: options.hidden, invariant: options.invariant, sectorsPerCluster: options.sectorsPerCluster });
+} catch (error) {
+  if (error instanceof FatError) fail(error.message);
+  throw error;
+} finally {
+  closeSync(fd);
+}

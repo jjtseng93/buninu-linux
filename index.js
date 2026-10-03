@@ -120,6 +120,10 @@ initramfs/init.js needs, -r just boots what is already there. Anything after
 -- goes to qemu-system-x86_64 or qemu-system-aarch64 verbatim (for example:
 -r -- -smp 4).
 
+With BUNINU_JS_TOOLS=1 in the environment, fetch and build are done in
+JavaScript (scripts/fetch.js, scripts/build.js) and need only node or bun:
+no Debian toolchain and no Docker.
+
 Fetch and build need the Debian toolchain from README "Build environment"
 (PRoot, a Debian or Ubuntu host, or --docker); run needs QEMU (Termux
 pkg, apt, or brew install qemu). Tools missing for the stages you picked are
@@ -250,13 +254,18 @@ function hasTool(name) {
   return false;
 }
 
-const inDocker = (stage) => useDocker && stage.flag !== "run";
+// BUNINU_JS_TOOLS=1: fetch and build run scripts/fetch.js and scripts/build.js
+// in this process instead of the shell scripts, so they need no toolchain
+// and no Docker; run is unchanged.
+const jsTools = process.env.BUNINU_JS_TOOLS === "1";
+const usesJs = (stage) => jsTools && stage.flag !== "run";
+const inDocker = (stage) => useDocker && stage.flag !== "run" && !jsTools;
 
 function checkTools(selectedStages) {
   const missing = [];
   for (const stage of selectedStages) {
     const arch = stage.flag === "run" ? runArch : buildArch;
-    for (const tool of inDocker(stage) ? ["docker"] : stage.tools(arch)) {
+    for (const tool of inDocker(stage) ? ["docker"] : usesJs(stage) ? [] : stage.tools(arch)) {
       if (!hasTool(tool)) missing.push(`${tool} (for --${stage.flag})`);
     }
   }
@@ -348,12 +357,46 @@ const stageEnv = {
   ...(real && { REAL_MACHINE: "1" }),
 };
 
+// The arch.js config for the JS stages, from the same settings as stageEnv.
+const jsConfig = async (env) => (await import("./scripts/arch.js")).config({
+  arch: env.BUNINU_ARCH,
+  flavor: env.LINUX_FLAVOR,
+  real: env.REAL_MACHINE === "1",
+  mirror: env.ALPINE_MIRROR,
+});
+
+async function runJs(stage, env) {
+  const module = stage.flag === "fetch" ? "scripts/fetch.js" : "scripts/build.js";
+  console.log(`\n==> [${stage.flag} js] ${module}`);
+  try {
+    const cfg = await jsConfig(env);
+    if (stage.flag === "fetch") await (await import("./scripts/fetch.js")).fetchAll(cfg);
+    else await (await import("./scripts/build.js")).buildAll(cfg);
+  } catch (error) {
+    fail(`${module}: ${error.message}`);
+  }
+}
+
 for (const stage of ordered) {
   // run-qemu.sh builds a missing vda.img itself, which needs the build
-  // toolchain; with Docker that has to happen in the container first.
-  if (stage.flag === "run" && useDocker && !selected.has(stages[1]) &&
+  // toolchain; with Docker that has to happen in the container first, and
+  // with BUNINU_JS_TOOLS=1 scripts/build.js writes it.
+  if (stage.flag === "run" && (useDocker || jsTools) && !selected.has(stages[1]) &&
       !existsSync(resolve(rootDir, "vda.img"))) {
-    runScript(stages[1], "build-image.sh", [], { ...stageEnv, BUNINU_ARCH: runArch });
+    if (jsTools) {
+      console.log("\n==> [build js] scripts/build.js image");
+      try {
+        (await import("./scripts/build.js")).image(await jsConfig({ ...stageEnv, BUNINU_ARCH: runArch }));
+      } catch (error) {
+        fail(`scripts/build.js: ${error.message}`);
+      }
+    } else {
+      runScript(stages[1], "build-image.sh", [], { ...stageEnv, BUNINU_ARCH: runArch });
+    }
+  }
+  if (usesJs(stage)) {
+    await runJs(stage, stageEnv);
+    continue;
   }
   for (const script of stage.scripts) {
     runScript(stage, script, stage.flag === "run" ? passthrough : [], stageEnv);

@@ -1,0 +1,126 @@
+#!/bin/bun
+// dd — copy blocks between files.
+//
+//   dd [if=FILE] [of=FILE] [bs=N] [ibs=N] [obs=N] [count=N] [skip=N] [seek=N]
+//      [conv=notrunc,sparse,sync,fsync,fdatasync,noerror] [status=none|noxfer|progress]
+//
+// N takes c (1), w (2), b (512), K/KiB, M/MiB, G/GiB (powers of 1024) or
+// kB, MB, GB (powers of 1000), and the AxB product form, as in coreutils.
+// conv=sparse seeks over output blocks that are all zero instead of writing them.
+
+import { closeSync, fstatSync, fsyncSync, ftruncateSync, openSync, readSync, writeSync } from "node:fs";
+
+const fail = (message) => {
+  console.error(`dd: ${message}`);
+  process.exit(1);
+};
+
+const multipliers = { c: 1, w: 2, b: 512, k: 1024, K: 1024, KiB: 1024, kB: 1e3, KB: 1e3, M: 1024 ** 2, MiB: 1024 ** 2, MB: 1e6, G: 1024 ** 3, GiB: 1024 ** 3, GB: 1e9 };
+const number = (name, text) => text.split("x").reduce((product, part) => {
+  const match = /^(\d+)([a-zA-Z]*)$/.exec(part);
+  if (!match || !(match[2] in { "": 1, ...multipliers })) fail(`invalid number: '${text}' for ${name}`);
+  return product * Number(match[1]) * (multipliers[match[2]] ?? 1);
+}, 1);
+
+const options = { if: null, of: null, ibs: 512, obs: 512, count: Infinity, skip: 0, seek: 0, conv: new Set(), status: "default" };
+for (const argument of process.argv.slice(2)) {
+  if (argument === "-h" || argument === "--help") {
+    console.error("Usage: dd [if=FILE] [of=FILE] [bs=N] [count=N] [skip=N] [seek=N] [conv=notrunc,sparse,...] [status=none]");
+    process.exit(0);
+  }
+  const separator = argument.indexOf("=");
+  if (separator < 0) fail(`unrecognized operand '${argument}'`);
+  const key = argument.slice(0, separator);
+  const value = argument.slice(separator + 1);
+  if (key === "if" || key === "of") options[key] = value;
+  else if (key === "bs") options.ibs = options.obs = number(key, value);
+  else if (key === "ibs" || key === "obs" || key === "count" || key === "skip" || key === "seek") options[key] = number(key, value);
+  else if (key === "conv") for (const flag of value.split(",")) {
+    if (!["notrunc", "sparse", "sync", "fsync", "fdatasync", "noerror"].includes(flag)) fail(`invalid conversion: '${flag}'`);
+    options.conv.add(flag);
+  }
+  else if (key === "status") {
+    if (!["none", "noxfer", "progress"].includes(value)) fail(`invalid status level: '${value}'`);
+    options.status = value;
+  }
+  else if (key === "iflag" || key === "oflag") {}
+  else fail(`unrecognized operand '${argument}'`);
+}
+if (options.ibs < 1 || options.obs < 1) fail("block sizes must be positive");
+
+const input = options.if === null ? 0 : (() => {
+  try { return openSync(options.if, "r"); } catch (error) { return fail(`failed to open '${options.if}': ${error.message}`); }
+})();
+const output = options.of === null ? 1 : (() => {
+  try { return openSync(options.of, options.conv.has("notrunc") ? (() => { try { openSync(options.of, "r"); return "r+"; } catch { return "w"; } })() : "a+"); }
+  catch (error) { return fail(`failed to open '${options.of}': ${error.message}`); }
+})();
+// "a+" would append; reopen read-write so writes land at explicit positions.
+const outputFd = options.of !== null && !options.conv.has("notrunc") ? (closeSync(output), openSync(options.of, "r+")) : output;
+const inputSeekable = fstatSync(input).isFile() || fstatSync(input).isBlockDevice();
+const outputSeekable = fstatSync(outputFd).isFile() || fstatSync(outputFd).isBlockDevice();
+
+let inputPosition = inputSeekable ? options.skip * options.ibs : null;
+if (!inputSeekable && options.skip) {
+  // Pipes: read and drop skip blocks.
+  const discard = Buffer.alloc(options.ibs);
+  for (let block = 0; block < options.skip; block++) if (readSync(input, discard, 0, options.ibs, null) === 0) break;
+}
+let outputPosition = options.seek * options.obs;
+// Without notrunc the output is cut at the seek point, as dd does.
+if (options.of !== null && !options.conv.has("notrunc") && fstatSync(outputFd).isFile()) ftruncateSync(outputFd, outputPosition);
+
+const stats = { fullIn: 0, partialIn: 0, fullOut: 0, partialOut: 0, bytes: 0 };
+const started = performance.now();
+const buffer = Buffer.alloc(options.ibs);
+let pending = Buffer.alloc(0);
+let skippedTail = false;
+
+const writeBlock = (block) => {
+  if (options.conv.has("sparse") && outputSeekable && block.every((byte) => byte === 0)) {
+    outputPosition += block.length;
+    skippedTail = true;
+  } else {
+    for (let offset = 0; offset < block.length;) {
+      offset += writeSync(outputFd, block, offset, block.length - offset, outputSeekable ? outputPosition + offset : null);
+    }
+    outputPosition += block.length;
+    skippedTail = false;
+  }
+  if (block.length === options.obs) stats.fullOut++; else stats.partialOut++;
+  stats.bytes += block.length;
+};
+
+for (let blocks = 0; blocks < options.count; blocks++) {
+  let count;
+  try {
+    count = readSync(input, buffer, 0, options.ibs, inputPosition);
+  } catch (error) {
+    if (!options.conv.has("noerror")) fail(`error reading '${options.if ?? "standard input"}': ${error.message}`);
+    count = 0;
+  }
+  if (count === 0) break;
+  if (inputPosition !== null) inputPosition += count;
+  if (count === options.ibs) stats.fullIn++; else stats.partialIn++;
+  let block = buffer.subarray(0, count);
+  if (options.conv.has("sync") && count < options.ibs) block = Buffer.concat([block, Buffer.alloc(options.ibs - count)]);
+  pending = Buffer.concat([pending, block]);
+  while (pending.length >= options.obs) {
+    writeBlock(pending.subarray(0, options.obs));
+    pending = pending.subarray(options.obs);
+  }
+}
+if (pending.length) writeBlock(Buffer.from(pending));
+// A sparse run at the end still has to reach the file's length.
+if (skippedTail && fstatSync(outputFd).size < outputPosition) ftruncateSync(outputFd, outputPosition);
+if (options.conv.has("fsync") || options.conv.has("fdatasync")) fsyncSync(outputFd);
+
+if (options.status !== "none") {
+  console.error(`${stats.fullIn}+${stats.partialIn} records in\n${stats.fullOut}+${stats.partialOut} records out`);
+  if (options.status !== "noxfer") {
+    const seconds = (performance.now() - started) / 1000;
+    console.error(`${stats.bytes} bytes copied, ${seconds.toFixed(3)} s, ${(stats.bytes / Math.max(seconds, 1e-9) / 1e6).toFixed(1)} MB/s`);
+  }
+}
+if (input !== 0) closeSync(input);
+if (outputFd !== 1) closeSync(outputFd);

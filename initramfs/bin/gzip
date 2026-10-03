@@ -1,0 +1,6 @@
+#!/bin/bun
+// gzip — see /lib/gzip.js.
+
+import { run } from "../lib/gzip.js";
+
+process.exit(run("gzip", process.argv.slice(2), {}));

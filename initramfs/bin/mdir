@@ -1,0 +1,6 @@
+#!/bin/bun
+// mdir — see /lib/mtools.js.
+
+import { mdir } from "../lib/mtools.js";
+
+process.exit(mdir(process.argv.slice(2)));

@@ -1,0 +1,178 @@
+#!/bin/bun
+// parted — GPT partitioning of a disk image, script mode only (see /lib/gpt.js).
+//
+//   parted [-s] IMAGE COMMAND...
+//
+// Commands, any number in a row as with parted -s:
+//   mklabel gpt
+//   mkpart NAME [FS-TYPE] START END    START/END with s, B, kB/MB/GB/TB,
+//                                      KiB/MiB/GiB/TiB, % or the current unit;
+//                                      a negative value counts from the end
+//   set NUMBER FLAG on|off             esp, boot, msftdata, bios_grub,
+//                                      legacy_boot, hidden, no_automount
+//   name NUMBER NAME
+//   rm NUMBER
+//   unit UNIT                          s, B, kB, MB, GB, TB, KiB, MiB, GiB, TiB, %
+//   print
+// START and END are used as given, without alignment; END is inclusive.
+
+import { closeSync, fstatSync, openSync } from "node:fs";
+import { GptError, SECTOR, TYPES, randomGuid, readGpt, usable, writeGpt } from "../lib/gpt.js";
+
+const fail = (message) => {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+};
+
+const usage = () => {
+  console.error(`Usage: parted [-s] IMAGE COMMAND...
+  mklabel gpt | mkpart NAME [FS-TYPE] START END | set NUMBER FLAG on|off
+  name NUMBER NAME | rm NUMBER | unit UNIT | print`);
+  process.exit(1);
+};
+
+// -s is implied; -a takes a value and alignment is not applied anyway.
+const raw = process.argv.slice(2);
+const words = [];
+for (let index = 0; index < raw.length; index++) {
+  const argument = raw[index];
+  if (argument === "-s" || argument === "--script") continue;
+  if (argument === "-a" || argument === "--align") { index++; continue; }
+  if (argument.startsWith("--align=")) continue;
+  if (argument === "-h" || argument === "--help") usage();
+  if (argument.startsWith("-") && words.length === 0) fail(`unknown option ${argument}`);
+  words.push(argument);
+}
+if (words.length < 2) usage();
+const [image, ...commands] = words;
+
+let fd;
+try { fd = openSync(image, "r+"); } catch (error) { fail(`Could not stat device ${image} - ${error.message}.`); }
+const stat = fstatSync(fd);
+if (!stat.isFile()) fail(`${image}: only disk image files are supported`);
+const sectors = Math.floor(stat.size / SECTOR);
+if (sectors < 2 + 2 * 33 + 1) fail(`${image} is too small for a GPT`);
+
+let table = readGpt(fd, sectors);
+let dirty = false;
+let unit = "MB";
+
+const units = { s: SECTOR, B: 1, kB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, KiB: 1024, MiB: 1024 ** 2, GiB: 1024 ** 3, TiB: 1024 ** 4 };
+const unitName = (text) => Object.keys(units).find((name) => name.toLowerCase() === text.toLowerCase()) ?? (text === "%" ? "%" : null);
+
+/** A START or END position in sectors (END inclusive). */
+const position = (text, isEnd) => {
+  const match = /^(-?)(\d+(?:\.\d+)?)([a-zA-Z%]*)$/.exec(text);
+  if (!match) fail(`invalid position ${text}`);
+  const name = match[3] ? unitName(match[3]) : unit;
+  if (!name) fail(`invalid unit in ${text}`);
+  const amount = Number(match[2]);
+  if (name === "%") return Math.round((sectors - 1) * amount / 100);
+  const count = name === "s" ? amount : Math.round(amount * units[name] / SECTOR);
+  // A negative position counts back from the end of the disk: -1s is the last sector.
+  if (match[1]) return Math.floor(sectors - count);
+  return Math.floor(count - (isEnd && name !== "s" ? 1 : 0));
+};
+
+const requireTable = () => {
+  if (!table) fail(`${image}: unrecognised disk label`);
+  return table;
+};
+const partition = (text) => {
+  const number = Number(text);
+  const entry = requireTable().entries.find((candidate) => candidate.number === number);
+  if (!entry) fail(`Partition doesn't exist.`);
+  return entry;
+};
+
+const typeForFs = (fs) => {
+  if (!fs) return TYPES.linux;
+  if (/^(fat16|fat32|fat12|ntfs|exfat)$/i.test(fs)) return TYPES.msdata;
+  if (/^linux-swap/i.test(fs)) return TYPES.swap;
+  return TYPES.linux;
+};
+const knownFs = /^(fat12|fat16|fat32|ext2|ext3|ext4|btrfs|xfs|ntfs|exfat|linux-swap(\(v[01]\))?|hfs\+?|udf|zfs)$/i;
+
+const print = () => {
+  const current = requireTable();
+  const show = (sector) => unit === "s" ? `${sector}s` : unit === "%" ? `${((sector / (sectors - 1)) * 100).toFixed(1)}%` : `${+(sector * SECTOR / units[unit]).toFixed(1)}${unit}`;
+  console.log(`Model:  (file)\nDisk ${image}: ${show(sectors - 1 + (unit === "s" ? 1 : 0))}\nSector size (logical/physical): 512B/512B\nPartition Table: gpt\nDisk Flags: \n`);
+  console.log("Number  Start  End  Size  Name  Flags");
+  for (const entry of current.entries) {
+    const flags = [];
+    if (entry.type === TYPES.esp) flags.push("boot", "esp");
+    if (entry.type === TYPES.bios_grub) flags.push("bios_grub");
+    if (entry.type === TYPES.msdata) flags.push("msftdata");
+    if (entry.attributes & 4n) flags.push("legacy_boot");
+    console.log(` ${entry.number}  ${show(entry.first)}  ${show(entry.last)}  ${show(entry.last - entry.first + 1)}  ${entry.name}  ${flags.join(", ")}`);
+  }
+};
+
+try {
+  for (let index = 0; index < commands.length;) {
+    const command = commands[index++];
+    const take = (what) => {
+      if (index >= commands.length) fail(`${command}: expecting ${what}`);
+      return commands[index++];
+    };
+    if (command === "mklabel") {
+      const label = take("a disk label type");
+      if (label !== "gpt") fail(`only gpt labels are supported, not ${label}`);
+      table = { diskGuid: randomGuid(), entries: [] };
+      dirty = true;
+    } else if (command === "unit") {
+      const name = unitName(take("a unit"));
+      if (!name) fail(`invalid unit ${commands[index - 1]}`);
+      unit = name;
+    } else if (command === "mkpart") {
+      const current = requireTable();
+      const name = take("a partition name");
+      let fs = null;
+      if (knownFs.test(commands[index] ?? "")) fs = commands[index++];
+      const first = position(take("a start"), false);
+      const last = position(take("an end"), true);
+      const range = usable(sectors);
+      if (first < range.first || last > range.last || first > last) {
+        fail(`The location ${first}s-${last}s is outside of the usable range ${range.first}s-${range.last}s of the device.`);
+      }
+      if (current.entries.some((entry) => first <= entry.last && entry.first <= last)) fail("the partition overlaps another one");
+      let number = 1;
+      while (current.entries.some((entry) => entry.number === number)) number++;
+      current.entries.push({ number, type: typeForFs(fs), guid: randomGuid(), first, last, attributes: 0n, name, fs });
+      current.entries.sort((a, b) => a.number - b.number);
+      dirty = true;
+    } else if (command === "set") {
+      const entry = partition(take("a partition number"));
+      const flag = take("a flag").toLowerCase();
+      const state = take("on or off").toLowerCase();
+      if (state !== "on" && state !== "off") fail(`expecting on or off, not ${state}`);
+      const on = state === "on";
+      if (flag === "esp" || flag === "boot") entry.type = on ? TYPES.esp : typeForFs(entry.fs ?? "fat32");
+      else if (flag === "bios_grub") entry.type = on ? TYPES.bios_grub : typeForFs(entry.fs);
+      else if (flag === "msftdata") entry.type = on ? TYPES.msdata : TYPES.linux;
+      else {
+        const bits = { legacy_boot: 2n, hidden: 1n << 62n, no_automount: 1n << 63n }[flag];
+        if (bits === undefined) fail(`unsupported flag ${flag}`);
+        entry.attributes = on ? entry.attributes | bits : entry.attributes & ~bits;
+      }
+      dirty = true;
+    } else if (command === "name") {
+      const entry = partition(take("a partition number"));
+      entry.name = take("a name");
+      dirty = true;
+    } else if (command === "rm") {
+      const entry = partition(take("a partition number"));
+      table.entries = table.entries.filter((candidate) => candidate !== entry);
+      dirty = true;
+    } else if (command === "print") {
+      if (dirty) { writeGpt(fd, sectors, table); dirty = false; }
+      print();
+    } else fail(`unknown command ${command}`);
+  }
+  if (dirty) writeGpt(fd, sectors, table);
+} catch (error) {
+  if (error instanceof GptError) fail(error.message);
+  throw error;
+} finally {
+  closeSync(fd);
+}
