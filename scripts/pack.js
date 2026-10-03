@@ -121,6 +121,12 @@ const packStaging = (cfg) => {
     rmSync(join(staging, "bin", "bun"), { force: true });
     rmSync(join(staging, "lib", "modules"), { recursive: true, force: true });
     copyTree(cfg.nativeDir, staging);
+    // Only this kernel's modules: native/<arch>/ keeps every release fetched
+    // so far (an older pin, the other flavor), and none of those can load.
+    const modules = join(staging, "lib", "modules");
+    for (const release of existsSync(modules) ? readdirSync(modules) : []) {
+      if (release !== cfg.kernelRelease) rmSync(join(modules, release), { recursive: true, force: true });
+    }
     copyFile(join(rootDir, "README.md"), join(staging, "usr/share/doc/buninu-linux/README.md"));
     for (const name of [
       "LICENSE",
