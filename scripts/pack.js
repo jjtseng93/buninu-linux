@@ -51,6 +51,23 @@ export const copyTree = (source, target) => {
   }
 };
 
+/**
+ * The modes git would check out with umask 022: directories 755, files 755
+ * when their owner may execute them and 644 otherwise; symlinks untouched.
+ * A checkout made under another umask (native Termux's 0077 gives 600/700)
+ * then packs the same archive.
+ */
+export const normalizeModes = (path) => {
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) return;
+  if (stat.isDirectory()) {
+    chmodSync(path, 0o755);
+    for (const name of readdirSync(path)) normalizeModes(join(path, name));
+  } else if (stat.isFile()) {
+    chmodSync(path, stat.mode & 0o100 ? 0o755 : 0o644);
+  }
+};
+
 /** `cp FILE TARGET`: contents and mode, a new mtime. */
 const copyFile = (source, target) => {
   rmSync(target, { force: true });
@@ -150,6 +167,7 @@ const packStaging = (cfg) => {
     link("../../../../../../buninu/icon.png", join(staging, "usr/share/icons/hicolor/512x512/apps/buninu-linux.png"));
     link("../../../buninu/icon.png", join(staging, "usr/share/pixmaps/buninu-linux.png"));
 
+    normalizeModes(staging);
     const cpio = spawnSync(jsRuntime(), [
       join(rootDir, "scripts/cpio.js"),
       staging,

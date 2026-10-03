@@ -59,6 +59,14 @@ mkdir -p "$staging/usr/share/icons/hicolor/512x512/apps" "$staging/usr/share/pix
 ln -sfn ../../../../../../buninu/icon.png "$staging/usr/share/icons/hicolor/512x512/apps/buninu-linux.png"
 ln -sfn ../../../buninu/icon.png "$staging/usr/share/pixmaps/buninu-linux.png"
 
+# The modes git would check out with umask 022: directories 755, files 755
+# when their owner may execute them and 644 otherwise (symlinks untouched).
+# A checkout made under another umask (native Termux's 0077 gives 600/700)
+# then packs the same archive.
+find "$staging" -type d -exec chmod 755 {} +
+find "$staging" -type f -perm -100 -exec chmod 755 {} +
+find "$staging" -type f ! -perm -100 -exec chmod 644 {} +
+
 # BUNINU_JS_CPIO=1 writes the archive with scripts/cpio.js (bun or node)
 # instead of fakeroot, cpio and gzip: the device nodes below exist only in
 # the archive, so nothing needs root.
