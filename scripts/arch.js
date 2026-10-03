@@ -128,6 +128,20 @@ export const jsRuntime = () => {
   return process.execPath;
 };
 
+/**
+ * Runs `action` with umask 022, so what the stages create gets the same
+ * modes everywhere: native Termux runs with 0077, PRoot and most hosts 022,
+ * and the modes end up in the initramfs.
+ */
+export const withUmask022 = async (action) => {
+  const previous = process.umask(0o022);
+  try {
+    return await action();
+  } finally {
+    process.umask(previous);
+  }
+};
+
 /** Runs `main` when `url` (a module's import.meta.url) is the script node or bun was started with. */
 export const runIfMain = (url, main) => {
   if (!process.argv[1] || resolve(process.argv[1]) !== fileURLToPath(url)) return;

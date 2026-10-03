@@ -29,7 +29,7 @@ import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { gunzipSync } from "node:zlib";
-import { config, rootDir, runIfMain } from "./arch.js";
+import { config, rootDir, runIfMain, withUmask022 } from "./arch.js";
 import { filterAliases, select, trimDependencies } from "./modules.js";
 
 const sha256File = async (path) => {
@@ -111,8 +111,11 @@ const writeTo = (path, bytes) => {
   writeFileSync(path, bytes);
 };
 
+// Both run with umask 022 (see arch.js withUmask022): native/ and kernel/
+// are packed with their modes.
+
 /** fetch-alpine.sh: the kernel, its selected modules, musl's loader and the EFI stub. */
-export const fetchAlpine = async (cfg = config()) => {
+export const fetchAlpine = (cfg = config()) => withUmask022(async () => {
   mkdirSync(cfg.kernelDir, { recursive: true });
   mkdirSync(join(cfg.nativeDir, "lib"), { recursive: true });
   const linux = readTar(await download(cfg, `${cfg.alpineBase}/${cfg.linuxPackage}`, cfg.linuxPackage, cfg.linuxSha256));
@@ -139,10 +142,10 @@ export const fetchAlpine = async (cfg = config()) => {
 
   chmodSync(join(cfg.nativeDir, "lib", cfg.muslLoader), 0o755);
   console.log(`Fetched Alpine ${cfg.arch} linux-${cfg.flavor} kernel, ${selected.length} modules, musl, and the ${cfg.efiStub} UKI stub.`);
-};
+});
 
 /** fetch-bun.sh: Bun from its release zip, and the GCC runtime it links against. */
-export const fetchBun = async (cfg = config()) => {
+export const fetchBun = (cfg = config()) => withUmask022(async () => {
   for (const directory of [
     cfg.downloadsDir,
     join(cfg.nativeDir, "bin"),
@@ -181,7 +184,7 @@ export const fetchBun = async (cfg = config()) => {
     if (/\.so/.test(name)) chmodSync(join(cfg.nativeDir, "lib", name), 0o755);
   }
   console.log(`Fetched Bun ${cfg.bunVersion} and its ${cfg.arch} musl runtime into ${cfg.nativeDir}/.`);
-};
+});
 
 export const fetchAll = async (cfg = config()) => {
   await fetchAlpine(cfg);

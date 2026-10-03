@@ -94,6 +94,17 @@ export const osRelease = (version) => [
 ].map((line) => `${line}\n`).join("");
 
 export const pack = (cfg = config()) => {
+  // The directories and files made here are packed with their modes; native
+  // Termux's umask 0077 would make /usr/lib and /usr/lib/os-release private.
+  const previousUmask = process.umask(0o022);
+  try {
+    packStaging(cfg);
+  } finally {
+    process.umask(previousUmask);
+  }
+};
+
+const packStaging = (cfg) => {
   const bun = join(cfg.nativeDir, "bin", "bun");
   if (!existsSync(bun) || !(statSync(bun).mode & 0o111)) {
     throw new Error(`no ${bun} yet; run the fetch stage first (node scripts/fetch.js)`);

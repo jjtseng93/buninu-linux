@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# What this script creates is packed with its modes: the same umask as
+# PRoot and most hosts, not native Termux's 0077.
+umask 022
 
 cd "$(dirname "$0")/.."
 
