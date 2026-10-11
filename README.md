@@ -61,57 +61,29 @@
 > [Build and test with QEMU on macOS or Linux](#build-and-test-with-qemu-on-macos-or-linux).
 
 - This guide builds a bootable `buninu-linux-<version>.img`
-- The documented build environment is Debian 13 under Termux PRoot
-- A regular Debian installation works as well.
-  * Experimental Alpine support now!
-- For a source checkout, clone into the Termux home so native Termux and PRoot
-  can share it; `~` differs between them, but the absolute path is the same.
+- Fetch and build use JS tools by default and need host Bun, not the native
+  build toolchain or Docker. There is no need to enter PRoot just to build.
 
 ### Steps
 
-- Before anything, install Bun in Debian/Alpine first:
-
-```sh
-# Debian/Ubuntu
-apt update
-apt install curl unzip
-
-# Alpine
-apk update
-apk add curl unzip bash libgcc libstdc++
-
-curl -fsSL https://bun.sh/install | bash
-```
-
-- Small tip: The below `apt install` command shows in the terminal when you run -b without the needed tools
+- Install bun first:
+  * Android: npm i -g bun
+  * Others: Follow the official guide: <https://bun.com>
+- With Bun installed and on `PATH`, choose either build method below.
+  * Check by `bun --version`
+- Leave `BUNINU_JS_TOOLS` unset (or set it to `1`); `0`, `off` or `false`
+  selects the [old shell build](#old-build-shell-tools) instead.
 
 #### Build directly with bun x
 
-Install the build tools, enter a directory where
-you want to keep the finished image, then run the published package:
+Enter a directory where you want to keep the finished image, then run the
+published package directly. No `apt install`/`apk add` build tools are needed:
 
 ```sh
-# Debian/Ubuntu
-apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
-
-# Alpine
-apk add bash coreutils tar curl unzip parted dosfstools mtools libgcc libstdc++
-
-mkdir -p /data/data/com.termux/files/home/buninu-build
-cd /data/data/com.termux/files/home/buninu-build
-
-export PATH=$HOME/.bun/bin:$PATH
-
+mkdir -p buninu-build
+cd buninu-build
 bun x buninu-linux --version
-
-# Debian/Ubuntu
 bun x buninu-linux -fb --real --export
-
-# Alpine
-export BUNINU_JS_CPIO=1
-export BUNINU_JS_UKI=1
-bun x buninu-linux -fb --real --export
-
 ```
 
 `--export` copies the completed `vda.img` out of bunx's package directory and
@@ -121,35 +93,69 @@ command when writing the USB drive.
 
 #### Or build from a source checkout
 
-In native Termux:
+With Git and Bun available:
 
-- git clone https://github.com/jjtseng93/buninu-linux.git ~/buninu-linux
+```sh
+git clone https://github.com/jjtseng93/buninu-linux.git buninu-linux
+cd buninu-linux
+bun ./index.js -fb --real --export
+```
 
-In Debian 13 under PRoot:
-
-- apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
-- cd /data/data/com.termux/files/home/buninu-linux
-- bun ./index.js -fb --real --export
-  * Fetches from Alpine/Bun
-  * Selects the physical-hardware modules
-  * Builds `vda.img`
-  * Exports it to `buninu-linux-<version>.img`
+This fetches the pinned Alpine/Bun/npm inputs, selects the physical-hardware
+modules, builds `vda.img`, and exports `buninu-linux-<version>.img`.
 
 #### Write the image to a USB drive
 
-Write the complete exported image (or `vda.img` when not using `--export`), not
-the FAT partition inside it, to a USB drive. The source filename below is an
-example; replace it with the exact name printed by the build. The destination
-is also only an example: identify the correct whole-disk device first, because
-this overwrites it completely.
+The recommended method is **Ventoy**: install it on the USB drive once using
+a Windows or Linux computer, then copy image files onto it from Android,
+Linux, macOS or Windows. For later builds, simply copy the new `.img` file
+onto the same drive; there is no need to flash or reformat it each time.
+You can keep multiple images and choose one from Ventoy's boot menu.
+
+Use the complete exported `.img` (or `vda.img` when not using `--export`),
+not the FAT partition inside it. Replace the example filename below with the
+exact name printed by the build.
+
+**Android / Termux: copy to a prepared Ventoy drive.** Ordinary non-root
+Android/Termux cannot directly access a USB block device with `dd`; PRoot
+does not grant that access either. One option is to install
+[Ventoy on the USB drive using a Windows or Linux computer](https://www.ventoy.net/en/doc_start.html)
+first, then connect it to Android via USB OTG and use a file manager to copy
+the `.img` onto Ventoy's data partition. Safely eject it, boot the target PC from the USB
+drive, and select the image in Ventoy's menu. Ventoy supports `.img` files;
+no extraction or renaming to `.iso` is needed.
+
+Installing Ventoy initially erases the selected USB drive. Later copying an
+image file onto it does not require reformatting. Do not use `dd` or Rufus
+on that drive if you want to preserve its Ventoy installation.
+
+**Linux: write directly with `dd`.** Identify the USB drive with `lsblk` and
+unmount its mounted partitions first. `/dev/sdX` below means the whole disk,
+not a partition such as `/dev/sdX1`. This overwrites the destination disk,
+including its partition table and existing files; check the device carefully.
 
 ```sh
 sudo dd if='buninu-linux-<version>.img' of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
-Alternatively, copy the exported `.img` file to a
-[Ventoy](https://www.ventoy.net/en/index.html) USB drive and select it from
-Ventoy's boot menu.
+**macOS: write directly with `dd`.** Use `diskutil list` to identify the USB
+drive, then substitute its actual disk number for `N` below. The same
+whole-disk overwrite warning applies. Use macOS's `bs=4m` spelling; press
+`Ctrl-T` during the copy to request progress.
+
+```sh
+diskutil list
+diskutil unmountDisk /dev/diskN
+sudo dd if='buninu-linux-<version>.img' of=/dev/rdiskN bs=4m
+sync
+diskutil eject /dev/diskN
+```
+
+**Windows: write with [Rufus](https://rufus.ie/).** Rufus supports raw `.img`
+disk images, not just ISO files (see its [official FAQ](https://github.com/pbatard/rufus/wiki/FAQ#openbsd)).
+Select the correct USB device, select the exported `.img` as the boot image,
+and start writing. Use DD/raw-image mode if prompted. This overwrites the
+selected USB drive; no conversion to `.iso` is needed.
 
 #### Booting from the USB drive
 
@@ -824,6 +830,10 @@ chroot -n /mnt /bin/sh        # traditional: mount nothing
 
 ## Environment and dependencies
 
+The default JS build uses host Bun. The native build-tool dependencies below
+apply to the [old shell build](#old-build-shell-tools), the optional Docker
+shell toolchain, and the separate native hello-world example.
+
 ### Build environment
 
 The baseline is the stock Debian 13 (trixie) OCI image, which is also what this
@@ -890,6 +900,82 @@ apt install clang lld dosfstools mtools parted
 The retired `test/build-init-bootstrap.sh` also needs `clang lld`. It compiles
 the historical freestanding x86-64 `/init`; the current Buninu Linux path does
 not use or compile it.
+
+## Old build (shell tools)
+
+These are the previous native-toolchain build instructions, retained as an
+optional alternative to the default JS tools. Set `BUNINU_JS_TOOLS=0`
+explicitly to use them. The documented environment is Debian 13 under Termux
+PRoot or a regular Debian/Ubuntu installation; the Alpine route is experimental.
+Missing shell build tools are reported before the selected stages run.
+
+- For a source checkout, clone into the Termux home so native Termux and PRoot
+  can share it; `~` differs between them, but the absolute path is the same.
+- Before anything, install Bun in Debian/Alpine first:
+
+```sh
+# Debian/Ubuntu
+apt update
+apt install curl unzip
+
+# Alpine
+apk update
+apk add curl unzip bash libgcc libstdc++
+
+curl -fsSL https://bun.sh/install | bash
+```
+
+### Old build directly with bun x
+
+Install the build tools, enter a directory where you want to keep the
+finished image, then run the published package:
+
+```sh
+# Debian/Ubuntu
+apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+
+# Alpine
+apk add bash coreutils tar curl unzip parted dosfstools mtools libgcc libstdc++
+
+mkdir -p /data/data/com.termux/files/home/buninu-build
+cd /data/data/com.termux/files/home/buninu-build
+
+export PATH=$HOME/.bun/bin:$PATH
+export BUNINU_JS_TOOLS=0
+
+bun x buninu-linux --version
+
+# Debian/Ubuntu
+bun x buninu-linux -fb --real --export
+
+# Alpine: use JS for cpio and UKI assembly within the shell pipeline
+export BUNINU_JS_CPIO=1
+export BUNINU_JS_UKI=1
+bun x buninu-linux -fb --real --export
+```
+
+`--export` copies the completed `vda.img` out of bunx's package directory into
+the invocation directory as `buninu-linux-<version>.img`.
+
+### Old build from a source checkout
+
+In native Termux:
+
+```sh
+git clone https://github.com/jjtseng93/buninu-linux.git ~/buninu-linux
+```
+
+In Debian 13 under PRoot:
+
+```sh
+apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
+cd /data/data/com.termux/files/home/buninu-linux
+BUNINU_JS_TOOLS=0 bun ./index.js -fb --real --export
+```
+
+This fetches the pinned inputs, selects the physical-hardware modules, builds
+`vda.img`, and exports `buninu-linux-<version>.img`. Continue with
+[Write the image to a USB drive](#write-the-image-to-a-usb-drive).
 
 ## Implementation details
 
@@ -1432,6 +1518,9 @@ for the userspace session.
   * [Buninu Linux (Section 2)](#buninu-linux-section-2)
   * [Hello world (Section 1)](#hello-world-section-1)
   * [Retired native bootstrap](#retired-native-bootstrap)
+- [Old build (shell tools)](#old-build-shell-tools)
+  * [Old build directly with bun x](#old-build-directly-with-bun-x)
+  * [Old build from a source checkout](#old-build-from-a-source-checkout)
 - [Implementation details](#implementation-details)
   * [1. Hello world](#1-hello-world)
   * [2. Buninu Linux – Bun as PID 1](#2-buninu-linux-bun-as-pid-1)
