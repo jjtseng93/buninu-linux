@@ -3,13 +3,15 @@
 Buninu Linux is licensed under the MIT License; see `LICENSE`.
 
 It redistributes the third-party components below under their own licenses.
-The full license texts are in `LICENSES/`. Every SHA-256 here was checked
+Platform license texts are in `LICENSES/`; npm application licenses and
+notices also remain inside their installed package directories, as listed
+below. Platform SHA-256 values here were checked
 byte-for-byte against the official Alpine Linux v3.24 x86_64 or aarch64
 package (or the official Bun release) it came from. The x86_64 guest is the
 default build; `--arch aarch64` builds the other one from the same versions.
 
-The sections below cover the platform: the kernel, the C library, the GCC
-runtime, the UEFI stub and Bun. The Buninu userspace under `initramfs/buninu/`
+The sections below cover the platform, fetched npm applications and graphics
+resources. The Buninu userspace under `initramfs/buninu/`
 carries its own third-party notices; see the last section.
 
 Alpine's CDN serves only the current pkgrel of each branch, so the package
@@ -235,6 +237,65 @@ SHA-256 of the shipped files:
 native/x86_64/bin/bun    16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d
 native/aarch64/bin/bun   1101cd0aa92ea214c2aaf4bb3761ca3c76a90aae0e6f94c07efb4e8c4f18a8fc
 ```
+
+## npm applications fetched and redistributed in the image
+
+The fetch stage downloads the following exact releases directly from the
+npm registry. `scripts/npm-packages.md` is the canonical list of tarball
+URLs and SHA-256 pins. Both fetch and pack verify those hashes. Pack removes
+the leading `package/` component and installs the contents under
+`/usr/lib/node_modules/`; it does not run npm lifecycle scripts or resolve
+additional dependencies. The downloaded archives are build inputs, not
+committed source files, but their contents are redistributed in the image.
+
+| Package | Version | Package license | Project / package page | Installed license and notices (relative to `/usr/lib/node_modules/`) |
+|---|---|---|---|---|
+| `buninu-browser` | 0.2.2 | MIT for the browser's own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-browser | `buninu-browser/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/` and vendor notices within that package |
+| `@drxiaozhi/casty` | 1.3.4 | MIT | https://github.com/jjtseng93/casty | `@drxiaozhi/casty/LICENSE` |
+| `@drxiaozhi/jspulse` | 0.2.1 | LGPL-2.1-or-later, with additional component notices | https://github.com/jjtseng93/jspulse | `@drxiaozhi/jspulse/LICENSE`, `NOTICE.md`, `LICENSES/` and source-file notices within that package |
+| `@drxiaozhi/jspinyin` | 0.1.1 | MIT; hanzipinyin material under the Unlicense | https://www.npmjs.com/package/@drxiaozhi/jspinyin | `@drxiaozhi/jspinyin/LICENSE` and `@drxiaozhi/jspinyin/LICENSE-hanzipinyin.md` |
+
+The upstream links identify the projects; the pinned registry archives
+identify the exact releases used by this build. Preserve the packages'
+copyright notices, license texts, third-party notices and source material
+when redistributing or repacking the image. Buninu Linux's MIT license does
+not relicense these components.
+
+### Browser resources and LGPL media decoder
+
+Only the browser's `usr/lib/canvaskit` and `usr/share/fonts` directories are
+excluded from extraction. Its `usr/README.md`, top-level license collection,
+third-party notices and vendor source material are retained. The distribution
+launcher creates relative links to the system CanvasKit and fonts when those
+resource directories are missing; their licenses are documented under
+Graphics stack below and remain with the system copies.
+
+The browser includes `@wasmpeg/cpu` 1.0.1 and its FFmpeg code under
+LGPL-2.1-or-later. Within `/usr/lib/node_modules/buninu-browser/`, retain:
+
+- `vendor/wasmpeg/LICENSE`, `vendor/wasmpeg/NOTICE` and `LICENSES/wasmpeg.txt`;
+- `vendor/wasmpeg/source-v1.0.1.tar.gz`, the bundled source archive;
+- `vendor/wasmpeg/VENDORING.md`, with artifact hashes and rebuild instructions;
+- `patches/wasmpeg/`, documenting the package's local changes;
+- the other license texts identified in `THIRD_PARTY_NOTICES.md`, including
+  those for Emscripten and zlib.
+
+The decoder's `cpu.wasm` remains a separate, replaceable file. Do not remove
+the source archive or rebuild material merely to reduce the image size.
+
+### jspulse source and notices
+
+jspulse is shipped as JavaScript source, with its LGPL license, modification
+notices and additional notices intact. Its `NOTICE.md` describes the
+PulseAudio, Termux, ALSA and Sun G.711 material; `LICENSES/` includes LGPL-2.1
+and NCSA texts. Browser audio communicates with this separate server through
+the PulseAudio protocol. The distribution's launcher does not replace or
+remove the package's source or license files.
+
+This inventory records the shipped materials; it is not a blanket compliance
+certification. Redistributors remain responsible for applicable source,
+notice and modification/replacement requirements, particularly if changing
+the packages, their build artifacts or the source material supplied with them.
 
 ## Graphics stack
 

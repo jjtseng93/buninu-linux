@@ -1463,7 +1463,19 @@ own third-party notices, listed at the end of [NOTICE.md](NOTICE.md).
 The repository also commits four third-party platform binaries per guest
 architecture under `native/<arch>/lib/`, and the built image redistributes
 several more. Each stays
-under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
+under its own terms, with platform license texts in [`LICENSES/`](LICENSES/).
+
+The build also fetches four SHA-256-pinned npm releases and redistributes
+them under `/usr/lib/node_modules`: `buninu-browser`, `@drxiaozhi/casty`,
+`@drxiaozhi/jspulse` and `@drxiaozhi/jspinyin`. Their license and notice files
+remain inside their package directories. Exact download URLs and hashes are
+in [`scripts/npm-packages.md`](scripts/npm-packages.md); versions, upstream
+sources and installed notice/source locations are recorded in
+[NOTICE.md](NOTICE.md#npm-applications-fetched-and-redistributed-in-the-image).
+The project's MIT license does not replace those packages' licenses.
+In particular, jspulse and the browser's bundled wasmpeg/FFmpeg code carry
+LGPL obligations; retain their licenses and supplied source/rebuild material
+when redistributing the image.
 
 ### Bundled component licenses
 
@@ -1474,6 +1486,11 @@ under its own terms, with the full texts in [`LICENSES/`](LICENSES/):
 | Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
+| buninu-browser 0.2.2 | MIT for its own code; bundled components have their own licenses | npm download → image |
+| wasmpeg / FFmpeg (`@wasmpeg/cpu` 1.0.1, bundled in buninu-browser) | LGPL-2.1-or-later, plus component notices; source archive and rebuild documentation retained | browser package → image |
+| `@drxiaozhi/casty` 1.3.4 | MIT | npm download → image |
+| `@drxiaozhi/jspulse` 0.2.1 | LGPL-2.1-or-later, plus component notices | npm download → image |
+| `@drxiaozhi/jspinyin` 0.1.1 | MIT; hanzipinyin material under the Unlicense | npm download → image |
 | CanvasKit 0.41.1 (`initramfs/lib/canvaskit/`, Skia compiled to WebAssembly) | BSD-3-Clause (`LICENSES/BSD-3-Clause-Skia.txt`) | committed |
 | xterm.js 6.0.0 headless core and unicode-graphemes addon (`initramfs/lib/xterm/`); box-drawing shape tables in `initramfs/lib/bunterm/glyphs.js` | MIT (`LICENSES/MIT-xterm.js.txt`) | committed |
 | DejaVu Sans Mono (`initramfs/usr/share/fonts/DejaVuSansMono*.ttf`) | Bitstream Vera (`LICENSES/Bitstream-Vera.txt`) | committed |
