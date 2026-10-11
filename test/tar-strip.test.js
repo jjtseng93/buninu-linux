@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strippedName } from "../initramfs/lib/tar-strip.js";
+import { excludeMatcher } from "../initramfs/lib/tar-exclude.js";
 
 const work = mkdtempSync(join(tmpdir(), "buninu-tar-strip-"));
 const cli = join(import.meta.dir, "../initramfs/bin/tar");
@@ -53,6 +54,64 @@ function extract(bytes, flags = ["--strip-components=1"], stdin = false) {
   const result = run(["-xf", stdin ? "-" : archive, "-C", dir, ...flags], stdin ? bytes : undefined);
   return { dir, archive, ...result };
 }
+
+test("exclude matches path boundaries, ancestors, dot paths and wildcard patterns", () => {
+  const excluded = excludeMatcher(["package/usr/", "*.map", ".wh.*"]);
+  for (const name of ["package/usr", "./package/usr/a/b", "package/lib/a.map", "package/.wh.foo"])
+    expect(excluded(name)).toBe(true);
+  for (const name of ["package/usr2/a", "package/user/a", "package/lib/a.js"])
+    expect(excluded(name)).toBe(false);
+});
+
+test("exclude works before strip, with zero strip, compression and stdin", () => {
+  const bytes = tar([
+    { name: "package/usr/deep/data", data: "excluded without a directory header" },
+    { name: "package/usr/link", type: "2", target: "/outside" },
+    { name: "package/keep[*].js", data: "keep literal name" },
+    { name: "package/usr2/data", data: "keep boundary" },
+    { name: "package/debug.map", data: "exclude repeated pattern" },
+    { name: "package/hard", type: "1", target: "package/usr/deep/data" },
+  ]);
+  for (const strip of [0, 1]) {
+    for (const input of [bytes, Bun.gzipSync(bytes), Bun.zstdCompressSync(bytes)]) {
+      const result = extract(input, [`--strip-components=${strip}`, "--exclude=package/usr", "--exclude", "*.map"], true);
+      expect(result.status).toBe(0);
+      const root = strip ? result.dir : join(result.dir, "package");
+      expect(readFileSync(join(root, "keep[*].js"), "utf8")).toBe("keep literal name");
+      expect(existsSync(join(root, "usr"))).toBe(false);
+      expect(existsSync(join(root, "hard"))).toBe(false);
+      expect(existsSync(join(root, "debug.map"))).toBe(false);
+      expect(existsSync(join(root, "usr2/data"))).toBe(true);
+    }
+  }
+});
+
+test("exclude handles listing, all excluded, member selection and missing arguments", () => {
+  const result = extract(payload, ["--exclude=*"]);
+  expect(result.status).toBe(0);
+  expect(existsSync(join(result.dir, "package"))).toBe(false);
+  const listed = run(["-tf", result.archive, "--exclude=package"]);
+  expect(listed.status).toBe(0);
+  expect(listed.stdout.trim()).toBe("top.txt");
+  const selected = extract(payload, ["--strip-components=1", "package/lib", "--exclude=package/lib"]);
+  expect(selected.status).toBe(0);
+  expect(existsSync(join(selected.dir, "lib"))).toBe(false);
+  expect(run(["-xf", "unused", "--exclude"]).status).toBe(2);
+});
+
+test("exclude skips creation subtrees and never overwrites excluded destination files", () => {
+  const source = extract(payload, []);
+  const created = join(work, "exclude-create.tar");
+  expect(run(["-cf", created, "-C", source.dir, "--exclude=package/lib", "package/lib", "top.txt"]).status).toBe(0);
+  expect(run(["-tf", created]).stdout.trim()).toBe("top.txt");
+  const dest = join(work, "exclude-existing");
+  mkdirSync(join(dest, "package/lib"), { recursive: true });
+  writeFileSync(join(dest, "package/lib/a.txt"), "original");
+  const result = run(["-xf", source.archive, "-C", dest, "--exclude=package/lib"]);
+  expect(result.status).toBe(0);
+  expect(readFileSync(join(dest, "package/lib/a.txt"), "utf8")).toBe("original");
+  expect(existsSync(join(dest, "package/hard"))).toBe(false);
+});
 
 test("strips npm prefix, preserves empty directories and both link types", () => {
   const result = extract(payload);

@@ -30,7 +30,7 @@ Use `-` as ARCHIVE to read from standard input or write to standard output.
 | `--zstd` | Create or read a zstd-compressed tar. A `.zst` or `.tzst` input is also detected by name. |
 | `-v` | Print names while creating/extracting; with `-t`, also show each member's size, modification time, kind and link target. |
 | `-o`, `--no-same-owner`, `--no-same-permissions`, `--overwrite` | GNU tar compatibility for extraction; these already match Bun.Archive's behaviour. |
-| `--exclude=PATTERN` | Accepted for js-udocker compatibility. Device nodes are not extracted and js-udocker removes whiteout files separately. |
+| `--exclude=PATTERN`, `--exclude PATTERN` | Exclude matching paths and their descendants during creation, listing, or extraction. Repeat to exclude multiple patterns. Uses Bun.Glob syntax; quote wildcards to prevent shell expansion. |
 
 Short options can be combined, for example `-xzvf` or `-czf`.
 For the traditional first option word, the leading hyphen is optional, so
@@ -49,6 +49,9 @@ tar --zstd -xf backup.tar.zst -C /mnt/restore
 # Remove the package/ directory from an npm tarball
 tar -xzf package.tgz -C /tmp/package --strip-components=1
 
+# Exclude browser resources; match before removing package/
+tar -xzf buninu-browser-0.2.2.tgz -C /tmp/browser --strip-components=1 --exclude=package/usr
+
 # An Alpine root filesystem, symbolic links and all; then enter it
 tar -xzf alpine-minirootfs-3.24.1-x86_64.tar.gz -C /mnt/alpine
 chroot /mnt/alpine
@@ -60,8 +63,16 @@ chroot /mnt/alpine
 original archive names, before stripping; listing still shows original names.
 Hardlink targets have the same number of components removed, while symbolic
 link targets are preserved verbatim. A leading `./` counts as one component.
-Without this option, or with `--strip-components=0`, the existing
-`Bun.Archive.extract()` route is unchanged. Positive counts use a separate
+Exclude patterns match original paths, ignoring a leading `./` or `/` and
+trailing `/`. They may match starting at any path component; `usr` excludes
+any directory or file named `usr`, while `package/usr` targets that path.
+An excluded directory excludes all descendants, even without a directory
+header in the archive. Excluded hardlink targets are not restored from
+pre-existing destination files; symbolic link targets remain verbatim.
+This is not a complete implementation of GNU tar's pattern options.
+
+Without excludes and with no stripping (or `--strip-components=0`), the existing
+`Bun.Archive.extract()` route is unchanged. Positive counts or excludes use a separate
 extractor which rejects `..` components and symlink ancestors in output paths.
 
 Extraction restores symbolic links exactly as the archive records them,

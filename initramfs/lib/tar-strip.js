@@ -1,4 +1,5 @@
-// Opt-in --strip-components extraction. The ordinary Bun.Archive path is
+// Opt-in --strip-components / --exclude extraction (count may be zero).
+// The ordinary Bun.Archive path is
 // deliberately separate. Payload offsets come from the CLI's tar scanner.
 import { linkSync, lstatSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
