@@ -806,11 +806,13 @@ async function main(argv) {
 
   if (command !== null) {
     const name = argv[i] ?? "bunmsh";
-    const state = createState({
-      args: [name, ...argv.slice(i + 1)],
-      mouseTracking: forceMouse || undefined,
-      pathSearch: builtinOnly ? false : undefined,
-    });
+    const state = process.env.BUNMSH_INTERNAL_PIPELINE_STATE
+      ? pipelineChildState()
+      : createState({
+          args: [name, ...argv.slice(i + 1)],
+          mouseTracking: forceMouse || undefined,
+          pathSearch: builtinOnly ? false : undefined,
+        });
     const result = await execute(command, state);
     return state.exitRequested ? state.exitStatus : result.status;
   }

@@ -2,6 +2,34 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.3.11] - 2026-10-12
+
+### Fixed
+
+- Keep multiline quoted words, command substitutions and here-documents
+  together when parsing compound-command bodies, rather than treating their
+  continuation lines as separate commands or compound keywords.
+
+- Accept additional `if`/`elif` and `while`/`until` header layouts, including
+  `then` or `do` on the following line, and execute commands placed on the
+  same line after `then`.
+
+- Improve comment handling in compound keyword and case-arm scanning, and
+  include nearby source text in several compound-syntax error messages.
+
+### Added
+
+- Initial support for parenthesized subshell groups, executed in a child
+  bunmsh with inherited shell state, including groups embedded in command
+  sequences and leading groups followed by `&&`, `||` or `;`.
+  Subshell redirection is still limited: the leading-group path handles
+  discarding stdout/stderr to `/dev/null`, but does not yet implement
+  general file redirection or descriptor duplication.
+
+- Recognize general numeric output-descriptor duplication syntax such as
+  `3>&1`. Only the existing `1>&2` and `2>&1` handling is implemented for
+  ordinary commands; other numeric pairs are currently accepted but ignored.
+
 ## [0.3.10] - 2026-09-29
 
 ### Fixed
