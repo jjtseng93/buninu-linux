@@ -5,6 +5,7 @@ import { lstat, readdir } from "node:fs/promises";
 import { linkSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { showDocument } from "../lib/document.js";
+import { extractStripped } from "../lib/tar-strip.js";
 
 const fail = (message) => {
   console.error(`tar: ${message}`);
@@ -22,7 +23,7 @@ Try 'tar --help' for the full manual.`);
   process.exit(2);
 };
 
-const options = { operation: null, archive: null, directory: ".", compression: null, verbose: false, operands: [] };
+const options = { operation: null, archive: null, directory: ".", compression: null, verbose: false, operands: [], strip: 0 };
 const argv = process.argv.slice(2);
 if (argv.length === 0) usage();
 const take = (index, option) => {
@@ -41,6 +42,14 @@ for (let index = 0; index < argv.length; index++) {
   }
   if (argument === "--zstd") { options.compression = "zstd"; continue; }
   if (argument === "--gzip") { options.compression = "gzip"; continue; }
+  if (argument === "--strip-components" || argument.startsWith("--strip-components=")) {
+    const value = argument === "--strip-components" ? take(index++, argument) : argument.slice(19);
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) {
+      fail("--strip-components requires a non-negative safe integer");
+    }
+    options.strip = Number(value);
+    continue;
+  }
   // GNU tar compatibility used by js-udocker. Bun.Archive never restores
   // ownership or permissions, and extraction replaces existing files, so
   // these options already describe its normal extraction behaviour.
@@ -201,6 +210,8 @@ const scanEntries = (bytes) => {
     const target = extended.linkpath ?? longTarget ?? text(block, 157, 100);
     entries.push({
       name: name.replace(/^\.\//, ""),
+      archiveName: name,
+      dataOffset: offset,
       kind: entryKinds[flag] ?? "file",
       target,
       size,
@@ -280,6 +291,24 @@ const restoreLinks = (entries) => {
     }
   }
 };
+
+// Opt-in path only: keep the existing Bun.Archive extraction unchanged for
+// ordinary extraction and --strip-components=0.
+if (options.operation === "x" && options.strip > 0) {
+  try {
+    const bytes = tarBytes(await archiveBytes());
+    const entries = scanEntries(bytes);
+    if (!entries) throw new Error("invalid tar archive");
+    const wanted = options.operands.length ? patterns().map((pattern) => new Bun.Glob(pattern)) : null;
+    const members = entries.filter((entry) => !wanted || wanted.some((glob) => glob.match(entry.name)));
+    extractStripped(bytes, members, options.directory, options.strip, {
+      verbose: options.verbose, filtered: options.operands.length > 0,
+    });
+  } catch (error) {
+    fail(error?.message || String(error));
+  }
+  process.exit(0);
+}
 
 if (options.operation === "x" || options.operation === "t") {
   let archive;

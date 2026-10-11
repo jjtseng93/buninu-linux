@@ -25,6 +25,7 @@ Use `-` as ARCHIVE to read from standard input or write to standard output.
 | `-t` | List archive members. |
 | `-f ARCHIVE`, `--file=ARCHIVE` | Archive file, or `-` for standard input/output. |
 | `-C DIR`, `--directory=DIR` | Read input files from DIR, or extract into DIR. |
+| `--strip-components=N`, `--strip-components N` | Remove N leading path components when extracting. N must be a non-negative integer. Members with no remaining name are skipped. |
 | `-z`, `--gzip` | Create gzip-compressed tar, or explicitly identify gzip input. |
 | `--zstd` | Create or read a zstd-compressed tar. A `.zst` or `.tzst` input is also detected by name. |
 | `-v` | Print names while creating/extracting; with `-t`, also show each member's size, modification time, kind and link target. |
@@ -45,12 +46,23 @@ tar -tf source.tar.gz
 tar --zstd -cf backup.tar.zst home
 tar --zstd -xf backup.tar.zst -C /mnt/restore
 
+# Remove the package/ directory from an npm tarball
+tar -xzf package.tgz -C /tmp/package --strip-components=1
+
 # An Alpine root filesystem, symbolic links and all; then enter it
 tar -xzf alpine-minirootfs-3.24.1-x86_64.tar.gz -C /mnt/alpine
 chroot /mnt/alpine
 ```
 
 ## Links
+
+`--strip-components` applies only to extraction. Member filters match the
+original archive names, before stripping; listing still shows original names.
+Hardlink targets have the same number of components removed, while symbolic
+link targets are preserved verbatim. A leading `./` counts as one component.
+Without this option, or with `--strip-components=0`, the existing
+`Bun.Archive.extract()` route is unchanged. Positive counts use a separate
+extractor which rejects `..` components and symlink ancestors in output paths.
 
 Extraction restores symbolic links exactly as the archive records them,
 including absolute targets such as `/bin/busybox` and targets that do not
