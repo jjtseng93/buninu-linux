@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds and boots both guests on a fresh Debian 13 host of either CPU, in
+# Builds and boots both guests on a fresh Debian-based Bun host of either CPU, in
 # Docker:
 #
 #   test/host/host-test.sh [amd64|arm64]
@@ -8,7 +8,7 @@
 # emulated and takes a few times longer. The container (./Dockerfile) has the
 # README's build packages and QEMU. It clones the committed HEAD of this
 # checkout, so uncommitted changes to the project are not tested, then builds
-# with the host toolchain rather than --docker and boots each guest through
+# with the default JS tools rather than nested --docker and boots each guest through
 # boot-test.exp. The exit status is 0 only when every step passed.
 #
 #   GUESTS="aarch64"         which guests to test (default: x86_64 aarch64)

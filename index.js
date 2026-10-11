@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { accessSync, constants, copyFileSync, existsSync, readFileSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { jsToolsEnabled } from "./scripts/js-tools.js";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const invocationDir = process.cwd();
@@ -84,17 +85,17 @@ Usage:
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
                 EFI stub, Bun and npm application tarballs
-                (fetch-alpine.sh, fetch-bun.sh, fetch-npm.sh)
+                (scripts/fetch.js by default)
   -b, --build   pack the initramfs, assemble the UKI, write vda.img
-                                       (build-uki.sh, build-image.sh)
+                (scripts/build.js by default)
   -r, --run     boot vda.img under QEMU (run-qemu.sh), with KVM or
                 Hypervisor.framework when the guest matches the host CPU
 
   --arch ARCH   guest architecture: x86_64 (default; alias amd64, x64) or
                 aarch64 (alias arm64, native speed on Apple Silicon). A bare
                 -r boots whichever one vda.img was last built for
-  --docker      run fetch and build inside a Debian container built from
-                ./Dockerfile; always on for macOS, which lacks the toolchain
+  --docker      with JS tools disabled, run fetch/build in the Debian
+                container from ./Dockerfile; automatic on macOS in shell mode
 
   --export      after -b/--build, copy the image to
                 ./buninu-linux-${pkg.version}.img (x86_64) or
@@ -121,11 +122,12 @@ initramfs/init.js needs, -r just boots what is already there. Anything after
 -- goes to qemu-system-x86_64 or qemu-system-aarch64 verbatim (for example:
 -r -- -smp 4).
 
-With BUNINU_JS_TOOLS=1 in the environment, fetch and build are done in
-JavaScript (scripts/fetch.js, scripts/build.js) and need only node or bun:
-no Debian toolchain and no Docker.
+Fetch and build use JavaScript by default (scripts/fetch.js, scripts/build.js).
+Host Bun is required for npm extraction; no Debian toolchain or Docker is used.
+Set BUNINU_JS_TOOLS=0, off or false to select the shell tools instead
+(case-insensitive; surrounding whitespace is ignored).
 
-Fetch and build need the Debian toolchain from README "Build environment"
+With JS tools disabled, fetch and build need the Debian toolchain from README "Build environment"
 (PRoot, a Debian or Ubuntu host, or --docker); run needs QEMU (Termux
 pkg, apt, or brew install qemu). Tools missing for the stages you picked are
 reported before anything starts.
@@ -255,10 +257,9 @@ function hasTool(name) {
   return false;
 }
 
-// BUNINU_JS_TOOLS=1: fetch and build run scripts/fetch.js and scripts/build.js
-// in this process instead of the shell scripts, so they need no toolchain
-// and no Docker; run is unchanged.
-const jsTools = process.env.BUNINU_JS_TOOLS === "1";
+// JS tools are the default; explicit 0/off/false selects shell tools.
+// Run remains unchanged. JS fetch/build bypass Docker.
+const jsTools = jsToolsEnabled();
 const usesJs = (stage) => jsTools && stage.flag !== "run";
 const inDocker = (stage) => useDocker && stage.flag !== "run" && !jsTools;
 

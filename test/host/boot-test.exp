@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-# Boots vda.img with `node ./index.js -r --arch <arch>` and drives the serial
+# Boots vda.img with `bun ./index.js -r --arch <arch>` and drives the serial
 # console: the REPL, the Buninu shell, eth0, PID 1, a tmpfs mount, a fetch from
 # inside the guest and poweroff. Each step waits for the output it expects, so
 # a hang or a wrong answer fails with a message instead of racing ahead.
@@ -36,7 +36,7 @@ proc step {what line pattern} {
 
 cd $checkout
 set start [clock seconds]
-spawn node ./index.js -r --arch $arch
+spawn bun ./index.js -r --arch $arch
 
 set timeout $boot_timeout
 expect {

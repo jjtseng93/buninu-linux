@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs inside the container host-test.sh starts: an ordinary Debian 13 machine
+# Runs inside the container host-test.sh starts: a Debian-based Bun environment
 # of the chosen CPU. Clones the committed HEAD of the checkout mounted at
-# /repo, builds each guest with the host toolchain (no --docker), boots it
+# /repo, builds each guest with the default JS tools (no nested --docker), boots it
 # through boot-test.exp, and checks that the builds leave git status clean.
 set -euo pipefail
 
@@ -9,7 +9,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 guests=${GUESTS:-x86_64 aarch64}
 kvm=no
 if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then kvm=yes; fi
-echo "### host: $(uname -sm), node $(node --version), /dev/kvm: $kvm"
+echo "### host: $(uname -sm), bun $(bun --version), /dev/kvm: $kvm"
 
 git config --global --add safe.directory '*'
 git clone --quiet /repo /work
@@ -27,7 +27,7 @@ for guest in $guests; do
     echo "### $guest: fetch + build ${BUILD_FLAGS:-}"
     log=/tmp/build-$guest.log
     # BUILD_FLAGS is split on purpose: it holds flags such as --linux-lts.
-    if node ./index.js -fb --arch "$guest" ${BUILD_FLAGS:-} > "$log" 2>&1; then
+    if bun ./index.js -fb --arch "$guest" ${BUILD_FLAGS:-} > "$log" 2>&1; then
         grep -E '^==>|^Fetched|^Built|^Packed|^note' "$log" || true
     else
         echo "### FAIL: $guest build; last lines:"

@@ -207,15 +207,15 @@ host. `--arch` picks the guest:
 
 #### macOS
 
-This project does not currently support a native macOS build toolchain (GNU
-cpio and tar, `fakeroot`, `parted`, PE-aware binutils), so on a Mac `index.js`
-always runs the fetch and build stages in a Debian 13 container built from
+The default JS tools build directly on macOS with host Bun, without Docker.
+If you opt out with `BUNINU_JS_TOOLS=0`, `index.js` runs the shell fetch and
+build stages in a Debian-based `oven/bun:1.4.2` container built from
 [`Dockerfile`](Dockerfile), with the checkout bind-mounted. The image is built
 on first use and tagged with a hash of the Dockerfile. Only the run stage uses
-the Mac itself:
+the Mac itself in that shell-tools mode:
 
 ```sh
-# Docker Desktop (running) for -f/-b, QEMU and its UEFI firmware for -r
+# Host Bun for -f/-b; QEMU and its UEFI firmware for -r
 brew install qemu
 
 # Apple Silicon: Hypervisor.framework accelerates the aarch64 guest
@@ -242,7 +242,7 @@ apt install qemu-system-x86 ovmf
 bun ./index.js -fbr
 ```
 
-Pass `--docker` to build in the same container as macOS instead of installing
+Set `BUNINU_JS_TOOLS=0` and pass `--docker` to build in the same container as macOS instead of installing
 the build packages; the aarch64 guest additionally needs
 `binutils-aarch64-linux-gnu` for a host build and `qemu-system-arm
 qemu-efi-aarch64` to run.
@@ -289,9 +289,9 @@ qemu-efi-aarch64` to run.
 #### Testing on a Linux host in Docker
 
 `test/host/host-test.sh` checks the Linux-host path from any machine with
-Docker: it starts a fresh Debian 13 container of the chosen CPU with the
+Docker: it starts a fresh `oven/bun:1.4.2` container of the chosen CPU with the
 build packages above and QEMU, clones the committed `HEAD` of this checkout,
-builds both guests with that toolchain (not `--docker`) and boots each one,
+builds both guests with Bun and the default JS tools (not nested `--docker`) and boots each one,
 driving the serial console through `test/host/boot-test.exp`:
 
 ```sh
@@ -928,12 +928,19 @@ it too). Its physical-image stages run as fetch → build:
 
 #### Build flags
 
+Fetch and build default to JS tools. Host Bun is required for npm extraction.
+Only `BUNINU_JS_TOOLS=0`, `off` or `false` disables this route (case-insensitive,
+with surrounding whitespace ignored); unset or empty values keep it enabled.
+JS tools bypass Docker, even with `--docker`. To use the container toolchain,
+run `BUNINU_JS_TOOLS=0 bun index.js -fb --docker`. The run stage still uses
+`run-qemu.sh` and host QEMU.
+
 | flag | runs | use it when |
 | --- | --- | --- |
-| `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh`, `fetch-npm.sh` | first clone, or after bumping a pinned version |
-| `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
+| `-f`, `--fetch` | `scripts/fetch.js` by default; shell route: `fetch-alpine.sh`, `fetch-bun.sh`, `fetch-npm.sh` | first clone, or after bumping a pinned version |
+| `-b`, `--build` | `scripts/build.js` by default; shell route: `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
 | `--arch ARCH` | explicitly selects `x86_64` (default for fetch/build) or `aarch64`; a bare `-r` detects the last built UKI | building or running a particular guest architecture |
-| `--docker` | `-f`/`-b` inside the container from `Dockerfile` (always on macOS) | no Debian toolchain on the host |
+| `--docker` | with JS tools disabled, `-f`/`-b` inside the container from `Dockerfile` (automatic on macOS in shell mode) | use the shell toolchain without installing it on the host |
 
 `--export` is a post-build option: after `-b` finishes, it copies `vda.img` to
 the directory where the command was invoked as
@@ -958,7 +965,7 @@ its own.
 
 ```text
 index.js                  entry point: -f / -b / -r / --arch / --docker / --export / --linux-lts / --real
-Dockerfile                the Debian 13 build toolchain for --docker (and macOS)
+Dockerfile                Debian-based oven/bun:1.4.2 plus the shell build toolchain
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 fetch-npm.sh              [fetch]  pinned browser, casty, jspulse and jspinyin tarballs (download only)
