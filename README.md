@@ -46,7 +46,7 @@
     + Also has mouse click, wheel, and cursor drawing
     + Simplified browser works: buninu-browser natively or casty in chroot debian
     + Playing YouTube with sound (experimental); see [Playing YouTube with sound](#playing-youtube-with-sound-experimental)
-    + See [Commands inside `/bin`](#commands-inside-bin) for browser usage instructions
+    + See [Buninu Browser](#buninu-browser-early-stage-experimental) for the built-in browser, or [Debian and Chromium with casty](#debian-and-chromium-with-casty) for the optional chroot setup
 
 ---
 
@@ -545,11 +545,11 @@ For Chinese input, run the pinyin input method
 that is not inside a chroot, so it uses Buninu's `xclip`:
 
 ```sh
-bun x @drxiaozhi/jspinyin
+jspinyin
 ```
 
 - jspinyin → casty: press `Ctrl-C` in jspinyin to copy its result box, then
-  `Ctrl-V` in casty pastes it through OSC 52.
+  `Ctrl-V` or `Ctrl-E paste` in casty pastes it through OSC 52.
 - casty → jsmdcui / jspinyin: `Alt-C` in casty copies the selection through
   OSC 52, and `Ctrl-V` pastes it in jsmdcui or jspinyin, since jsmdcui reads
   from `xclip` first by default.
@@ -563,7 +563,7 @@ such as `casty` inside the Debian chroot connect to it over `127.0.0.1`,
 because a chroot shares Buninu's network. Several programs can play at once.
 
 This assumes the Debian chroot and `casty` from
-[Commands inside /bin](#commands-inside-bin) are already set up, with the
+[Debian and Chromium with casty](#debian-and-chromium-with-casty) are already set up, with the
 chroot shell on tty2. `bun x` needs network access; see
 [Basic configuration](#basic-configuration).
 
@@ -660,7 +660,10 @@ If there is no sound, check step 4's terminal for errors, and make sure
 Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes the commands
 above, implemented as Bun scripts or thin launchers for bundled packages.
 
-### Buninu Browser (early-stage / experimental)
+For Debian/Alpine rootfs and Chromium examples, see
+[Optional chroot and native binaries](#optional-chroot-and-native-binaries).
+
+### Buninu Browser (early-stage, experimental)
 
 `buninu-browser` is still in an early stage. Websites may render incorrectly
 or fail to load or play media; it is not yet a general-purpose browser
@@ -716,50 +719,6 @@ bun x bunproot --git --readme | stripansi | jmi
 
 
 
-# Download and enter an x64 Debian rootfs
-# Make sure you have run this already:
-#   bunterm 2 --font-size 13
-bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
-cd js-udocker
-bun udocker.js pull --platform=linux/amd64 debian:13
-bun udocker.js create --name db debian:13
-cd ~/.udocker/containers/db/ROOT
-chroot . /bin/bash
-apt update
-apt install --no-install-recommends ca-certificates curl unzip chromium-headless-shell fonts-noto-cjk fonts-noto-color-emoji git
-curl -fsSL https://bun.sh/install | bash
-bun x bunmsh
-# We haven't fully reviewed
-# @sanohiro/casty's safety
-# below is a fork of mine
-# fixing some issues and adding functions
-cd
-git clone https://github.com/jjtseng93/casty
-cd casty/bin
-# When clicking around, don’t release the mouse button immediately after pressing it, to make sure the mouse-down event is triggered
-bun casty.js buninu.org
-# For sound in casty (YouTube), start jspulse first:
-# see "Playing YouTube with sound (experimental)" under "Using Buninu Linux"
-
-
-# Download and enter an x64 Alpine minirootfs
-bun x bunproot --download-alpine-x64
-mkdir alpine
-cd alpine
-tar xvf ../alpine-minirootfs-*-x86_64.tar.gz
-cp $(which bun) bin
-chroot .
-apk add libgcc libstdc++
-
-
-# Enter a root filesystem on a disk. /proc, /sys, /dev, /dev/pts, /run, /tmp
-# and /etc/resolv.conf are mounted for you and removed again on exit
-chroot /mnt
-chroot /mnt /bin/bun --version
-chroot -n /mnt /bin/sh        # traditional: mount nothing
-
-
-
 ip link set eth0 up
 ip addr add 192.168.1.50/24 dev eth0
 ip route add default via 192.168.1.1
@@ -793,6 +752,75 @@ bunterm /dev/tty3 --font-size 13 -e bun /buninu/apps/jsmdcui/src/index.js --demo
 
 The graphics stack behind `bunterm` — the framebuffer module, CanvasKit,
 the fonts and the terminal — is described in [graphics.md](graphics.md).
+
+## Optional chroot and native binaries
+
+These optional examples download and run native Linux binaries, including
+Debian/Alpine utilities and Chromium. They are outside Buninu Linux's
+JS/WASM userspace-tooling approach and are not part of its default bundled
+applications. Skip this section if you want to use only the JS/WASM tools.
+The built-in `chroot` command itself is a Bun script; programs run inside
+the selected root filesystem need not be JavaScript or WebAssembly.
+
+A chroot shares the host kernel and is not a security sandbox. Use trusted
+root filesystems and software. Downloads require network access. The
+Debian and Alpine examples below target x86-64; chroot does not emulate
+another CPU architecture.
+
+### Debian and Chromium with casty
+
+```sh
+# Download and enter an x64 Debian rootfs
+# Make sure you have run this already:
+#   bunterm 2 --font-size 13
+bun x bunproot --git --yes clone https://github.com/jjtseng93/js-udocker
+cd js-udocker
+bun udocker.js pull --platform=linux/amd64 debian:13
+bun udocker.js create --name db debian:13
+cd ~/.udocker/containers/db/ROOT
+chroot . /bin/bash
+apt update
+apt install --no-install-recommends ca-certificates curl unzip chromium-headless-shell fonts-noto-cjk fonts-noto-color-emoji git
+curl -fsSL https://bun.sh/install | bash
+bun x bunmsh
+# The original casty is
+#   @sanohiro/casty
+# below is a fork of mine
+# fixing some issues and adding functions
+cd
+git clone https://github.com/jjtseng93/casty
+cd casty/bin
+
+bun casty.js buninu.org
+# For sound in casty (YouTube), start jspulse first:
+# see "Playing YouTube with sound (experimental)" under "Using Buninu Linux"
+```
+
+For audio setup, see
+[Playing YouTube with sound (experimental)](#playing-youtube-with-sound-experimental).
+
+### Alpine minirootfs
+
+```sh
+# Download and enter an x64 Alpine minirootfs
+bun x bunproot --download-alpine-x64
+mkdir alpine
+cd alpine
+tar xvf ../alpine-minirootfs-*-x86_64.tar.gz
+cp $(which bun) bin
+chroot .
+apk add libgcc libstdc++
+```
+
+### An existing root filesystem
+
+```sh
+# Enter a root filesystem on a disk. /proc, /sys, /dev, /dev/pts, /run, /tmp
+# and /etc/resolv.conf are mounted for you and removed again on exit
+chroot /mnt
+chroot /mnt /bin/bun --version
+chroot -n /mnt /bin/sh        # traditional: mount nothing
+```
 
 ## Environment and dependencies
 
@@ -1386,6 +1414,12 @@ for the userspace session.
   * [Clipboard](#clipboard)
   * [Playing YouTube with sound (experimental)](#playing-youtube-with-sound-experimental)
 - [Commands inside /bin](#commands-inside-bin)
+  * [Buninu Browser (early-stage, experimental)](#buninu-browser-early-stage-experimental)
+  * [Archive tools and other examples](#archive-tools-and-other-examples)
+- [Optional chroot and native binaries](#optional-chroot-and-native-binaries)
+  * [Debian and Chromium with casty](#debian-and-chromium-with-casty)
+  * [Alpine minirootfs](#alpine-minirootfs)
+  * [An existing root filesystem](#an-existing-root-filesystem)
 - [Environment and dependencies](#environment-and-dependencies)
   * [Build environment](#build-environment)
   * [Buninu Linux (Section 2)](#buninu-linux-section-2)
