@@ -974,7 +974,7 @@ jspinyin into the terminal.
 
 `/bin/jspulse` directly imports its installed package entry from
 `/usr/lib/node_modules`. `/bin/jspinyin` instead starts the system jsmdcui
-at `/buninu/apps/jsmdcui/src/index.js`, passing the user's arguments followed
+at `/buninu/apps/jsmdcui/src/index.js` with `--tui`, passing the user's arguments followed
 by `/usr/lib/node_modules/@drxiaozhi/jspinyin/im.md`. It bypasses the upstream
 `bun x jsmdcui` launcher, so launching this command does not download jsmdcui.
 Both are small, executable JavaScript files, with no shell wrapper.

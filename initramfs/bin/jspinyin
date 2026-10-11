@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
 const child = Bun.spawn({
-  cmd: [process.execPath, resolve(root, "buninu/apps/jsmdcui/src/index.js"),
+  cmd: [process.execPath, resolve(root, "buninu/apps/jsmdcui/src/index.js"), "--tui",
     ...process.argv.slice(2), resolve(root, "usr/lib/node_modules/@drxiaozhi/jspinyin/im.md")],
   stdio: ["inherit", "inherit", "inherit"],
 });

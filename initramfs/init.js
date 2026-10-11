@@ -435,6 +435,11 @@ const launchBunmsh = () => {
 let replServer = null;
 
 const launchBuninu = async () => {
+  try {
+    await Bun.write("/proc/sys/kernel/hostname", "buninu\n");
+  } catch (error) {
+    console.error(`init.js: setting hostname: ${error?.message ?? error}`);
+  }
 
   console.log(`
 Type bunterm in bunmsh: Graphical Terminal

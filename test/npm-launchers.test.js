@@ -54,6 +54,6 @@ test("jspinyin bypasses upstream bun x and forwards arguments to system jsmdcui 
   });
   expect(result.status).toBe(23);
   expect(JSON.parse(result.stdout)).toEqual({
-    args: [...args, join(pkg, "im.md")], cwd: root, marker: "preserved", dir: system,
+    args: ["--tui", ...args, join(pkg, "im.md")], cwd: root, marker: "preserved", dir: system,
   });
 });
