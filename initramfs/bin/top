@@ -2,6 +2,7 @@
 // top — periodically render snapshots and process lines supplied by ps.
 
 import { showDocument } from "../lib/document.js";
+import { memoryText } from "../lib/top-memory.js";
 import {
   CLOCK_TICKS,
   formatProcessHeader,
@@ -18,13 +19,6 @@ const uptimeText = (seconds) => {
   const hours = Math.floor(seconds % 86400 / 3600);
   const minutes = Math.floor(seconds % 3600 / 60);
   return `${days ? `${days} day${days === 1 ? "" : "s"}, ` : ""}${hours}:${String(minutes).padStart(2, "0")}`;
-};
-
-const memoryText = (memory) => {
-  const total = memory.MemTotal ?? 0;
-  const free = memory.MemFree ?? 0;
-  const cache = (memory.Buffers ?? 0) + (memory.Cached ?? 0) + (memory.SReclaimable ?? 0);
-  return `MiB Mem : ${(total / 1024).toFixed(1)} total, ${(free / 1024).toFixed(1)} free, ${((total - free - cache) / 1024).toFixed(1)} used, ${(cache / 1024).toFixed(1)} buff/cache`;
 };
 
 const intervalRows = (snapshot, previous) => {
