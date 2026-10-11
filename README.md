@@ -60,6 +60,9 @@
 > test either an x86_64 or aarch64 guest with `qemu-system` instead, see
 > [Build and test with QEMU on macOS or Linux](#build-and-test-with-qemu-on-macos-or-linux).
 
+You can build the image on an Android phone, but the `--real` image below
+boots an x86-64 UEFI computer. It does not install Buninu Linux onto the phone.
+
 - This guide builds a bootable `buninu-linux-<version>.img`
 - Fetch and build use JS tools by default and need host Bun, not the native
   build toolchain or Docker. There is no need to enter PRoot just to build.
@@ -67,7 +70,14 @@
 ### Steps
 
 - Install bun first:
-  * Android: npm i -g bun
+  * Android: run these commands in Termux:
+
+    ```sh
+    pkg update && pkg upgrade
+    pkg i npm
+    npm i -g bun
+    ```
+
   * Others: Follow the official guide: <https://bun.com>
 - With Bun installed and on `PATH`, choose either build method below.
   * Check by `bun --version`
@@ -112,6 +122,17 @@ Linux, macOS or Windows. For later builds, simply copy the new `.img` file
 onto the same drive; there is no need to flash or reformat it each time.
 You can keep multiple images and choose one from Ventoy's boot menu.
 
+On Android, first make the exported image accessible to your file manager.
+Run `termux-setup-storage` and accept the storage permission prompt, or allow
+Termux to manage all files in Android's app settings if that option is
+available. From the directory containing the exported image, copy it to
+Download:
+
+```sh
+termux-setup-storage
+cp buninu-linux-*.img /sdcard/Download/
+```
+
 Use the complete exported `.img` (or `vda.img` when not using `--export`),
 not the FAT partition inside it. Replace the example filename below with the
 exact name printed by the build.
@@ -125,9 +146,15 @@ the `.img` onto Ventoy's data partition. Safely eject it, boot the target PC fro
 drive, and select the image in Ventoy's menu. Ventoy supports `.img` files;
 no extraction or renaming to `.iso` is needed.
 
+---
+
 Installing Ventoy initially erases the selected USB drive. Later copying an
 image file onto it does not require reformatting. Do not use `dd` or Rufus
 on that drive if you want to preserve its Ventoy installation.
+
+Choose either Ventoy or direct image writing, not both. If you used Ventoy,
+skip the Linux/macOS/Windows direct-write methods below and continue to
+[Booting from the USB drive](#booting-from-the-usb-drive).
 
 **Linux: write directly with `dd`.** Identify the USB drive with `lsblk` and
 unmount its mounted partitions first. `/dev/sdX` below means the whole disk,
@@ -186,6 +213,17 @@ cfg.sound     // all packaged ALSA sound modules and detected sound devices
 start()
 ```
 
+Once `start()` opens the Buninu shell, run:
+
+```sh
+bunterm 2
+```
+
+This opens the graphical terminal on virtual console 2 and switches to it.
+It supports Chinese text, emoji and the browser's terminal graphics. Use
+`Ctrl+Alt+F1` to return to the original console and `Ctrl+Alt+F2` to return
+to this terminal.
+
 There is no DHCP client yet; configure a detected wired interface with `ip` as
 described under [Basic configuration](#basic-configuration). Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
@@ -197,6 +235,11 @@ image; `-h` lists all flags.
 > This section covers guests built and run with `qemu-system` only. To build
 > an image for real x86-64 UEFI hardware, follow [Quick start](#quick-start)
 > above and use `-fb --real --export`.
+
+The commands in this section assume you have cloned the source and changed
+into its directory, as in [Or build from a source checkout](#or-build-from-a-source-checkout).
+You do not need to run that section's `--real` build first. Bun must be on
+`PATH`; install QEMU as shown below.
 
 The same `index.js` builds and boots Buninu Linux in QEMU on a Mac or Linux
 host. `--arch` picks the guest:
@@ -239,19 +282,20 @@ To run `bunterm` in a QEMU window on the aarch64 guest, see
 
 #### amd64 Linux
 
-On Debian or Ubuntu the build runs on the host exactly as in PRoot, and QEMU
-uses KVM for the x86_64 guest when the user can open `/dev/kvm`:
+On Debian or Ubuntu, the default JS build needs host Bun, not the native
+build toolchain. QEMU uses KVM for the x86_64 guest when the user can open
+`/dev/kvm`. Install QEMU and its firmware, then build and boot:
 
 ```sh
-apt install binutils-mingw-w64-x86-64 cpio curl dosfstools fakeroot mtools parted unzip
-apt install qemu-system-x86 ovmf
+sudo apt install qemu-system-x86 ovmf
 bun ./index.js -fbr
 ```
 
-Set `BUNINU_JS_TOOLS=0` and pass `--docker` to build in the same container as macOS instead of installing
-the build packages; the aarch64 guest additionally needs
-`binutils-aarch64-linux-gnu` for a host build and `qemu-system-arm
-qemu-efi-aarch64` to run.
+To run an aarch64 guest, additionally install `qemu-system-arm` and
+`qemu-efi-aarch64`. Cross-binutils are not needed for the default JS build.
+For the optional [old shell build](#old-build-shell-tools), install its native
+toolchain (including `binutils-aarch64-linux-gnu` for aarch64), or set
+`BUNINU_JS_TOOLS=0` and pass `--docker` to use the build container instead.
 
 #### What differs on aarch64
 
