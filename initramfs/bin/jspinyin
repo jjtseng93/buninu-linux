@@ -1,0 +1,12 @@
+#!/bin/bun
+// Use the distribution's jsmdcui instead of the package's `bun x` launcher.
+import { resolve } from "node:path";
+
+const root = resolve(import.meta.dir, "..");
+const child = Bun.spawn({
+  cmd: [process.execPath, resolve(root, "buninu/apps/jsmdcui/src/index.js"),
+    ...process.argv.slice(2), resolve(root, "usr/lib/node_modules/@drxiaozhi/jspinyin/im.md")],
+  stdio: ["inherit", "inherit", "inherit"],
+});
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => child.kill(signal));
+process.exit(await child.exited);

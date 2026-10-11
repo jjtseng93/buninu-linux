@@ -970,7 +970,15 @@ other frontends/options are delegated to the package launcher. Use this
 distribution command for resource setup; calling the npm entry directly
 bypasses the hook. The extracted packages are otherwise unmodified, including
 their license/source files. This step does not start services or integrate
-jspinyin into the terminal; its upstream launcher can still invoke `bun x`.
+jspinyin into the terminal.
+
+`/bin/jspulse` directly imports its installed package entry from
+`/usr/lib/node_modules`. `/bin/jspinyin` instead starts the system jsmdcui
+at `/buninu/apps/jsmdcui/src/index.js`, passing the user's arguments followed
+by `/usr/lib/node_modules/@drxiaozhi/jspinyin/im.md`. It bypasses the upstream
+`bun x jsmdcui` launcher, so launching this command does not download jsmdcui.
+Both are small, executable JavaScript files, with no shell wrapper.
+Run `jspulse --alsa` or `jspinyin` from the terminal.
 
 To fetch only these application archives:
 

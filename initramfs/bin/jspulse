@@ -1,0 +1,2 @@
+#!/bin/bun
+import "../usr/lib/node_modules/@drxiaozhi/jspulse/jspulse.js";
