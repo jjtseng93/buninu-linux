@@ -44,8 +44,7 @@
     + See [Multitasking modes](#multitasking-modes)
   * The graphical terminal `bunterm` draws on the framebuffer with CJK, colour emoji and kitty images; see [Showing images](#showing-images)
     + Also has mouse click, wheel, and cursor drawing
-    + Simplified browser works: @sanohiro/casty in chroot debian
-    + (Use at your own risk: We haven't fully examined its code)
+    + Simplified browser works: buninu-browser natively or casty in chroot debian
     + Playing YouTube with sound (experimental); see [Playing YouTube with sound](#playing-youtube-with-sound-experimental)
     + See [Commands inside `/bin`](#commands-inside-bin) for browser usage instructions
 
@@ -557,7 +556,7 @@ bun x @drxiaozhi/jspinyin
 
 ### Playing YouTube with sound (experimental)
 
-[jspulse](https://www.npmjs.com/package/@drxiaozhi/jspulse) is a
+[jspulse](https://github.com/jjtseng93/jspulse), now a built-in, is a
 PulseAudio-compatible sound server written for Bun. It runs natively in
 Buninu, outside any chroot, and plays through ALSA. Chromium-based programs
 such as `casty` inside the Debian chroot connect to it over `127.0.0.1`,
@@ -593,15 +592,18 @@ chroot shell on tty2. `bun x` needs network access; see
    the percentage afterwards if it is too quiet or too loud:
 
    ```sh
-   bun x @drxiaozhi/jspulse --volume 50
-   bun x @drxiaozhi/jspulse --play
+   jspulse --volume 50
+   jspulse --play
    ```
 
 4. **Start the sound server.** It keeps running in the foreground, so leave
    this terminal as it is; `Ctrl+C` stops it:
 
    ```sh
-   bun x @drxiaozhi/jspulse --alsa
+   jspulse --alsa
+   
+   # or start in the background
+   jspulse --alsa &
    ```
 
 5. **Start casty with sound.** Press `Ctrl+Alt+F2` to return to the chroot
@@ -613,6 +615,18 @@ chroot shell on tty2. `bun x` needs network access; see
    bun casty.js https://www.youtube.com
    ```
 
+   Alternatively, the built-in `buninu-browser` runs directly in a native
+   Buninu `bunterm`, outside the chroot, and uses the same running jspulse
+   server. It is still in an early experimental stage, but can play an
+   individual video, for example:
+
+   ```sh
+   buninu-browser https://youtu.be/jf-pn0a-Twk
+   ```
+
+   Playback may still fail or be unstable; this does not imply full YouTube
+   compatibility.
+
 If there is no sound, check step 4's terminal for errors, and make sure
 `PULSE_SERVER` was exported in the same shell that started casty.
 
@@ -621,6 +635,9 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | command | does | manual |
 | --- | --- | --- |
 | `buninu-linux-help` | render this buninu-linux README from `/usr/share/doc/buninu-linux/README.md` | `buninu-linux-help` |
+| `buninu-browser` | early-stage, experimental JavaScript/WASM browser with the bundled casty terminal frontend; not yet a general-purpose browser replacement | `buninu-browser --help` |
+| `jspulse` | PulseAudio-compatible audio server and ALSA mixer controls; use `--alsa` on Buninu Linux | `jspulse --help` |
+| `jspinyin` | Chinese pinyin input panel, opened with the system jsmdcui in TUI mode; not a system-wide input method | — |
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
@@ -629,12 +646,43 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
+| `gzip`, `gunzip`, `zcat` | compress or decompress gzip files, including decompression to stdout | `gzip --help` |
+| `unzip` | list or extract ZIP archives, or write a member to stdout with `-p` | `unzip --help` |
+| `truncate` | resize files, including sparse files | `truncate --help` |
+| `dd` | copy blocks between files with offsets, size limits and sparse-output support | `dd --help` |
+| `mkfs.fat` | format a FAT32 filesystem in a disk image | `mkfs.fat --help` |
+| `mmd`, `mcopy`, `mdir` | create directories, copy files and list contents in a FAT image without mounting it; use `-i IMAGE` and `::/path` | — |
+| `parted` | create and inspect GPT partitions in a disk image; script-mode subset | `parted --help` |
 | `stripansi` | remove ANSI escape sequences from stdin, `-`, or one or more files and concatenate the results | — |
 | `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
 | `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images, with the mouse working, wheel scrollback included (`--no-mouse` turns it off); xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
-Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes twelve commands
-implemented as Bun scripts.
+Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes the commands
+above, implemented as Bun scripts or thin launchers for bundled packages.
+
+### Buninu Browser (early-stage / experimental)
+
+`buninu-browser` is still in an early stage. Websites may render incorrectly
+or fail to load or play media; it is not yet a general-purpose browser
+replacement. Run it inside `bunterm` (or another Kitty-graphics terminal).
+The browser and casty are bundled; these commands do not install them from npm.
+
+```sh
+# Open the Buninu website (requires network access)
+buninu-browser buninu.org
+
+# Open the browser's built-in audio test page
+buninu-browser about:audio
+```
+
+For audio output, first load sound drivers with `cfg.sound` at the PID 1
+REPL, then run `jspulse --alsa` in another terminal or use `jspulse --alsa &` to run in the background. In the browser terminal:
+
+```sh
+buninu-browser about:audio
+```
+
+### Archive tools and other examples
 
 The small `tar` reads the archive's own headers for links and listing, so
 extraction restores directories, hard links and every symbolic link —
@@ -644,7 +692,7 @@ only regular files. Creation still follows the `Bun.Archive` boundary: it
 stores regular files but not Unix metadata, links, or empty directories. It
 supports gzip and Bun's built-in zstd, not xz or bzip2.
 
-- `--help` renders each Markdown manual in the terminal.
+- Where provided, `--help` shows the command's help or renders its Markdown manual.
 - The `bun x` examples below require network access: 
   * `bun x` downloads the requested program from the npm registry and runs it without installing it permanently. 
   * If they fail the 1st time, try `bun pm cache rm`
@@ -684,17 +732,7 @@ bun x bunmsh
 # We haven't fully reviewed
 # @sanohiro/casty's safety
 # below is a fork of mine
-# fixing some issues
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
-# !!!Use at your own risk!!!
+# fixing some issues and adding functions
 cd
 git clone https://github.com/jjtseng93/casty
 cd casty/bin
