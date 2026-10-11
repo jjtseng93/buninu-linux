@@ -25,6 +25,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { config, jsRuntime, rootDir, runIfMain } from "./arch.js";
+import { stageNpm } from "./stage-npm.js";
 
 /**
  * `cp -a SOURCE/. TARGET/`: modes, times and symlinks kept, directories
@@ -138,6 +139,7 @@ const packStaging = (cfg) => {
     rmSync(join(staging, "bin", "bun"), { force: true });
     rmSync(join(staging, "lib", "modules"), { recursive: true, force: true });
     copyTree(cfg.nativeDir, staging);
+    stageNpm(staging);
     // Only this kernel's modules: native/<arch>/ keeps every release fetched
     // so far (an older pin, the other flavor), and none of those can load.
     const modules = join(staging, "lib", "modules");

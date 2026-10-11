@@ -1,0 +1,24 @@
+#!/bin/bun
+// Keep distribution resource setup and the offline casty launcher outside the
+// npm package, so a later `bun i` can replace that package without losing them.
+import { resolve, join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { ensureBrowserResources } from "../lib/browser-resources.js";
+
+const root = resolve(import.meta.dir, "..");
+const modules = join(root, "usr/lib/node_modules");
+const browser = join(modules, "buninu-browser");
+ensureBrowserResources(browser, root);
+const entry = join(browser, "index.js");
+const { chooseFrontend } = await import(pathToFileURL(entry).href);
+const args = process.argv.slice(2);
+const choice = chooseFrontend(args);
+const casty = choice.frontend === "casty";
+const child = Bun.spawn({
+  cmd: [process.execPath, casty ? join(modules, "@drxiaozhi/casty/index.js") : entry,
+    ...(casty ? choice.args : args)],
+  env: casty ? { ...process.env, CASTY_BROWSER: join(browser, "buninu-browser.js") } : process.env,
+  stdio: ["inherit", "inherit", "inherit"],
+});
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => child.kill(signal));
+process.exit(await child.exited);

@@ -25,6 +25,7 @@ trap 'rm -rf "$staging"; rm -f "$archive"' EXIT
 cp -a --reflink=auto initramfs/. "$staging/"
 rm -rf "$staging/bin/bun" "$staging/lib/modules"
 cp -a --reflink=auto "$native_dir/." "$staging/"
+bash scripts/stage-npm.sh "$staging"
 # Only this kernel's modules: native/<arch>/ keeps every release fetched so
 # far (an older pin, the other flavor), and none of those can load.
 for release_dir in "$staging/lib/modules"/*; do

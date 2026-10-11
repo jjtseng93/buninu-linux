@@ -942,9 +942,35 @@ from the package name and version, preserving the existing cache names.
 Both fetch routes download them directly from `registry.npmjs.org` into
 `downloads/npm/`, shared by x86_64 and aarch64, and verify the pinned SHA-256
 on cache hits as well as downloads. No npm/Bun package installation,
-lifecycle scripts or dependency resolution runs. This step does not extract
-the packages or include them in the image yet; installation paths and shared
-resource links will be handled by a later assembly/pack step.
+lifecycle scripts or dependency resolution runs during fetch.
+
+At pack time, `scripts/stage-npm.js` (JS tools) or `scripts/stage-npm.sh`
+(shell tools) rechecks SHA-256 and extracts each archive with one leading
+component removed into the staging tree's `/usr/lib/node_modules/<package>`.
+Scoped names retain their `@scope/name` directories. No install scripts or
+dependency resolution run. JS extraction uses the initramfs JS `tar` and
+requires a host Bun; shell/Docker extraction uses the host `tar`, without Bun.
+The source `initramfs/` and project `package.json` are not modified by packing.
+
+The image gets `/usr/lib/package.json` with the four exact dependencies and
+standard `node_modules/.bin` links. This reserves a normal package-manager
+layout for later `cd /usr/lib` and `bun i --backend=copyfile`; no lockfile is
+fabricated. `bun i` alone retains the pinned versions, not newer releases.
+Persistence across boots and a package-update command are not implemented here.
+
+Only `buninu-browser` excludes `package/usr/lib/canvaskit` and
+`package/usr/share/fonts` when unpacked; `usr/README.md` and other contents
+are retained. The distribution's
+`/bin/buninu-browser` launcher creates missing resource directories and relative
+links on startup: package `usr/lib/canvaskit` points to `/lib/canvaskit`, and
+package `usr/share/fonts` points to `/usr/share/fonts`. Existing resources are
+left untouched, including resources restored by a later npm installation.
+The launcher runs the packaged casty directly, without `bunx`/`npx` downloads;
+other frontends/options are delegated to the package launcher. Use this
+distribution command for resource setup; calling the npm entry directly
+bypasses the hook. The extracted packages are otherwise unmodified, including
+their license/source files. This step does not start services or integrate
+jspinyin into the terminal; its upstream launcher can still invoke `bun x`.
 
 To fetch only these application archives:
 
@@ -965,7 +991,7 @@ and copies the final `vda.img` to the invocation directory.
 | --- | --- | --- |
 | `fetch-alpine.sh` | Alpine CDN | `kernel/<arch>/vmlinuz-<flavor>`, `kernel/<arch>/linuxx64.efi.stub` (`linuxaa64.efi.stub`), `native/<arch>/lib/ld-musl-<arch>.so.1`, and the selected network, storage, input, power and filesystem modules under `native/<arch>/lib/modules/` with trimmed module indexes |
 | `fetch-bun.sh` | GitHub, Alpine CDN | `native/<arch>/bin/bun`, `native/<arch>/lib/{libc.musl-<arch>.so.1,libstdc++.so.6,libgcc_s.so.1}` |
-| `fetch-npm.sh` / `scripts/fetch-npm.js` | npm registry, fixed URLs and SHA-256 in `scripts/npm-packages.md` | `downloads/npm/*.tgz` only; no extraction or image installation yet |
+| `fetch-npm.sh` / `scripts/fetch-npm.js` | npm registry, fixed URLs and SHA-256 in `scripts/npm-packages.md` | `downloads/npm/*.tgz`; pack later extracts into `/usr/lib/node_modules` |
 | `scripts/pack-initramfs.sh` | `initramfs/`, then `native/<arch>/` over it | `build/initramfs.cpio.gz` |
 | `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) |
 | `build-image.sh` | `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) | `vda.img` |
