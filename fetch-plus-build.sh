@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 
 ./fetch-alpine.sh
 ./fetch-bun.sh
+./fetch-npm.sh
 ./build-uki.sh
 ./build-image.sh
 

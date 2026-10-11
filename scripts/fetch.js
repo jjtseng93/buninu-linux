@@ -189,6 +189,7 @@ export const fetchBun = (cfg = config()) => withUmask022(async () => {
 export const fetchAll = async (cfg = config()) => {
   await fetchAlpine(cfg);
   await fetchBun(cfg);
+  await (await import("./fetch-npm.js")).fetchNpm();
 };
 
 runIfMain(import.meta.url, () => fetchAll());

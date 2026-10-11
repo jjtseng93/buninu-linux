@@ -43,7 +43,7 @@ const stages = [
   {
     flag: "fetch",
     short: "f",
-    scripts: ["fetch-alpine.sh", "fetch-bun.sh"],
+    scripts: ["fetch-alpine.sh", "fetch-bun.sh", "fetch-npm.sh"],
     tools: () => ["curl", "unzip", "tar", "gzip", "sha256sum"],
   },
   {
@@ -83,7 +83,8 @@ Usage:
 
 Stages (always run in this order, whichever you pick):
   -f, --fetch   download and verify the pinned kernel, musl, GCC runtime,
-                EFI stub and Bun      (fetch-alpine.sh, fetch-bun.sh)
+                EFI stub, Bun and npm application tarballs
+                (fetch-alpine.sh, fetch-bun.sh, fetch-npm.sh)
   -b, --build   pack the initramfs, assemble the UKI, write vda.img
                                        (build-uki.sh, build-image.sh)
   -r, --run     boot vda.img under QEMU (run-qemu.sh), with KVM or

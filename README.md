@@ -864,7 +864,7 @@ it too). Its physical-image stages run as fetch → build:
 
 | flag | runs | use it when |
 | --- | --- | --- |
-| `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh` | first clone, or after bumping a pinned version |
+| `-f`, `--fetch` | `fetch-alpine.sh`, `fetch-bun.sh`, `fetch-npm.sh` | first clone, or after bumping a pinned version |
 | `-b`, `--build` | `build-uki.sh`, `build-image.sh` | after editing `initramfs/init.js` or the kernel command line |
 | `--arch ARCH` | explicitly selects `x86_64` (default for fetch/build) or `aarch64`; a bare `-r` detects the last built UKI | building or running a particular guest architecture |
 | `--docker` | `-f`/`-b` inside the container from `Dockerfile` (always on macOS) | no Debian toolchain on the host |
@@ -895,6 +895,7 @@ index.js                  entry point: -f / -b / -r / --arch / --docker / --expo
 Dockerfile                the Debian 13 build toolchain for --docker (and macOS)
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
+fetch-npm.sh              [fetch]  pinned browser, casty, jspulse and jspinyin tarballs (download only)
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with the hello-world EFI
 run-qemu.sh               [run]    QEMU q35 (x86_64) or virt (aarch64), KVM/HVF/TCG
@@ -922,6 +923,36 @@ tampered with is fetched again and has to pass the same hash before a script
 extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
+The four application packages are pinned separately in
+`scripts/npm-packages.md`: `buninu-browser@0.2.2`,
+`@drxiaozhi/casty@1.3.4`, `@drxiaozhi/jspulse@0.2.1`, and
+`@drxiaozhi/jspinyin@0.1.1`. These were npm's `latest` versions when checked
+on 2026-10-11; fetch never resolves `latest` or a version range at runtime.
+Each registry tarball was checked against its published SHA-512 integrity
+before its SHA-256 was recorded in the shared pins file.
+
+The manifest uses fixed YAML-compatible blocks: a double-quoted
+`"package@version":` header, followed by two `  - ` lines containing the
+registry URL and `sha256:HEX`. Blank lines and `#` comments are allowed.
+The `.md` extension lets `bun scripts/npm-packages.md` display the list.
+Bun parses it with `Bun.YAML.parse`; Node and shell also support the same
+strict format without installing a YAML parser. Cache filenames are derived
+from the package name and version, preserving the existing cache names.
+
+Both fetch routes download them directly from `registry.npmjs.org` into
+`downloads/npm/`, shared by x86_64 and aarch64, and verify the pinned SHA-256
+on cache hits as well as downloads. No npm/Bun package installation,
+lifecycle scripts or dependency resolution runs. This step does not extract
+the packages or include them in the image yet; installation paths and shared
+resource links will be handled by a later assembly/pack step.
+
+To fetch only these application archives:
+
+```sh
+bun scripts/fetch-npm.js     # built-in fetch; also works with Node.js
+./fetch-npm.sh              # curl + sha256sum, including inside Docker
+```
+
 #### Build pipeline
 
 The primary `bun ./index.js -fb --real` pipeline runs the steps below in order;
@@ -934,6 +965,7 @@ and copies the final `vda.img` to the invocation directory.
 | --- | --- | --- |
 | `fetch-alpine.sh` | Alpine CDN | `kernel/<arch>/vmlinuz-<flavor>`, `kernel/<arch>/linuxx64.efi.stub` (`linuxaa64.efi.stub`), `native/<arch>/lib/ld-musl-<arch>.so.1`, and the selected network, storage, input, power and filesystem modules under `native/<arch>/lib/modules/` with trimmed module indexes |
 | `fetch-bun.sh` | GitHub, Alpine CDN | `native/<arch>/bin/bun`, `native/<arch>/lib/{libc.musl-<arch>.so.1,libstdc++.so.6,libgcc_s.so.1}` |
+| `fetch-npm.sh` / `scripts/fetch-npm.js` | npm registry, fixed URLs and SHA-256 in `scripts/npm-packages.md` | `downloads/npm/*.tgz` only; no extraction or image installation yet |
 | `scripts/pack-initramfs.sh` | `initramfs/`, then `native/<arch>/` over it | `build/initramfs.cpio.gz` |
 | `build-uki.sh` | that archive, kernel, stub | `build/cmdline`, `build/os-release`, `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) |
 | `build-image.sh` | `vda/EFI/BOOT/BOOTX64.EFI` (`BOOTAA64.EFI`) | `vda.img` |
