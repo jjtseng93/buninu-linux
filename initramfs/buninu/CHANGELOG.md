@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.19 - 2026-10-12
+
+- Sync bunmsh to 0.3.11: more POSIX syntax
+
 ## 0.4.18 - 2026-09-29
 
 - Sync jsgotty to 1.1.14: Kitty for Windows
