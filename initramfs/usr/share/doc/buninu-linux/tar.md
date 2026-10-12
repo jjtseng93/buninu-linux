@@ -50,7 +50,7 @@ tar --zstd -xf backup.tar.zst -C /mnt/restore
 tar -xzf package.tgz -C /tmp/package --strip-components=1
 
 # Exclude browser resources; match before removing package/
-tar -xzf buninu-browser-0.2.2.tgz -C /tmp/browser --strip-components=1 --exclude=package/usr
+tar -xzf buninu-browser-*.tgz -C /tmp/browser --strip-components=1 --exclude=package/usr
 
 # An Alpine root filesystem, symbolic links and all; then enter it
 tar -xzf alpine-minirootfs-3.24.1-x86_64.tar.gz -C /mnt/alpine
