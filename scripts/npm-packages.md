@@ -1,9 +1,10 @@
 # npm packages
 # Latest versions checked on 2026-10-11; SHA-256 pins verified against registry SHA-512 integrity.
+# buninu-browser updated and verified on 2026-10-12.
 
-"buninu-browser@0.2.2":
-  - https://registry.npmjs.org/buninu-browser/-/buninu-browser-0.2.2.tgz
-  - sha256:d551fec88f0fe8a6494f806cc8b4b560454796e25f25493e8a3b5b77e6f7f10b
+"buninu-browser@0.2.3":
+  - https://registry.npmjs.org/buninu-browser/-/buninu-browser-0.2.3.tgz
+  - sha256:0f7c9cd9df689d7b0900fdf3172851125ebd8aba12bed555be7e091d427146e8
 
 "@drxiaozhi/casty@1.3.4":
   - https://registry.npmjs.org/@drxiaozhi/casty/-/casty-1.3.4.tgz
