@@ -1,24 +1,37 @@
+import {compileAwk, executeAwk} from "./awk.js";
+import {normalFileDiff} from "./diff.js";
+import {compileSed, applySed} from "./sed.js";
 import {
   constants as fsConstants,
   accessSync,
   closeSync,
   chmodSync,
+  chownSync,
+  copyFileSync,
   createReadStream,
   createWriteStream,
   lstatSync,
   linkSync,
   mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
   openSync,
   readdirSync,
   rmdirSync,
   readFileSync,
+  readSync,
+  read as fsRead,
+  writeSync,
   realpathSync,
   statSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import {
+  tmpdir,
   arch as osArch,
   constants as osConstants,
   hostname as osHostname,
@@ -33,7 +46,7 @@ import {
   isAbsolute,
   resolve as resolvePath,
 } from "node:path";
-import { Readable, Writable } from "node:stream";
+import { Readable } from "node:stream";
 import { format as formatValue } from "node:util";
 import { EXECUTABLE_COMMAND, IS_COMPILED } from "../single-exe/compiled.js";
 import { readAssetText } from "../single-exe/assetsHelper.js";
@@ -258,13 +271,18 @@ export function tokenize(source, options = {}) {
     // word for the indented continuation lines commonly used in exec calls.
     const continuation = lineContinuationLength(source, i);
     if (continuation) {
+      options.continuations?.set(i, continuation);
       i += continuation;
       continue;
     }
 
     if (ch === "\n") {
       finishWord();
-      tokens.push({ type: "op", value: ";", offset: i });
+      // Newlines after AND/OR/pipe operators continue the same command,
+      // including when a here-document body lies between the two sides.
+      const previous = tokens.at(-1);
+      if (!(previous?.type === "op" && ["&&", "||", "|"].includes(previous.value)))
+        tokens.push({ type: "op", value: ";", offset: i });
       i++;
       atWordBoundary = true;
       if (pendingHeredocs.length) {
@@ -283,24 +301,22 @@ export function tokenize(source, options = {}) {
       while (i < source.length && source[i] !== "\n") i++;
       continue;
     }
+    const fullDup = /^\d+>&\d+(?=$|[\s;|&<>])/.exec(source.slice(i))?.[0];
+    if (!current && fullDup) { tokens.push({type:"op",value:fullDup,offset:i}); i += fullDup.length; atWordBoundary=true; continue; }
+    const ioOperator = /^(?:[0-9]+)?(?:>&|<&|<>|>>|>(?!>)|<(?!<))/.exec(source.slice(i))?.[0];
+    if (!current && ioOperator) {
+      tokens.push({type:"op", value:ioOperator, offset:i});
+      i += ioOperator.length;
+      atWordBoundary = true;
+      continue;
+    }
     const two = source.slice(i, i + 2);
-    const fdDup = /^(\d+>&\d+)/.exec(source.slice(i))?.[1] ?? "";
     const operatorAhead =
       ["|", ";", "<", ">"].includes(ch) ||
       two === "&&" ||
-      two === "||" ||
-      two === "2>" ||
-      Boolean(fdDup);
+      two === "||";
     if (current && operatorAhead) {
       finishWord();
-      continue;
-    }
-    // A descriptor duplication begins with the shorter `2>` redirect token,
-    // so it must win before ordinary file redirects are considered.
-    if (!current && fdDup) {
-      tokens.push({ type: "op", value: fdDup, offset: i });
-      i += fdDup.length;
-      atWordBoundary = true;
       continue;
     }
     if (!current && ["&&", "||", ">>", "2>", "2>>"].includes(
@@ -357,6 +373,7 @@ export function tokenize(source, options = {}) {
         }
         const quotedContinuation = lineContinuationLength(source, i);
         if (quotedContinuation) {
+          options.continuations?.set(i, quotedContinuation);
           i += quotedContinuation;
           continue;
         }
@@ -369,7 +386,7 @@ export function tokenize(source, options = {}) {
           }
         }
         if ((source[i] === "$" && ["(", "{"].includes(source[i + 1])) || source[i] === "`") {
-          const end = source[i + 1] === "{" ? parameterEnd(source, i) : substitutionEnd(source, i);
+          const end = source[i] === "$" && source[i + 1] === "{" ? parameterEnd(source, i) : substitutionEnd(source, i);
           text += source.slice(i, end);
           i = end;
           continue;
@@ -407,7 +424,7 @@ export function tokenize(source, options = {}) {
     while (i < source.length) {
       const c = source[i];
       if ((c === "$" && ["(", "{"].includes(source[i + 1])) || c === "`") {
-        const end = source[i + 1] === "{" ? parameterEnd(source, i) : substitutionEnd(source, i);
+        const end = source[i] === "$" && source[i + 1] === "{" ? parameterEnd(source, i) : substitutionEnd(source, i);
         text += source.slice(i, end);
         i = end;
         continue;
@@ -415,9 +432,7 @@ export function tokenize(source, options = {}) {
       const maybeOp =
         ["|", ";", "<", ">"].includes(c) ||
         source.slice(i, i + 2) === "&&" ||
-        source.slice(i, i + 2) === "||" ||
-        source.slice(i, i + 2) === "2>" ||
-        /^\d+>&\d+/.test(source.slice(i));
+        source.slice(i, i + 2) === "||";
       if (isSpace(c) || c === "\n" || c === "'" || c === '"' || c === "\\" || maybeOp)
         break;
       text += c;
@@ -460,6 +475,7 @@ export function parse(source) {
     const pipeline = [];
     while (true) {
       const command = emptyCommand();
+      command.lineNumber = source.slice(0, tokens[i]?.offset ?? 0).split("\n").length;
       while (i < tokens.length) {
         const token = tokens[i];
         if (token.type === "op" && ["|", ";", "&&", "||"].includes(token.value))
@@ -469,7 +485,7 @@ export function parse(source) {
           i++;
           continue;
         }
-        if (token.type === "op" && ["<", ">", ">>", "2>", "2>>", "<<", "<<-", "<<<"].includes(token.value)) {
+        if (token.type === "op" && (/^\d*(?:>&|<&|<>|>>|>|<)$/.test(token.value) || ["<<", "<<-", "<<<"].includes(token.value))) {
           const target = tokens[i + 1];
           if (!target || target.type !== "word")
             throw new ShellSyntaxError(
@@ -495,6 +511,7 @@ export function parse(source) {
 
       if (tokens[i]?.value === "|") {
         i++;
+        while (tokens[i]?.value === ";" && source[tokens[i].offset] === "\n") i++;
         if (!tokens[i])
           throw new ShellSyntaxError("pipeline requires a command", source.length);
         continue;
@@ -539,14 +556,25 @@ export function parse(source) {
 }
 
 function parameterValue(name, state) {
+  if (name === "LINENO") return String(state.lineNumber ?? 1);
   if (name === "?") return String(state.lastStatus);
   if (name === "$") return String(process.pid);
   if (name === "#") return String(Math.max(0, state.args.length - 1));
-  if (name === "-") return "";
+  if (name === "-") return Object.entries(state.shellOptions ?? {}).filter(([k,v])=>v && k.length === 1).map(([k])=>k).join("");
   if (name === "0") return state.args[0] ?? "bunmsh";
   if (name === "@" || name === "*") return state.args.slice(1).join((state.env.IFS ?? " ")[0] ?? " ");
   if (/^[1-9][0-9]*$/.test(name)) return state.args[Number(name)] ?? "";
   return state.env[name] ?? "";
+}
+
+function checkedParameter(name,state) {
+  const unset = name === "LINENO" ? false : /^\d+$/.test(name) ? Number(name) >= state.args.length : /^[A-Za-z_]/.test(name) && !Object.hasOwn(state.env,name);
+  if (state.shellOptions.u && unset) {
+    state.exitRequested = true;
+    state.exitStatus = 1;
+    throw new ShellSyntaxError(`${name}: parameter not set`);
+  }
+  return parameterValue(name,state);
 }
 
 function tildeDirectory(name, state) {
@@ -606,16 +634,6 @@ function arithmeticValue(source, state) {
   return String(value | 0);
 }
 
-function globPatternRegex(pattern, anchoredStart, anchoredEnd, greedy) {
-  let source = "";
-  for (const ch of pattern) {
-    if (ch === "*") source += greedy ? ".*" : ".*?";
-    else if (ch === "?") source += ".";
-    else source += ch.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-  }
-  return new RegExp(`${anchoredStart ? "^" : ""}${source}${anchoredEnd ? "$" : ""}`);
-}
-
 async function casePatternRegex(pattern, state) {
   let marked = "";
   const literal = (value) => {
@@ -660,34 +678,37 @@ async function casePatternRegex(pattern, state) {
       let end = i + 1;
       if (marked[end] === "!" || marked[end] === "^") end++;
       if (marked[end] === "]") end++;
-      while (end < marked.length && marked[end] !== "]") end++;
+      while (end < marked.length && marked[end] !== "]") {
+        if (marked[end] === "\u0000" && end + 1 < marked.length) end++;
+        end++;
+      }
       if (end >= marked.length) source += "\\[";
       else {
         let body = marked.slice(i + 1, end);
         const negate = body[0] === "!" || body[0] === "^";
         if (negate) body = body.slice(1);
-        body = body.replaceAll("\\", "\\\\");
+        body = body.replace(/\u0000(.)/gs, (_,ch) => /[\\\]\-^]/.test(ch) ? `\\${ch}` : ch);
         source += `[${negate ? "^" : ""}${body}]`;
         i = end;
       }
     }
     else source += marked[i].replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
   }
-  return new RegExp(`^${source}$`);
+  return new RegExp(`^${source}$`, "s");
 }
 
-async function parameterExpansion(body, state) {
+async function parameterExpansion(body, state, quoted = false) {
   if (/^[!%][A-Za-z_][A-Za-z0-9_]*$/.test(body)) {
     const value = parameterValue(body.slice(1), state);
     return body[0] === "!" ? parameterValue(value, state) : String([...value].length);
   }
-  if (body.startsWith("#") && /^[A-Za-z_][A-Za-z0-9_]*$/.test(body.slice(1)))
+  if (body.startsWith("#") && /^(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?$#-])$/.test(body.slice(1)))
     return String(parameterValue(body.slice(1), state).length);
   const trim = /^([A-Za-z_][A-Za-z0-9_]*|[?$#@*]|[0-9]+)(%%|%|##|#)(.*)$/s.exec(body);
   if (trim) {
     const value = parameterValue(trim[1], state);
-    const pattern = stripExpansionMarkers(await expandText(trim[3], state));
-    const matches = (part) => globPatternRegex(pattern, true, true, true).test(part);
+    const pattern = await casePatternRegex(trim[3], state);
+    const matches = (part) => pattern.test(part);
     if (trim[2] === "%") {
       for (let i = value.length; i >= 0; i--) if (matches(value.slice(i))) return value.slice(0, i);
     } else if (trim[2] === "%%") {
@@ -718,13 +739,14 @@ async function parameterExpansion(body, state) {
   if (!match) throw new ShellSyntaxError(`unsupported parameter expansion: \${${body}}`);
   const [, name, operator, operand = ""] = match;
   const value = parameterValue(name, state);
-  const unset = !Object.hasOwn(state.env, name) && !/^[?$#@*0-9]$/.test(name);
+  const unset = /^\d+$/.test(name) ? Number(name) >= state.args.length :
+    name !== "LINENO" && !Object.hasOwn(state.env, name) && !/^[?$#@*-]$/.test(name);
   const empty = value === "";
-  if (!operator) return value;
+  if (!operator) return checkedParameter(name,state);
   const useEmpty = operator.startsWith(":");
   const op = operator.at(-1);
   const missing = unset || (useEmpty && empty);
-  const expandedOperand = async () => stripExpansionMarkers(await expandText(operand, state));
+  const expandedOperand = () => expandParameterOperand(operand, state, quoted);
   if (op === "-") return missing ? expandedOperand() : value;
   if (op === "+") return missing ? "" : expandedOperand();
   if (op === "=") {
@@ -732,7 +754,7 @@ async function parameterExpansion(body, state) {
       if (!/^[A-Za-z_]/.test(name)) throw new ShellSyntaxError("cannot assign positional parameter");
       if (state.readonly?.has(name)) throw new ShellSyntaxError(`${name}: is read only`);
       const expanded = await expandedOperand();
-      state.env[name] = expanded;
+      state.env[name] = stripExpansionMarkers(expanded);
       return expanded;
     }
     return value;
@@ -742,11 +764,48 @@ async function parameterExpansion(body, state) {
 }
 
 function markedExpansion(value) {
-  return `\u0001${value}\u0002`;
+  return `\ufdd0${value}\ufdd1`;
 }
 
 function stripExpansionMarkers(value) {
-  return value.replace(/[\u0001\u0002]/g, "");
+  return value.replace(/\ufdd4/g, " ").replace(/[\ufdd0-\ufdd3\ufdd5\ufdd6]/g, "");
+}
+
+// Like mksh eval.c's XARG/XARGSEP, retain quote and argument boundaries
+// until field splitting. A selected ${...word} is shell word syntax, not text.
+async function expandParameterOperand(source, state, outerQuoted) {
+  let output = "", plain = "", quote = "none";
+  const flush = async () => {
+    if (quote === "single") output += `\ufdd2${plain}\ufdd5\ufdd3`;
+    else {
+      const value = await expandText(plain, state, outerQuoted || quote === "double");
+      output += quote === "double" ? `\ufdd2${value}${value === "\ufdd6" ? "" : "\ufdd5"}\ufdd3` : value;
+    }
+    plain = "";
+  };
+  for (let i = 0; i < source.length;) {
+    const ch = source[i];
+    if (quote === "single") {
+      if (ch === "'") { await flush(); quote = "none"; i++; }
+      else plain += source[i++];
+      continue;
+    }
+    if ((ch === '"' && quote !== "single") || (ch === "'" && quote === "none" && !outerQuoted)) {
+      await flush(); quote = quote === "none" ? (ch === '"' ? "double" : "single") : "none"; i++; continue;
+    }
+    if (ch === "\\" && i + 1 < source.length) {
+      if (quote === "none" && !outerQuoted || '$`"\\'.includes(source[i + 1])) {
+        plain += `\u0000${source[i + 1]}`; i += 2; continue;
+      }
+    }
+    if (ch === "`" || ch === "$" && ["{", "("].includes(source[i + 1])) {
+      const end = source[i] === "$" && source[i + 1] === "{" ? parameterEnd(source, i) : substitutionEnd(source, i);
+      plain += source.slice(i, end); i = end; continue;
+    }
+    plain += source[i++];
+  }
+  await flush();
+  return output;
 }
 
 async function commandSubstitution(source, state) {
@@ -755,17 +814,24 @@ async function commandSubstitution(source, state) {
     env: { ...state.env },
     aliases: { ...state.aliases },
     readonly: new Set(state.readonly),
+    exported: new Set(state.exported),
     directoryHistory: [...state.directoryHistory],
     tabs: [...state.tabs],
     exitRequested: false,
     exitStatus: 0,
+    flow:null, loopDepth:0, returnDepth:0,
+    shellOptions:{...state.shellOptions}, fdBindings:{...state.fdBindings},
+    traps:{}, trapListeners:new Map(), pendingTraps:[], ownedFds:new Set(),
   };
+  // Command substitution installs its own stdout pipe even inside >file.
+  delete child.fdBindings[1];
   const output = await execute(source, child, { capture: true });
-  state.expansionStatus = output.status;
-  return decode(output.stdout).replace(/\n+$/, "");
+  const final = await finishShell(child,output.status,{capture:true});
+  state.expansionStatus = final.status;
+  return decode(concatBytes([output.stdout,final.stdout])).replace(/\n+$/, "");
 }
 
-async function expandText(text, state) {
+async function expandText(text, state, quoted = false) {
   let output = "";
   for (let i = 0; i < text.length; ) {
     if (text[i] === "\u0000") {
@@ -775,7 +841,11 @@ async function expandText(text, state) {
     }
     if (text[i] === "`") {
       const end = substitutionEnd(text, i);
-      output += markedExpansion(await commandSubstitution(text.slice(i + 1, end - 1), state));
+      // mksh lex.c SBQUOTE removes one escape layer before parsing the body,
+      // even inside quotes that belong to the inner command. Double-quoted
+      // backquotes additionally recognize an escaped double quote.
+      const source = text.slice(i + 1, end - 1).replace(quoted ? /\\([$`\\"])/g : /\\([$`\\])/g, "$1");
+      output += markedExpansion(await commandSubstitution(source, state));
       i = end;
       continue;
     }
@@ -785,7 +855,8 @@ async function expandText(text, state) {
     }
     if (text.startsWith("$((", i)) {
       const end = substitutionEnd(text, i);
-      output += markedExpansion(arithmeticValue(text.slice(i + 3, end - 2), state));
+      const expression = stripExpansionMarkers(await expandText(text.slice(i + 3, end - 2), state));
+      output += markedExpansion(arithmeticValue(expression, state));
       i = end;
       continue;
     }
@@ -797,20 +868,22 @@ async function expandText(text, state) {
     }
     if (text[i + 1] === "{") {
       const end = parameterEnd(text, i);
-      output += markedExpansion(await parameterExpansion(text.slice(i + 2, end - 1), state));
+      output += markedExpansion(await parameterExpansion(text.slice(i + 2, end - 1), state, quoted));
       i = end;
       continue;
     }
     const next = text[i + 1];
     if (["?", "$", "#", "@", "*", "-"].includes(next) || /[0-9]/.test(next ?? "")) {
-      output += markedExpansion(parameterValue(next, state));
+      output += next === "@" && quoted
+        ? (state.args.length > 1 ? state.args.slice(1).map(arg => `\ufdd2${arg}\ufdd5\ufdd3`).join("\ufdd4") : "\ufdd6")
+        : markedExpansion(checkedParameter(next, state));
       i += 2;
       continue;
     }
     if (isNameStart(next)) {
       let end = i + 2;
       while (isNameChar(text[end])) end++;
-      output += markedExpansion(parameterValue(text.slice(i + 1, end), state));
+      output += markedExpansion(checkedParameter(text.slice(i + 1, end), state));
       i = end;
       continue;
     }
@@ -832,6 +905,7 @@ function splitFields(segments, state) {
     forced = false;
   };
   for (const segment of segments) {
+    if (segment.boundary) { finish(true); continue; }
     if (segment.quoted && segment.text === "") forced = true;
     for (const ch of segment.text) {
       if (!segment.quoted && segment.splittable && ifs.includes(ch)) {
@@ -896,42 +970,41 @@ function braceFields(field) {
 }
 
 export async function expandWord(word, state, options = {}) {
-  if (!options.single && word.fragments.length === 1 &&
-      word.fragments[0].quote === "double" && word.fragments[0].text === "$@")
-    return state.args.slice(1);
   const segments = [];
-  for (let index = 0; index < word.fragments.length; index++) {
-    const fragment = word.fragments[index];
+  for (const fragment of word.fragments) {
     const source = fragment.quote === "none" && !options.noTilde
-      ? expandTildes(fragment.text, state, Boolean(options.assignment))
-      : fragment.text;
-    let text = fragment.quote === "single"
-      ? source.replaceAll("\u0000", "")
-      : await expandText(source, state);
-    if (fragment.quote !== "none") {
-      segments.push({ text: stripExpansionMarkers(text.replaceAll("\u0000", "")), quoted: true, splittable: false });
-    } else {
-      let plain = "";
-      let splittable = false;
-      const flush = () => {
-        if (plain) segments.push({ text: plain, quoted: false, splittable });
-        plain = "";
-      };
-      for (let i = 0; i < text.length; i++) {
-        if (text[i] === "\u0001") { flush(); splittable = true; continue; }
-        if (text[i] === "\u0002") { flush(); splittable = false; continue; }
-        if (text[i] !== "\u0000") { plain += text[i]; continue; }
-        flush();
-        segments.push({ text: text[++i] ?? "", quoted: true, splittable: false });
-      }
-      flush();
+      ? expandTildes(fragment.text, state, Boolean(options.assignment)) : fragment.text;
+    if (fragment.quote === "single") {
+      segments.push({text:source.replaceAll("\u0000", ""),quoted:true,splittable:false});
+      continue;
     }
+    const text = await expandText(source, state, fragment.quote === "double");
+    let plain = "", splitDepth = 0, quoteDepth = fragment.quote === "double" ? 1 : 0;
+    const flush = () => {
+      if (plain) segments.push({text:plain,quoted:quoteDepth > 0,splittable:splitDepth > 0});
+      plain = "";
+    };
+    if (fragment.quote === "double" && !text.includes("\ufdd6"))
+      segments.push({text:"",quoted:true,splittable:false});
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "\ufdd0") { flush(); splitDepth++; }
+      else if (ch === "\ufdd1") { flush(); splitDepth--; }
+      else if (ch === "\ufdd2") { flush(); quoteDepth++; }
+      else if (ch === "\ufdd3") { flush(); quoteDepth--; }
+      else if (ch === "\ufdd4") { flush(); segments.push({text:options.single ? " " : "",boundary:!options.single}); }
+      else if (ch === "\ufdd5") { flush(); segments.push({text:"",quoted:true,splittable:false}); }
+      else if (ch === "\ufdd6") { flush(); }
+      else if (ch === "\u0000") { flush(); segments.push({text:text[++i] ?? "",quoted:true,splittable:false}); }
+      else plain += ch;
+    }
+    flush();
   }
   if (options.single) return [segments.map(({ text }) => text).join("")];
   const fields = splitFields(segments, state);
   const output = [];
   for (const field of fields)
-    for (const expanded of braceFields(field)) output.push(...await pathnameFields(expanded, state));
+    for (const expanded of braceFields(field)) output.push(...(state.shellOptions.f ? [expanded.map(part=>part.ch).join("")] : await pathnameFields(expanded, state)));
   return output;
 }
 
@@ -1057,10 +1130,16 @@ async function sourceFile(argv, state) {
   try {
     const source = await Bun.file(path).text();
     const previousArgs = state.args;
+    const previousLoopDepth = state.loopDepth;
+    state.loopDepth = 0;
     if (argv.length > 2) state.args = [previousArgs[0], ...argv.slice(2)];
+    state.returnDepth++;
     try {
       return await execute(source, state, { capture: true });
     } finally {
+      state.returnDepth--;
+      state.loopDepth = previousLoopDepth;
+      if (state.flow?.kind === "return") state.flow = null;
       state.args = previousArgs;
     }
   } catch (error) {
@@ -1125,7 +1204,112 @@ function evaluateTest(argv, state) {
   throw new Error("unsupported expression");
 }
 
+function loopControl(kind, argv, state) {
+  const levels = argv[1] === undefined ? 1 : Number(argv[1]);
+  if (argv.length > 2 || !Number.isInteger(levels) || levels < 1)
+    return result(2, "", `bunmsh: ${kind}: expected a positive integer\n`);
+  if (!state.loopDepth) return result(2, "", `bunmsh: ${kind}: not in a loop\n`);
+  state.flow = { kind, levels: Math.min(levels, state.loopDepth) };
+  return result();
+}
+
+function trapName(value) {
+  if (value === "0" || value === "EXIT") return "EXIT";
+  const name = /^\d+$/.test(value)
+    ? Object.keys(osConstants.signals).find(key => osConstants.signals[key] === Number(value))
+    : value.startsWith("SIG") ? value : `SIG${value}`;
+  return name && osConstants.signals[name] && !["SIGKILL","SIGSTOP"].includes(name) ? name : null;
+}
+
+function setTrap(argv, state) {
+  let args = argv.slice(1);
+  if (args[0] === "--") args.shift();
+  if (!args.length) return result(0,Object.entries(state.traps).map(([name,command]) => `trap -- ${quoteShellWord(command)} ${name === "EXIT" ? "0" : name.slice(3)}\n`).join(""));
+  let action = args.shift();
+  if (/^\d+$/.test(action)) { args.unshift(action); action = "-"; }
+  if (!args.length) return result(2,"","bunmsh: trap: expected a signal\n");
+  for (const value of args) {
+    const name = trapName(value);
+    if (!name) return result(2,"",`bunmsh: trap: ${value}: invalid or uncatchable signal\n`);
+    const listener = state.trapListeners.get(name);
+    if (listener) process.off(name,listener);
+    state.trapListeners.delete(name);
+    if (action === "-") { delete state.traps[name]; continue; }
+    state.traps[name] = action;
+    if (name !== "EXIT") {
+      // Like mksh's pending-trap flag: callbacks enqueue only. Shell code
+      // runs at command boundaries, never reentrantly from a signal callback.
+      const handler = () => { if (state.traps[name] && !state.pendingTraps.includes(name)) state.pendingTraps.push(name); };
+      process.on(name,handler);
+      state.trapListeners.set(name,handler);
+    }
+  }
+  return result();
+}
+
+async function runPendingTraps(state, io) {
+  if (state.inTrap) return result();
+  const stdout = [], stderr = [];
+  while (state.pendingTraps.length) {
+    const name = state.pendingTraps.shift();
+    const source = state.traps[name];
+    if (!source) continue;
+    const savedStatus = state.lastStatus;
+    state.inTrap = true;
+    try {
+      const execution = await execute(source,state,io);
+      stdout.push(execution.stdout); stderr.push(execution.stderr);
+    } finally { state.inTrap = false; state.lastStatus = savedStatus; }
+    if (state.exitRequested) break;
+  }
+  return result(state.lastStatus,concatBytes(stdout),concatBytes(stderr));
+}
+
+export async function finishShell(state, status = state.lastStatus, io = {}) {
+  if (state.finished) return result(status);
+  state.finished = true;
+  let execution = result(status);
+  try {
+    const handler = state.traps.EXIT;
+    delete state.traps.EXIT;
+    if (handler) {
+      state.exitRequested = false;
+      state.flow = null;
+      state.lastStatus = status;
+      execution = await execute(handler,state,io);
+      execution.status = state.exitRequested ? state.exitStatus : status;
+    }
+    return execution;
+  } finally {
+    for (const [signal,listener] of state.trapListeners) process.off(signal,listener);
+    state.trapListeners.clear();
+    for (const fd of state.ownedFds) { try { closeSync(fd); } catch {} }
+    state.ownedFds.clear();
+    // Background processes deliberately remain unref'ed and accessible by
+    // stable index in Bun.sha.procs. No waiting, killing or registry cleanup.
+  }
+}
+
+function consumeLoopFlow(state) {
+  if (!state.flow) return false;
+  if (state.flow.kind === "return") return true;
+  const kind = state.flow.kind;
+  if (--state.flow.levels > 0) return true;
+  state.flow = null;
+  return kind === "break";
+}
+
 const builtins = {
+  return: async (argv, state) => {
+    if (!state.returnDepth) return result(2, "", "bunmsh: return: not in a function or sourced script\n");
+    const status = argv[1] === undefined ? state.lastStatus : Number(argv[1]);
+    if (argv.length > 2 || !Number.isInteger(status))
+      return result(2, "", "bunmsh: return: expected an integer status\n");
+    state.flow = { kind: "return" };
+    return result(status & 255);
+  },
+  break: async (argv, state) => loopControl("break", argv, state),
+  continue: async (argv, state) => loopControl("continue", argv, state),
   ":": async () => result(),
   true: async () => result(),
   false: async () => result(1),
@@ -1272,11 +1456,13 @@ const builtins = {
         fd = Number(arg.slice(2));
         continue;
       }
-      if (arg === "-r" || arg === "-R") raw = true;
-      else if (arg === "-n") newline = false;
-      else if (arg === "-l") separator = "\n";
-      else if (arg === "-N") separator = terminator = "\0";
-      else return result(1, "", `bunmsh: print: ${arg}: unsupported option\n`);
+      for (const flag of arg.slice(1)) {
+        if (flag === "r" || flag === "R") raw = true;
+        else if (flag === "n") newline = false;
+        else if (flag === "l") separator = "\n";
+        else if (flag === "N") separator = terminator = "\0";
+        else return result(1, "", `bunmsh: print: -${flag}: unsupported option\n`);
+      }
     }
     let output = argv.slice(i).join(separator);
     if (!raw) {
@@ -1340,6 +1526,25 @@ const builtins = {
     if (state.readLines) {
       gotInput = state.readLines.length > 0;
       line = state.readLines.shift() ?? "";
+    } else if (typeof input === "number" || input == null) {
+      // Like mksh's normal read mode, consume only through the delimiter.
+      // A fresh buffered stream would read ahead and cancelling it can close
+      // the shared descriptor, breaking subsequent reads and fd duplicates.
+      const byte = Buffer.alloc(1), data = [];
+      gotInput = false;
+      while (true) {
+        let count;
+        try {
+          count = input == null
+            ? await new Promise((resolve,reject) => fsRead(0,byte,0,1,null,(error,n) => error ? reject(error) : resolve(n)))
+            : readSync(input, byte, 0, 1, null);
+        }
+        catch (error) { if (error.code === "EINTR") continue; throw error; }
+        if (!count) break;
+        if (byte[0] === 10) { gotInput = true; break; }
+        data.push(byte[0]);
+      }
+      line = decoder.decode(Uint8Array.from(data));
     } else {
       const reader = fallbackInput(input).getReader();
       const chunks = [];
@@ -1461,8 +1666,9 @@ const builtins = {
   "..": async (_argv, state) => changeDirectory(state, ".."),
   "//": async (_argv, state) => previousChildDirectory(state),
   export: async (argv, state) => {
-    if (argv.length === 1) {
+    if (argv.length === 1 || argv.length === 2 && argv[1] === "-p") {
       const listing = Object.entries(state.env)
+        .filter(([name]) => !state.shellOptions.posix || state.exported.has(name))
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, value]) => `export ${name}=${JSON.stringify(value)}\n`)
         .join("");
@@ -1477,6 +1683,7 @@ const builtins = {
       else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))
         state.env[item] ??= "";
       else return result(1, "", `bunmsh: export: ${item}: invalid name\n`);
+      state.exported.add(assignment?.name ?? item);
     }
     return result();
   },
@@ -1488,6 +1695,7 @@ const builtins = {
         return result(1, "", `bunmsh: unset: ${name}: invalid name\n`);
       if (state.readonly.has(name)) return readonlyError(name);
       delete state.env[name];
+      state.exported.delete(name);
     }
     return result();
   },
@@ -1513,7 +1721,7 @@ const builtins = {
     return result();
   },
   env: async (argv, state, input, context = {}) => {
-    let env = { ...state.env };
+    let env = { ...externalEnvironment(state) };
     let i = 1;
     for (; i < argv.length; i++) {
       const item = argv[i];
@@ -1535,6 +1743,7 @@ const builtins = {
     const childState = {
       ...state,
       env,
+      exported: new Set(Object.keys(env)),
       directoryHistory: [...state.directoryHistory],
       tabs: [...state.tabs],
       readonly: new Set(state.readonly),
@@ -1677,14 +1886,37 @@ const builtins = {
     }
     return result(status, "", stderr);
   },
+  trap: async (argv,state) => setTrap(argv,state),
   set: async (argv, state) => {
     if (argv.length === 1)
       return result(0, Object.entries(state.env).sort().map(([k, v]) => `${k}=${JSON.stringify(v)}\n`).join(""));
-    if (argv[1] === "--") {
-      state.args = [state.args[0], ...argv.slice(2)];
-      return result();
+    const names = {errexit:"e",nounset:"u",noglob:"f",xtrace:"x",verbose:"v",posix:"posix"};
+    let i = 1;
+    for (; i < argv.length; i++) {
+      const item = argv[i];
+      if (item === "--") { i++; break; }
+      if (item === "-") {
+        // Traditional set - ends options and disables verbose/xtrace. Like
+        // mksh parse_args, preserve positional parameters if none follow.
+        state.shellOptions.x = state.shellOptions.v = false;
+        i++; break;
+      }
+      if (!/^[+-]/.test(item)) break;
+      const enabled = item[0] === "-";
+      if (item === "-o" || item === "+o") {
+        if (argv[i+1] === undefined) return result(0,Object.entries(names).map(([name,key]) => enabled ? `${name} ${state.shellOptions[key] ? "on" : "off"}\n` : `set ${state.shellOptions[key] ? "-" : "+"}o ${name}\n`).join(""));
+        const name = argv[++i];
+        if (!names[name]) return result(2,"",`bunmsh: set: unknown option ${name}\n`);
+        state.shellOptions[names[name]] = enabled;
+      } else {
+        for (const key of item.slice(1)) {
+          if (!"eufxv".includes(key)) return result(2,"",`bunmsh: set: unknown option ${key}\n`);
+          state.shellOptions[key] = enabled;
+        }
+      }
     }
-    return result(2, "", "bunmsh: set: option handling is not implemented yet\n");
+    if (i < argv.length || argv.at(-1) === "--") state.args = [state.args[0],...argv.slice(i)];
+    return result();
   },
 };
 
@@ -1702,6 +1934,13 @@ export function bunShellFallbackArgv(argv) {
   let commandArgv = argv;
   if (argv[0] === "ls")
     commandArgv = commandArgv.filter((value, index) => index === 0 || value !== "--color=auto");
+  if (["mv", "rm"].includes(argv[0]) && argv.includes("--")) {
+    const end = argv.indexOf("--");
+    // Bun.$ mv/rm do not accept --. Protect option-looking path operands when
+    // removing the delimiter, so a filename cannot become an option.
+    commandArgv = [...argv.slice(0, end), ...argv.slice(end + 1).map(value =>
+      value.startsWith("-") ? `./${value}` : value)];
+  }
   if (argv[0] === "cp")
     commandArgv = commandArgv.map((value, index) =>
       index > 0 && /^-[^-]/.test(value) ? `-${value.slice(1).replaceAll("r", "R")}` : value);
@@ -1709,9 +1948,36 @@ export function bunShellFallbackArgv(argv) {
 }
 
 async function runBunShellFallback(argv, state) {
+  if (argv[0] === "mkdir") {
+    const flags = argv.slice(1).filter(arg => /^-[pv]+$/.test(arg) || ["--parents","--vebose"].includes(arg));
+    const operands = argv.slice(1).filter(arg => !flags.includes(arg));
+    // Bun.$ starts sibling mkdir operands concurrently. POSIX callers can
+    // pass parent then child without -p, so preserve operand order here.
+    if (operands.length > 1 && operands.every(arg => !arg.startsWith("-") || arg === "-")) {
+      const output = [], errors = []; let status = 0;
+      for (const operand of operands) {
+        const r = await runBunShellFallback(["mkdir",...flags,operand],state);
+        status ||= r.status; output.push(r.stdout); errors.push(r.stderr);
+      }
+      return result(status,concatBytes(output),concatBytes(errors));
+    }
+  }
+  // GNU/POSIX rm -f ignores nonexistent operands, including the empty name.
+  // Bun.$ instead resolves that empty name to cwd and reports a directory.
+  if (argv[0] === "rm") {
+    const delimiter = argv.indexOf("--");
+    const options = argv.slice(1, delimiter < 0 ? undefined : delimiter)
+      .filter(arg => /^-[frRi]+$/.test(arg)).join("");
+    if (options.lastIndexOf("f") > options.lastIndexOf("i"))
+      argv = argv.filter((arg, index) => index === 0 || arg !== "");
+  }
+  // Bun.$ rejects an empty operand list even with rm -f. Autoconf probes it.
+  const rmFlags = argv.at(-1) === "--" ? argv.slice(1, -1) : argv.slice(1);
+  if (argv[0] === "rm" && rmFlags.every(arg => /^-[frRi]+$/.test(arg)) &&
+      rmFlags.join("").lastIndexOf("f") > rmFlags.join("").lastIndexOf("i")) return result();
   const shell = Bun.$`${bunShellFallbackArgv(argv)}`
     .cwd(nativePath(state.cwd))
-    .env(state.env)
+    .env(externalEnvironment(state))
     .nothrow();
   if (state.pipelineChild) {
     const output = await shell;
@@ -1727,6 +1993,42 @@ async function runFancyLsFallback(argv, state) {
 }
 
 async function runBunShellCpFallback(argv, state) {
+  let preserve=false, verbose=false, end=false;
+  const files=[], unsupported=[];
+  for(const arg of argv.slice(1)) {
+    if(!end&&arg==='--'){end=true;continue;}
+    if(!end&&arg.startsWith('-')&&arg!=='-') {
+      for(const flag of arg.slice(1)) {
+        if(flag==='p')preserve=true;
+        else if(flag==='v')verbose=true;
+        else unsupported.push(flag);
+      }
+    } else files.push(arg);
+  }
+  if(preserve) {
+    if(unsupported.length)return result(1,'',`bunmsh: cp: unsupported option with -p: -${unsupported[0]}\n`);
+    if(files.length<2)return result(1,'','bunmsh: cp: missing file operand\n');
+    const destination=resolvePath(nativePath(state.cwd),nativePath(files.pop()));
+    let directory=false;
+    try {directory=statSync(destination).isDirectory();}catch(error){if(error.code!=='ENOENT')return result(1,'',`bunmsh: cp: ${error.message}\n`);}
+    if(files.length>1&&!directory)return result(1,'','bunmsh: cp: destination must be a directory\n');
+    let stdout='',stderr='',status=0;
+    for(const file of files)try {
+      const source=resolvePath(nativePath(state.cwd),nativePath(file));
+      const target=directory?resolvePath(destination,pathBasename(source)):destination;
+      const info=statSync(source);
+      if(!info.isFile())throw new Error(`-p currently requires a regular file: ${file}`);
+      let previous;try{previous=statSync(target);}catch(error){if(error.code!=='ENOENT')throw error;}
+      if(previous?.dev===info.dev&&previous?.ino===info.ino)throw new Error(`${file} and destination are the same file`);
+      copyFileSync(source,target);
+      const copied=statSync(target);
+      if(copied.uid!==info.uid||copied.gid!==info.gid)chownSync(target,info.uid,info.gid);
+      chmodSync(target,info.mode&0o7777);
+      utimesSync(target,info.atime,info.mtime);
+      if(verbose)stdout+=`'${file}' -> '${target}'\n`;
+    }catch(error){status=1;stderr+=`bunmsh: cp: ${error.message}\n`;}
+    return result(status,stdout,stderr);
+  }
   const cmd = IS_COMPILED
     ? [...EXECUTABLE_COMMAND, "--bun-shell-fallback", ...bunShellFallbackArgv(argv)]
     : [...BUN_RUNTIME_COMMAND, BUNMSH_ENTRY, "--bun-shell-fallback", ...bunShellFallbackArgv(argv)];
@@ -1734,7 +2036,7 @@ async function runBunShellCpFallback(argv, state) {
     cmd,
     cwd: nativePath(state.cwd),
     env: {
-      ...state.env,
+      ...externalEnvironment(state),
       BUN_ENABLE_EXPERIMENTAL_SHELL_BUILTINS: "1",
     },
     stdin: "inherit",
@@ -1756,7 +2058,7 @@ async function runReflectedProcess(cmd, state) {
     const proc = Bun.spawn({
       cmd,
       cwd: nativePath(state.cwd),
-      env: state.env,
+      env: externalEnvironment(state),
       stdin: "inherit",
       stdout: inherit ? "inherit" : "pipe",
       stderr: inherit ? "inherit" : "pipe",
@@ -1802,7 +2104,10 @@ async function runCatFallback(argv, state, input) {
   const chunks = [];
   let status = 0;
   let stderr = "";
-  const writer = state.pipelineChild ? Bun.stdout.writer() : null;
+  // A subprocess still needs shell-level descriptor routing for redirects.
+  const endpoint = state.fdBindings?.[1] ?? {channel:1};
+  const writer = state.pipelineChild && endpoint.channel === 1 &&
+    endpoint.fd === undefined && !endpoint.closed ? Bun.stdout.writer() : null;
   const emit = async (chunk) => {
     if (writer) {
       writer.write(chunk);
@@ -1933,6 +2238,44 @@ async function runHeadFallback(argv, state, input) {
   return result(0, concatBytes(output));
 }
 
+async function runUniqFallback(argv, state, input) {
+  let count = false, repeated = false, single = false, i = 1;
+  for (; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--") { i++; break; }
+    if (arg === "-" || !arg.startsWith("-")) break;
+    if (!/^-[cdu]+$/.test(arg)) return result(1, "", `bunmsh: uniq: unsupported option: ${arg}\n`);
+    count ||= arg.includes("c"); repeated ||= arg.includes("d"); single ||= arg.includes("u");
+  }
+  const operands = argv.slice(i);
+  if (operands.length > 2) return result(1, "", "bunmsh: uniq: too many operands\n");
+  try {
+    const data = await readFallbackFiles([operands[0] ?? "-"], state, input);
+    const output = [];
+    let previous = null, occurrences = 0;
+    const emit = () => {
+      if (previous === null || (repeated && occurrences === 1) || (single && occurrences !== 1)) return;
+      if (count) output.push(String(occurrences).padStart(7) + " ");
+      output.push(previous, "\n");
+    };
+    for (let start = 0; start < data.length;) {
+      const newline = data.indexOf(10, start);
+      const end = newline < 0 ? data.length : newline;
+      const line = data.subarray(start, end);
+      if (previous !== null && previous.length === line.length && line.every((b, j) => b === previous[j])) occurrences++;
+      else { emit(); previous = line; occurrences = 1; }
+      start = end + 1;
+    }
+    emit();
+    const bytes = concatBytes(output);
+    if (operands[1] && operands[1] !== "-") {
+      writeFileSync(resolvePath(state.cwd, operands[1]), bytes);
+      return result(0);
+    }
+    return result(0, bytes);
+  } catch (error) { return result(1, "", `bunmsh: uniq: ${error.message}\n`); }
+}
+
 async function runTextFilter(argv, state, input, kind) {
   try {
     let args = argv.slice(1), reverse = false, numeric = false, unique = false;
@@ -2049,17 +2392,29 @@ function expandTrSet(value) {
 }
 
 async function runTrFallback(argv, _state, input) {
-  let del = false, i = 1;
-  if (argv[i] === "-d") del = true, i++;
-  if (!argv[i] || (!del && !argv[i + 1])) return result(1, "", "bunmsh: tr: missing operand\n");
-  const from = expandTrSet(argv[i++]);
-  const to = expandTrSet(argv[i] ?? "");
+  let del = false, squeeze = false, i = 1;
+  while (argv[i]?.startsWith("-") && argv[i] !== "-") {
+    const option = argv[i++];
+    if (option === "--") break;
+    if (!/^-[ds]+$/.test(option)) return result(1, "", `bunmsh: tr: unsupported option: ${option}\n`);
+    del ||= option.includes("d"); squeeze ||= option.includes("s");
+  }
+  const operands = argv.slice(i);
+  const count = del ? (squeeze ? 2 : 1) : (squeeze && operands.length === 1 ? 1 : 2);
+  if (operands.length !== count) return result(1, "", "bunmsh: tr: wrong number of operands\n");
+  const from = expandTrSet(operands[0]);
+  const to = expandTrSet(operands[1] ?? "");
+  const translate = !del && operands.length === 2;
+  if (translate && !to) return result(1, "", "bunmsh: tr: empty translation set\n");
+  const squeezed = new Set(operands.length === 2 ? to : from);
   const text = decoder.decode(await readFallbackInput(input));
-  let output = "";
+  let output = "", previous;
   for (const ch of text) {
     const index = from.indexOf(ch);
-    if (index < 0) output += ch;
-    else if (!del) output += to[Math.min(index, Math.max(0, to.length - 1))] ?? "";
+    if (del && index >= 0) continue;
+    const value = translate && index >= 0 ? to[Math.min(index, to.length - 1)] : ch;
+    if (squeeze && value === previous && squeezed.has(value)) continue;
+    output += value; previous = value;
   }
   return result(0, output);
 }
@@ -2076,7 +2431,7 @@ async function runCurlFallback(argv, state, input, context = {}) {
   const stderr = [];
   const io = {
     cwd: nativePath(state.cwd),
-    env: state.env,
+    env: externalEnvironment(state),
     stdoutIsTTY: streamStdout && Boolean(process.stdout.isTTY),
     readStdin: () => readFallbackInput(input),
     async writeStdout(chunk) {
@@ -2206,17 +2561,24 @@ function grepFiles(operands, state, recursive) {
 }
 
 function grepBasicRegex(pattern) {
-  let output = "", inClass = false;
+  let output = "", inClass = false, branchStart = true;
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
-    if (ch === "[") inClass = true;
-    if (ch === "]" && inClass) inClass = false;
-    if (!inClass && ch === "\\" && i + 1 < pattern.length && "+?|(){}".includes(pattern[i + 1])) {
-      output += pattern[++i];
+    if (!inClass && ch === "\\" && i + 1 < pattern.length) {
+      const next=pattern[++i];
+      output += "+?|(){}".includes(next) ? next : `\\${next}`;
+      branchStart = next === "(" || next === "|";
       continue;
     }
-    if (!inClass && "+?|(){}".includes(ch)) output += `\\${ch}`;
+    if (!inClass && ch === "$") {
+      const anchored = i === pattern.length-1 || pattern.startsWith("\\)",i+1) || pattern.startsWith("\\|",i+1);
+      output += anchored ? "$" : "\\$";
+    } else if (!inClass && ch === "^") output += branchStart ? "^" : "\\^";
+    else if (!inClass && "+?|(){}".includes(ch)) output += `\\${ch}`;
     else output += ch;
+    if (ch === "[") inClass = true;
+    else if (ch === "]" && inClass) inClass = false;
+    branchStart=false;
   }
   return output;
 }
@@ -2233,6 +2595,7 @@ function grepPosixClasses(pattern) {
 
 async function runGrepFallback(argv, state, input, context = {}) {
   let flags = "", colorMode = "never", i = 1;
+  const patterns=[];
   while (argv[i]?.startsWith("-") && argv[i] !== "-") {
     if (argv[i] === "--") { i++; break; }
     const colorOption = /^--colou?r(?:=(always|auto|never))?$/.exec(argv[i]);
@@ -2241,16 +2604,24 @@ async function runGrepFallback(argv, state, input, context = {}) {
       i++;
       continue;
     }
-    if (!/^-[EFiqvnorx]+$/.test(argv[i]))
+    if (argv[i] === "-e" || argv[i].startsWith("-e")) {
+      const option=argv[i++]; const pattern=option.length>2 ? option.slice(2) : argv[i++];
+      if (pattern === undefined) return result(2,"","bunmsh: grep: -e requires a pattern\n");
+      patterns.push(...pattern.split("\n")); continue;
+    }
+    if (!/^-[EFiqvnorxc]+$/.test(argv[i]))
       return result(2, "", `bunmsh: grep: unsupported option: ${argv[i]}\n`);
     flags += argv[i++].slice(1);
   }
-  const pattern = argv[i++];
-  if (pattern === undefined) return result(2, "", "bunmsh: grep: missing pattern\n");
+  if (!patterns.length) {
+    const pattern=argv[i++];
+    if (pattern === undefined) return result(2,"","bunmsh: grep: missing pattern\n");
+    patterns.push(...pattern.split("\n"));
+  }
   let regex;
-  const regexSource = flags.includes("F")
-    ? pattern.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
-    : grepPosixClasses(flags.includes("E") ? pattern : grepBasicRegex(pattern));
+  const regexSource=patterns.map(pattern => flags.includes("F")
+    ? pattern.replace(/[\\^$.*+?()[\]{}|]/g,"\\$&")
+    : grepPosixClasses(flags.includes("E") ? pattern : grepBasicRegex(pattern))).map(p=>`(?:${p})`).join("|");
   try { regex = new RegExp(flags.includes("x") ? `^(?:${regexSource})$` : regexSource, `${flags.includes("i") ? "i" : ""}${flags.includes("o") ? "g" : ""}`); }
   catch (error) { return result(2, "", `bunmsh: grep: ${error.message}\n`); }
   const invert = flags.includes("v"), quiet = flags.includes("q"), numbers = flags.includes("n"), only = flags.includes("o");
@@ -2261,15 +2632,16 @@ async function runGrepFallback(argv, state, input, context = {}) {
   const highlightRegex = color && !only
     ? new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : `${regex.flags}g`)
     : null;
-  let matched = false;
+  let matched = false, count = 0;
   const output = [];
   const processLine = (line, lineNumber, label, showLabel) => {
     regex.lastIndex = 0;
     const isMatch = regex.test(line);
     regex.lastIndex = 0;
     if (isMatch === invert) return false;
-    matched = true;
+    matched = true; count++;
     if (quiet) return true;
+    if (flags.includes("c")) return false;
     const prefix = `${showLabel ? `${label}:` : ""}${numbers ? `${lineNumber}:` : ""}`;
     if (only) {
       if (invert) return false;
@@ -2292,11 +2664,13 @@ async function runGrepFallback(argv, state, input, context = {}) {
       const files = grepFiles(operands, state, flags.includes("r"));
       const showLabel = files.length > 1 || flags.includes("r");
       for (const file of files) {
+        count=0;
         const lines = (await Bun.file(file.path).text()).split("\n");
         if (lines.at(-1) === "") lines.pop();
         for (let line = 0; line < lines.length; line++)
           if (processLine(lines[line], line + 1,
             implicitCwd ? file.shown.replace(/^\.\//, "") : file.shown, showLabel)) return result(0);
+        if (flags.includes("c")) output.push(`${showLabel ? `${file.shown}:` : ""}${count}\n`);
       }
     } catch (error) { return result(2, "", `bunmsh: grep: ${error.message}\n`); }
   } else {
@@ -2316,91 +2690,8 @@ async function runGrepFallback(argv, state, input, context = {}) {
       }
     } finally { try { reader.releaseLock(); } catch {} }
   }
+  if (!operands.length && flags.includes("c") && !quiet) output.push(`${count}\n`);
   return result(matched ? 0 : 1, output.join(""));
-}
-
-function splitSedCommands(script) {
-  const commands = [];
-  let start = 0, escaped = false;
-  for (let i = 0; i < script.length; i++) {
-    if (escaped) { escaped = false; continue; }
-    if (script[i] === "\\") { escaped = true; continue; }
-    if (script[i] === ";") {
-      commands.push(script.slice(start, i).trim());
-      start = i + 1;
-    }
-  }
-  commands.push(script.slice(start).trim());
-  return commands.filter(Boolean);
-}
-
-function readSedField(command, start, delimiter) {
-  let value = "";
-  for (let i = start; i < command.length; i++) {
-    if (command[i] === "\\" && i + 1 < command.length) {
-      if (command[i + 1] === delimiter) value += command[++i];
-      else value += command[i] + command[++i];
-    } else if (command[i] === delimiter) return [value, i + 1];
-    else value += command[i];
-  }
-  throw new Error("unterminated substitute command");
-}
-
-function sedReplacement(value) {
-  let output = "";
-  for (let i = 0; i < value.length; i++) {
-    if (value[i] === "\\" && /[1-9]/.test(value[i + 1] ?? "")) output += `$${value[++i]}`;
-    else if (value[i] === "\\" && i + 1 < value.length) output += value[++i];
-    else if (value[i] === "&") output += "$&";
-    else if (value[i] === "$") output += "$$";
-    else output += value[i];
-  }
-  return output;
-}
-
-function compileSedCommand(source, extended) {
-  const numberedPrint = /^(\d+)p$/.exec(source);
-  if (numberedPrint) return { type: "print", line: Number(numberedPrint[1]) };
-  if (!source.startsWith("s") || source.length < 2)
-    throw new Error(`unsupported command: ${source}`);
-  const delimiter = source[1];
-  const [pattern, replacementStart] = readSedField(source, 2, delimiter);
-  const [replacement, flagsStart] = readSedField(source, replacementStart, delimiter);
-  const flags = source.slice(flagsStart);
-  if (!/^[gp]*$/.test(flags)) throw new Error(`unsupported substitute flags: ${flags}`);
-  const regexSource = grepPosixClasses(extended ? pattern : grepBasicRegex(pattern));
-  return {
-    type: "substitute",
-    regex: new RegExp(regexSource, flags.includes("g") ? "g" : ""),
-    replacement: sedReplacement(replacement),
-    print: flags.includes("p"),
-  };
-}
-
-function applySed(text, commands, quiet) {
-  const trailingNewline = text.endsWith("\n");
-  const lines = text.split("\n");
-  if (trailingNewline) lines.pop();
-  const output = [];
-  for (let index = 0; index < lines.length; index++) {
-    let line = lines[index];
-    for (const command of commands) {
-      if (command.type === "print") {
-        if (command.line === index + 1) output.push(line);
-        continue;
-      }
-      command.regex.lastIndex = 0;
-      const matched = command.regex.test(line);
-      command.regex.lastIndex = 0;
-      if (matched) {
-        line = line.replace(command.regex, command.replacement);
-        if (command.print) output.push(line);
-      }
-    }
-    if (!quiet) output.push(line);
-  }
-  if (!output.length) return "";
-  return output.join("\n") + (trailingNewline ? "\n" : "");
 }
 
 async function runSedFallback(argv, state, input) {
@@ -2415,6 +2706,13 @@ async function runSedFallback(argv, state, input) {
       continue;
     }
     if (option.startsWith("-e")) { scripts.push(option.slice(2)); continue; }
+    if (option.startsWith("-f")) {
+      const file=option.length>2 ? option.slice(2) : argv[i++];
+      if (file === undefined) return result(1,"","bunmsh: sed: -f requires a file\n");
+      try { scripts.push(readFileSync(resolvePath(nativePath(state.cwd),nativePath(file)),"utf8")); }
+      catch(error) { return result(1,"",`bunmsh: sed: ${error.message}\n`); }
+      continue;
+    }
     if (!/^-[nEri]+$/.test(option))
       return result(1, "", `bunmsh: sed: unsupported option: ${option}\n`);
     quiet ||= option.includes("n");
@@ -2424,19 +2722,23 @@ async function runSedFallback(argv, state, input) {
   if (!scripts.length && i < argv.length) scripts.push(argv[i++]);
   if (!scripts.length) return result(1, "", "bunmsh: sed: missing script\n");
   let commands;
-  try { commands = scripts.flatMap(splitSedCommands).map((script) => compileSedCommand(script, extended)); }
+  try { commands = compileSed(scripts.join("\n"), pattern => grepPosixClasses(extended ? pattern : grepBasicRegex(pattern))); }
   catch (error) { return result(1, "", `bunmsh: sed: ${error.message}\n`); }
   const operands = argv.slice(i);
   if (inPlace && !operands.length) return result(1, "", "bunmsh: sed: -i requires a file operand\n");
+  const readExtra = file => {
+    try { return readFileSync(resolvePath(nativePath(state.cwd),nativePath(file)),"utf8"); }
+    catch { return ""; } // sed r silently skips unreadable or missing files.
+  };
   try {
     if (!operands.length) {
       const text = decoder.decode(await readFallbackInput(input));
-      return result(0, applySed(text, commands, quiet));
+      return result(0, applySed(text, commands, quiet, readExtra));
     }
     let stdout = "";
     for (const operand of operands) {
       const file = isAbsolute(nativePath(operand)) ? nativePath(operand) : resolvePath(nativePath(state.cwd), nativePath(operand));
-      const changed = applySed(await Bun.file(file).text(), commands, quiet);
+      const changed = applySed(await Bun.file(file).text(), commands, quiet, readExtra);
       if (inPlace) await Bun.write(file, changed);
       else stdout += changed;
     }
@@ -2510,16 +2812,47 @@ function runLnFallback(argv, state) {
   return result(status, "", stderr);
 }
 
+function symbolicFileMode(spec, stat) {
+  let mode = stat.mode & 0o7777;
+  // Retain the original shorthand; other symbolic forms require explicit who.
+  if (spec === "+x") return mode | 0o111;
+  for (const clause of spec.split(",")) {
+    const match = /^([ugoa]+)((?:[+=-][rwxX]*)+)$/.exec(clause);
+    if (!match) throw new Error(`unsupported mode: ${spec}`);
+    const who = match[1].includes("a") ? "ugo" : match[1];
+    let selected = 0, special = 0;
+    for (const [name, mask, bit] of [["u",0o700,0o4000],["g",0o070,0o2000],["o",0o007,0o1000]])
+      if (who.includes(name)) { selected |= mask; special |= bit; }
+    for (const action of match[2].matchAll(/([+=-])([rwxX]*)/g)) {
+      let bits = 0;
+      for (const ch of action[2]) {
+        if (ch === "r") bits |= 0o444;
+        if (ch === "w") bits |= 0o222;
+        if (ch === "x" || (ch === "X" && (stat.isDirectory() || (mode & 0o111)))) bits |= 0o111;
+      }
+      bits &= selected;
+      if (action[1] === "+") mode |= bits;
+      else if (action[1] === "-") mode &= ~bits;
+      else {
+        // GNU chmod preserves directory set-ID bits unless explicitly changed.
+        const clearedSpecial = stat.isDirectory() ? special & 0o1000 : special;
+        mode = (mode & ~(selected | clearedSpecial)) | bits;
+      }
+    }
+  }
+  return mode;
+}
+
 function runChmodFallback(argv, state) {
-  if (argv.length < 3) return result(1, "", "bunmsh: chmod: usage: chmod MODE FILE...\n");
-  const mode = argv[1];
+  let i = argv[1] === "--" ? 2 : 1;
+  const mode = argv[i++];
+  if (argv[i] === "--") i++;
+  if (!mode || i >= argv.length) return result(1, "", "bunmsh: chmod: usage: chmod MODE FILE...\n");
   let status = 0, stderr = "";
-  for (const operand of argv.slice(2)) {
+  for (const operand of argv.slice(i)) {
     const path = isAbsolute(nativePath(operand)) ? nativePath(operand) : resolvePath(nativePath(state.cwd), nativePath(operand));
     try {
-      if (/^[0-7]{3,4}$/.test(mode)) chmodSync(path, Number.parseInt(mode, 8));
-      else if (mode === "+x" || mode === "a+x") chmodSync(path, statSync(path).mode | 0o111);
-      else throw new Error(`unsupported mode: ${mode}`);
+      chmodSync(path, /^[0-7]{1,4}$/.test(mode) ? Number.parseInt(mode, 8) : symbolicFileMode(mode, statSync(path)));
     } catch (error) { status = 1; stderr += `bunmsh: chmod: ${operand}: ${error.message}\n`; }
   }
   return result(status, "", stderr);
@@ -2640,7 +2973,7 @@ async function queryProcessList(name, state) {
     proc = Bun.spawn({
       cmd: command,
       cwd: nativePath(state.cwd),
-      env: state.env,
+      env: externalEnvironment(state),
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -2822,12 +3155,157 @@ async function runPspacFallback(argv, state) {
   return result(0, colorProcessTable(rows), query.stderr);
 }
 
+function runExprFallback(argv) {
+  const args = argv.slice(argv[1] === "--" ? 2 : 1);
+  let i = 0;
+  const precedence = {"|":1,"&":2,"=":3,"!=":3,"<":3,"<=":3,">":3,">=":3,"+":4,"-":4,"*":5,"/":5,"%":5,":":6};
+  const truth = value => value !== "" && !/^-?0+$/.test(value);
+  const integer = value => { if (!/^-?\d+$/.test(value)) throw new Error("non-integer argument"); return BigInt(value); };
+  const atom = () => {
+    if (i >= args.length) throw new Error("missing operand");
+    const value = args[i++];
+    if (value !== "(") return value;
+    const nested = expression(1);
+    if (args[i++] !== ")") throw new Error("expected closing parenthesis");
+    return nested;
+  };
+  const expression = minimum => {
+    let left = atom();
+    while ((precedence[args[i]] ?? 0) >= minimum) {
+      const op = args[i++], right = expression(precedence[op] + 1);
+      if (op === "|") left = truth(left) ? left : truth(right) ? right : "0";
+      else if (op === "&") left = truth(left) && truth(right) ? left : "0";
+      else if (op === ":") {
+        const re = new RegExp(`^(?:${grepPosixClasses(grepBasicRegex(right))})`);
+        const match = re.exec(left);
+        // BRE parentheses are captures; a failed capturing match returns empty.
+        const capture = /(^|[^\\])(?:\\\\)*\\\(/.test(right);
+        left = capture ? (match?.[1] ?? "") : String(match?.[0].length ?? 0);
+      } else if (["+","-","*","/","%"].includes(op)) {
+        const a = integer(left), b = integer(right);
+        if ((op === "/" || op === "%") && b === 0n) throw new Error("division by zero");
+        left = String(op === "+" ? a+b : op === "-" ? a-b : op === "*" ? a*b : op === "/" ? a/b : a%b);
+      } else {
+        const numeric = /^-?\d+$/.test(left) && /^-?\d+$/.test(right);
+        const a = numeric ? BigInt(left) : left, b = numeric ? BigInt(right) : right;
+        left = String(Number(op === "=" ? a===b : op === "!=" ? a!==b : op === "<" ? a<b : op === "<=" ? a<=b : op === ">" ? a>b : a>=b));
+      }
+    }
+    return left;
+  };
+  try {
+    const value = expression(1);
+    if (i !== args.length) throw new Error("unexpected operand");
+    return result(truth(value) ? 0 : 1, `${value}\n`);
+  } catch (error) { return result(2,"",`bunmsh: expr: ${error.message}\n`); }
+}
+
+async function runAwkFallback(argv, state, input) {
+  try {
+    const scripts=[], variables={}; let i=1;
+    const assignment = text => {
+      const m=/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(text);
+      if (!m) throw new Error(`invalid variable assignment: ${text}`);
+      return [m[1], m[2].replace(/\\([ntr\\])/g, (_,c)=>({n:"\n",t:"\t",r:"\r","\\":"\\"})[c])];
+    };
+    for (; i<argv.length && argv[i].startsWith("-") && argv[i]!=="-"; i++) {
+      const option=argv[i]; if(option==="--") {i++;break;}
+      const flag=option.slice(0,2);
+      if(!["-F","-v","-f","-e"].includes(flag)) throw new Error(`unsupported option: ${option}`);
+      const value=option.length>2?option.slice(2):argv[++i];
+      if(value===undefined)throw new Error(`${flag} requires an argument`);
+      if(flag==="-F")variables.FS=value;
+      else if(flag==="-v") {const [name,text]=assignment(value);variables[name]=text;}
+      else scripts.push(flag==="-f" ? readFileSync(resolvePath(nativePath(state.cwd),nativePath(value)),"utf8") : value);
+    }
+    if(!scripts.length){if(i>=argv.length)throw new Error("missing program");scripts.push(argv[i++]);}
+    const program=compileAwk(scripts.join("\n"));
+    const needsInput = node => node && typeof node==="object" && (node.type==="getline"&&!node.file ||
+      (node instanceof Map ? [...node.values()] : Object.values(node)).some(needsInput));
+    const operands=argv.slice(i), inputs=[];
+    if(program.rules.length || needsInput(program)) {
+      for (const operand of operands.length?operands:["-"]) {
+        if(/^[A-Za-z_][A-Za-z0-9_]*=/.test(operand))inputs.push({assignment:assignment(operand)});
+        else inputs.push({name:operand,text:operand==="-"?decode(await readFallbackInput(input)):readFileSync(resolvePath(nativePath(state.cwd),nativePath(operand)),"utf8")});
+      }
+    }
+    const path = file => resolvePath(nativePath(state.cwd),nativePath(file));
+    const value=executeAwk(program,inputs,{variables,argv:operands,env:externalEnvironment(state),
+      runPipe:(command,text)=>{
+        const directory=mkdtempSync(resolvePath(tmpdir(),"bunmsh-awk-state-"));
+        try {
+          const file=resolvePath(directory,"state.json");
+          writeFileSync(file,pipelineBuiltinState(state).env[PIPELINE_STATE_ENV],{mode:0o600});
+          const p=Bun.spawnSync(pipelineCompoundArgv(command),{
+            cwd:nativePath(state.cwd),env:{...externalEnvironment(state),[PIPELINE_STATE_ENV]:`@file:${file}`},
+            stdin:bytes(text),stdout:"pipe",stderr:"pipe"});
+          if(p.error)throw p.error;
+          return {status:p.exitCode,stdout:decode(p.stdout),stderr:decode(p.stderr)};
+        } finally {rmSync(directory,{recursive:true,force:true});}
+      },
+      readFile:file=>readFileSync(path(file),"utf8"),
+      writeFile:(file,text,append)=>writeFileSync(path(file),text,{flag:append?"a":"w"})});
+    return result(value.status,value.stdout,value.stderr??"");
+  } catch(error) {return result(2,"",`bunmsh: ${error.message.startsWith("awk:")?"":"awk: "}${error.message}\n`);}
+}
+
+async function runCmpFallback(argv, state, input) {
+  let silent = false, i = 1;
+  for (; i < argv.length && argv[i].startsWith("-") && argv[i] !== "-"; i++) {
+    if (argv[i] === "--") { i++; break; }
+    if (["-s", "--silent", "--quiet"].includes(argv[i])) silent = true;
+    else return result(2, "", `bunmsh: cmp: unsupported option: ${argv[i]}\n`);
+  }
+  const files = argv.slice(i);
+  if (files.length !== 2) return result(2, "", "bunmsh: cmp: expected two files\n");
+  try {
+    let stdin;
+    const read = async file => file === "-" ? (stdin ??= await readFallbackInput(input)) :
+      readFileSync(resolvePath(nativePath(state.cwd), nativePath(file)));
+    const a = await read(files[0]), b = await read(files[1]);
+    let offset = 0, line = 1;
+    while (offset < Math.min(a.length, b.length) && a[offset] === b[offset]) {
+      if (a[offset] === 10) line++;
+      offset++;
+    }
+    if (offset === a.length && offset === b.length) return result();
+    if (silent) return result(1);
+    if (offset < Math.min(a.length, b.length))
+      return result(1, `${files[0]} ${files[1]} differ: char ${offset + 1}, line ${line}\n`);
+    const file = files[a.length < b.length ? 0 : 1];
+    return result(1, "", `cmp: EOF on ${file}${offset ? ` after byte ${offset}, in line ${line}` : " which is empty"}\n`);
+  } catch (error) { return result(2, "", silent ? "" : `bunmsh: cmp: ${error.message}\n`); }
+}
+
+async function runDiffFallback(argv, state) {
+  let brief=false, i=1;
+  for (; i<argv.length && argv[i].startsWith("-"); i++) {
+    if (argv[i] === "--") { i++; break; }
+    if (["-q","--brief"].includes(argv[i])) brief=true;
+    else if (!/^--color(?:=(?:always|auto|never))?$/.test(argv[i]))
+      return result(2,"",`bunmsh: diff: unsupported option: ${argv[i]}\n`);
+  }
+  if (argv.length-i !== 2) return result(2,"","bunmsh: diff: expected two files\n");
+  const [left,right]=argv.slice(i);
+  try {
+    const a=readFileSync(resolvePath(nativePath(state.cwd),nativePath(left)));
+    const b=readFileSync(resolvePath(nativePath(state.cwd),nativePath(right)));
+    if (a.equals(b)) return result();
+    if (brief || a.includes(0) || b.includes(0)) return result(1,`Files ${left} and ${right} differ\n`);
+    return result(1, Buffer.from(normalFileDiff(a.toString("latin1"), b.toString("latin1")), "latin1").toString());
+  } catch(error) {return result(2,"",`bunmsh: diff: ${error.message}\n`);}
+}
+
 const fallbackBuiltins = {
+  awk: runAwkFallback,
+  diff: runDiffFallback,
+  cmp: runCmpFallback,
+  expr: runExprFallback,
   basename: async (argv) => {
     const i = argv[1] === "--" ? 2 : 1;
     if (i >= argv.length || argv.length - i > 2)
       return result(1, "", "bunmsh: basename: usage: basename string [suffix]\n");
-    let name = pathBasename(argv[i]);
+    let name = /^\/+$/.test(argv[i]) ? "/" : pathBasename(argv[i]);
     const suffix = argv[i + 1];
     if (suffix && suffix !== name && name.endsWith(suffix)) name = name.slice(0, -suffix.length);
     return result(0, `${name}\n`);
@@ -2867,11 +3345,14 @@ const fallbackBuiltins = {
   clear: async () => result(0, "\x1b[2J\x1b[H"),
   rmdir: async (argv, state) => runRmdirFallback(argv, state),
   mktemp: async (argv, state) => runMktempFallback(argv, state),
+  uniq: runUniqFallback,
   sort: (argv, state, input) => runTextFilter(argv, state, input, "sort"),
   date: async (argv) => runDateFallback(argv),
   md5sum: (argv, state, input) => runHashFallback(argv, state, input, "md5"),
   sha256sum: (argv, state, input) => runHashFallback(argv, state, input, "sha256"),
   grep: runGrepFallback,
+  egrep: (argv, state, input, context) => runGrepFallback(["grep", "-E", ...argv.slice(1)], state, input, context),
+  fgrep: (argv, state, input, context) => runGrepFallback(["grep", "-F", ...argv.slice(1)], state, input, context),
   sed: runSedFallback,
   cut: runCutFallback,
   ln: async (argv, state) => runLnFallback(argv, state),
@@ -2921,8 +3402,14 @@ function formatMilliseconds(milliseconds, color = Boolean(process.stderr.isTTY))
   return output;
 }
 
+function externalEnvironment(state) {
+  if (!state.shellOptions.posix) return state.env;
+  return Object.fromEntries(Object.entries(state.env).filter(([name]) =>
+    state.exported.has(name) || name === PIPELINE_STATE_ENV));
+}
+
 export function createState(options = {}) {
-  const env = canonicalEnvironment({ ...process.env, ...(options.env ?? {}) });
+  const env = canonicalEnvironment({ ...(options.inheritEnvironment === false ? {} : process.env), ...(options.env ?? {}) });
   const cwd = shellPath(options.cwd ?? process.cwd());
   env.PWD = cwd;
   return {
@@ -2937,17 +3424,29 @@ export function createState(options = {}) {
     mouseTracking: options.mouseTracking ?? /^(?:1|true|on|yes)$/i.test(env.BUNMSH_MOUSE ?? ""),
     pathSearch: options.pathSearch ?? true,
     readonly: new Set(options.readonly ?? []),
+    exported: new Set(options.exported ?? Object.keys(env)),
     getoptsOffset: 1,
     args: options.args ?? ["bunmsh"],
     lastStatus: 0,
     exitRequested: false,
     exitStatus: 0,
     pipelineChild: options.pipelineChild ?? false,
+    flow: null,
+    loopDepth: 0,
+    returnDepth: 0,
+    fdBindings: {...(options.fdBindings ?? {})},
+    ownedFds: new Set(),
+    shellOptions: {...(options.shellOptions ?? {})},
+    ignoreErrexit: options.ignoreErrexit ?? 0,
+    traps: {},
+    trapListeners: new Map(),
+    pendingTraps: [],
+    inTrap: false,
   };
 }
 
 function hasCompoundSyntax(source) {
-  if (/(^|\n)\s*(?:\(|[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)\s*\{)/.test(source)) return true;
+  if (/(^|\n)\s*(?:\(|[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\))/.test(source)) return true;
   let commandStart = true;
   for (const token of tokenize(source)) {
     if (token.type === "op") {
@@ -2956,14 +3455,15 @@ function hasCompoundSyntax(source) {
     }
     const word = token.fragments.length === 1 && token.fragments[0].quote === "none"
       ? token.fragments[0].text : null;
-    if (commandStart && ["if", "while", "until", "for", "case"].includes(word)) return true;
+    if (commandStart && ["if", "while", "until", "for", "case", "{"].includes(word)) return true;
     if (!(commandStart && /^[A-Za-z_][A-Za-z0-9_]*=/.test(word ?? ""))) commandStart = false;
   }
   return false;
 }
 
-function compoundLogicalSource(source) {
-  const tokens = tokenize(source);
+function compoundLogicalSource(source, firstLine = 1, sourceLines = null) {
+  const continuations = new Map();
+  const tokens = tokenize(source, { continuations });
   const breaks = new Set();
   let commandStart = true;
   const literal = (token) => token.type === "word" && token.fragments.length === 1 &&
@@ -2975,6 +3475,24 @@ function compoundLogicalSource(source) {
       continue;
     }
     const word = literal(token);
+    // Function headers allow linebreaks before the opening brace. Braces
+    // elsewhere remain ordinary arguments unless at a command boundary.
+    const functionHeader = word === "{" && /[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)(?:\s|\\\r?\n)*$/.exec(source.slice(0, token.offset));
+    const functionBrace = Boolean(functionHeader);
+    if ((commandStart || functionBrace) && word === "{") {
+      if (!functionBrace) breaks.add(token.offset);
+      else breaks.add(functionHeader.index);
+      if (tokens[index + 1]) breaks.add(tokens[index + 1].offset);
+      commandStart = true;
+      continue;
+    }
+    if (commandStart && word === "}") {
+      breaks.add(token.offset);
+      if (tokens[index + 1]?.value === ";" && tokens[index + 2] &&
+          tokens[index + 2].value !== ";") breaks.add(tokens[index + 2].offset);
+      commandStart = false;
+      continue;
+    }
     if (!commandStart) continue;
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word ?? "")) continue;
     // Like mksh's KEYWORD lexer mode, these words are special only where a
@@ -2990,11 +3508,15 @@ function compoundLogicalSource(source) {
       breaks.add(tokens[index + 1].offset);
     commandStart = ["if", "while", "until", "elif", "then", "do", "else"].includes(word);
   }
-  let logical = source;
-  for (const offset of [...breaks].sort((a, b) => b - a))
-    if (offset > 0 && source[offset - 1] !== "\n")
-      logical = `${logical.slice(0, offset)}\n${logical.slice(offset)}`;
-  return logical;
+  let logical = "", line = firstLine, physicalIndex = 0;
+  const lineNumbers = [line];
+  for (let i = 0; i < source.length; i++) {
+    if (breaks.has(i) && logical && !logical.endsWith("\n")) { logical += "\n"; lineNumbers.push(line); }
+    if (continuations.has(i)) { i += continuations.get(i) - 1; line = sourceLines?.[++physicalIndex] ?? line + 1; continue; }
+    logical += source[i];
+    if (source[i] === "\n") { line = sourceLines?.[++physicalIndex] ?? line + 1; lineNumbers.push(line); }
+  }
+  return {logical, lineNumbers};
 }
 
 // A leaf command inside a compound body may continue across physical lines
@@ -3007,11 +3529,20 @@ function growLogicalCommand(lines, index) {
   let candidate = line;
   while (true) {
     try {
-      tokenize(candidate, { strict: true });
+      const tokens = tokenize(candidate, { strict: true });
+      const last = tokens.at(-1);
+      if (last?.type === "op" && ["|", "&&", "||"].includes(last.value) && end + 1 < lines.length) {
+        // Leave a following compound node for parseSequence to attach, but
+        // grow ordinary pipelines and AND/OR continuations across newlines.
+        if (!/^\s*(?:\{|if\b|for\b|while\b|until\b|case\b)/.test(lines[end + 1])) {
+          candidate += `\n${lines[++end]}`;
+          continue;
+        }
+      }
       return { source: candidate, next: end + 1 };
     } catch (error) {
       if (!(error instanceof ShellSyntaxError) ||
-          !/^(?:unterminated (?:here-document|single quote|double quote|command substitution|substitution))/.test(error.message))
+          !/^(?:unterminated (?:here-document|single quote|double quote|command substitution|parameter expansion|substitution))/.test(error.message))
         throw error;
       end++;
       if (end >= lines.length) throw error;
@@ -3020,16 +3551,75 @@ function growLogicalCommand(lines, index) {
   }
 }
 
+// Heredoc bodies follow the operator's source position even when it is the
+// final token. Remove only the connector, never the rest of the source.
+function removeSourceToken(source, token) {
+  return source.slice(0, token.offset) + source.slice(token.offset + token.value.length);
+}
+
+function compoundSource(node) {
+  if (node.type === "subshell") return `(${node.source})`;
+  if (node.type === "compoundPostfix")
+    return `${compoundSource(node.compound)} ${node.operator} ${node.right ? compoundSource(node.right) : node.command}`;
+  if (typeof node.source !== "string") throw new ShellSyntaxError(`missing source for ${node.type}`);
+  // A following serialized connector must not become part of a heredoc's
+  // delimiter line. Braces preserve the command's scope and give it a boundary.
+  if (node.type === "command" && tokenize(node.source).some(token => token.heredoc))
+    return `{\n${node.source}\n}`;
+  return node.source;
+}
+
 function makeCompoundPostfix(compound, suffix, source, nextLine) {
-  const match = /^\s*(\|\||&&|\||;)\s*(.*)$/.exec(suffix ?? "");
+  const suffixCommand = growLogicalCommand([suffix ?? "", ...source.slice(nextLine)], 0);
+  suffix = suffixCommand.source;
+  nextLine += suffixCommand.next - 1;
+  const tokens = tokenize(suffix ?? "");
+  const connector = tokens.find(t => t.type === "op" && [";","&&","||","|"].includes(t.value));
+  const redirectionText = (suffix ?? "").slice(0,connector?.offset ?? undefined).trim();
+  if (redirectionText && !redirectionText.startsWith("#")) {
+    if (redirectionText === "&") throw new ShellSyntaxError("&: only a single external command is supported");
+    const parsed = parse(`: ${redirectionText}`)[0]?.pipeline[0];
+    if (!parsed || parsed.words.length !== 1) throw new ShellSyntaxError(`unexpected compound suffix: ${redirectionText} after ${compound.source.slice(0,120)}`);
+    compound = {type:"redirected", compound, redirects:parsed.redirects, source:compoundSource(compound) + " " + redirectionText};
+    suffix = connector ? suffix.slice(connector.offset) : "";
+  }
+
+  const match = /^\s*(\|\||&&|\||;)\s*(.*)$/s.exec(suffix ?? "");
   if (!match) return { node: compound, nextLine };
   let command = match[2].trim();
+  let commandLine = null;
+  if (match[1] === ";" && (!command || command.startsWith("#"))) return { node: compound, nextLine };
   while (!command && nextLine < source.length) {
+    commandLine = nextLine;
     command = source[nextLine++].trim();
     if (!command || command.startsWith("#")) command = "";
   }
   if (!command)
     throw new ShellSyntaxError(`compound command requires a command after ${match[1]}`);
+  if (commandLine !== null && /^(?:\{|if\b|case\b|for\b|while\b|until\b|\()/.test(command))
+    return {node:{type:"compoundPostfix",compound,operator:match[1],rightPending:true},nextLine:commandLine};
+  // A postfix command can contain multiline quotes, substitutions or heredocs.
+  // Grow it just like an ordinary command before resuming the outer parser.
+  const remaining = [command, ...source.slice(nextLine)];
+  const grown = growLogicalCommand(remaining, 0);
+  command = grown.source;
+  nextLine += grown.next - 1;
+  const trailing = tokenize(command).at(-1);
+  if (trailing?.type === "op" && ["&&", "||", "|"].includes(trailing.value)) {
+    const middle = {type:"command",source:removeSourceToken(command,trailing)};
+    // Pipes bind more tightly; AND/OR lists associate left-to-right.
+    if (trailing.value !== "|") return {
+      node:{type:"compoundPostfix",compound:{type:"compoundPostfix",compound,operator:match[1],right:middle},operator:trailing.value,rightPending:true},
+      nextLine,
+    };
+    return {
+      node: {type:"compoundPostfix", compound, operator:match[1], right:{
+        type:"compoundPostfix", compound:middle,
+        operator:trailing.value, rightPending:true,
+      }},
+      nextLine,
+    };
+  }
   return {
     node: {
       type: "compoundPostfix",
@@ -3111,7 +3701,35 @@ function splitCasePatterns(source) {
 // Scan case clauses in the same lexical spirit as mksh's CASEPAT/KEYWORD
 // modes. In particular, clause boundaries are shell tokens, not line
 // boundaries: Autoconf commonly writes an entire clause on one line.
-function parseCaseArms(source) {
+function shellLiteral(token) {
+  return token?.type === "word" && token.fragments.length === 1 && token.fragments[0].quote === "none" ? token.fragments[0].text : null;
+}
+
+function caseKeywords(tokens) {
+  const words = new Map();
+  let start = true;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    let word = shellLiteral(token);
+    if (token.type === "op") {
+      if ([";", "|", "&&", "||"].includes(token.value)) start = true;
+      continue;
+    }
+    // Parentheses are retained in word tokens by this tokenizer. At command
+    // start they can introduce subshells without whitespace before `case`.
+    const openings = start ? /^\(+/.exec(word ?? "")?.[0].length ?? 0 : 0;
+    if (openings) {
+      word = word.slice(openings);
+      if (!word) continue;
+    }
+    if (start && word === "case" && shellLiteral(tokens[i + 2]) === "in") words.set(token.offset + openings, "case");
+    if (start && /^esac\)*$/.test(word ?? "")) words.set(token.offset + openings, "esac");
+    start = ["then", "do", "else", "{"].includes(word) || Boolean(word?.endsWith(")"));
+  }
+  return words;
+}
+
+function parseCaseArms(source, sourceLines) {
   const arms = [];
   let i = 0;
   const skipSpace = () => {
@@ -3153,43 +3771,23 @@ function parseCaseArms(source) {
     i++;
 
     const bodyStart = i;
-    quote = null;
     let nestedCases = 0;
-    let word = "";
     let terminator = null;
-    const finishWord = () => {
+    const bodyTokens = tokenize(source.slice(bodyStart));
+    const keywords = caseKeywords(bodyTokens);
+    i = source.length;
+    for (let t = 0; t < bodyTokens.length; t++) {
+      const token = bodyTokens[t];
+      const word = keywords.get(token.offset);
       if (word === "case") nestedCases++;
       else if (word === "esac" && nestedCases) nestedCases--;
-      word = "";
-    };
-    for (; i < source.length; i++) {
-      const ch = source[i];
-      if (ch === "#" && !word && (i === bodyStart || /[\s;|&]/.test(source[i - 1] ?? ""))) {
-        while (i < source.length && source[i] !== "\n") i++;
-        continue;
-      }
-      if (ch === "\\") { word = ""; i++; continue; }
-      if (quote) {
-        if (ch === quote) quote = null;
-        continue;
-      }
-      if (ch === "'" || ch === '"') { finishWord(); quote = ch; continue; }
-      if (ch === "$" && (source[i + 1] === "(" || source[i + 1] === "{")) {
-        finishWord();
-        i = (source[i + 1] === "(" ? substitutionEnd(source, i) : parameterEnd(source, i)) - 1;
-        continue;
-      }
-      if (ch === "`") {
-        finishWord();
-        try { i = substitutionEnd(source, i) - 1; }
-        catch (error) { error.message += ` near ${JSON.stringify(source.slice(Math.max(0, i - 100), i + 180))}`; throw error; }
-        continue;
-      }
-      if (/[A-Za-z_]/.test(ch)) { word += ch; continue; }
-      finishWord();
-      if (!nestedCases && ch === ";" && [";", "&", "|"].includes(source[i + 1])) {
-        terminator = source.slice(i, i + 2);
-        break;
+      if (!nestedCases && token.type === "op" && token.value === ";") {
+        const offset = bodyStart + token.offset;
+        if ([";", "&", "|"].includes(source[offset + 1]) && source[offset] === ";") {
+          terminator = source.slice(offset, offset + 2);
+          i = offset;
+          break;
+        }
       }
     }
     // POSIX allows the final clause to omit `;;` immediately before esac.
@@ -3197,10 +3795,11 @@ function parseCaseArms(source) {
       if (source.slice(bodyStart, i).trim() || arms.length) terminator = ";;";
       else throw new ShellSyntaxError("unterminated case clause");
     }
-    const bodySource = source.slice(bodyStart, i).trim();
+    const bodySource = source.slice(bodyStart, i);
     let body;
     try {
-      body = parseCompoundScript(bodySource);
+      const first = source.slice(0,bodyStart).split("\n").length - 1;
+      body = parseCompoundScript(bodySource, sourceLines?.[first] ?? 1, sourceLines?.slice(first));
     } catch (error) {
       if (error instanceof ShellSyntaxError)
         error.message += ` in case arm ${patterns.join("|")}`;
@@ -3212,8 +3811,41 @@ function parseCaseArms(source) {
   return arms;
 }
 
-export function parseCompoundScript(source) {
-  const lines = compoundLogicalSource(source.replace(/\\\r?\n/g, "")).split(/\r?\n/);
+function readCompoundHeader(lines, start, keyword) {
+  let source = "";
+  for (let end = start; end < lines.length; end++) {
+    source += (end === start ? "" : "\n") + lines[end];
+    let tokens;
+    try { tokens = tokenize(source, {strict:true}); } catch (error) {
+      if (error.message.startsWith("unterminated")) continue;
+      throw error;
+    }
+    const stack = [];
+    let commandStart = true;
+    for (let index = 1; index < tokens.length; index++) {
+      const token = tokens[index];
+      if (token.type === "op") {
+        if ([";", "&&", "||", "|"].includes(token.value)) commandStart = true;
+        continue;
+      }
+      const word = token.fragments.length === 1 && token.fragments[0].quote === "none" ? token.fragments[0].text : null;
+      if (commandStart && word === keyword && !stack.length) {
+        return {condition:source.slice(tokens[0].offset + tokens[0].fragments[0].text.length, token.offset).trim(),
+          tail:source.slice(token.offset + keyword.length).trim(), end};
+      }
+      if (commandStart && ["{", "if", "case", "while", "until", "for"].includes(word)) {
+        stack.push(word === "{" ? "}" : word === "if" ? "fi" : word === "case" ? "esac" : "done");
+      } else if (word === stack.at(-1)) stack.pop();
+      if (commandStart && /^[A-Za-z_][A-Za-z0-9_]*=/.test(word ?? "")) continue;
+      commandStart = ["{", "if", "while", "until", "then", "do", "else", "elif"].includes(word);
+    }
+  }
+  throw new ShellSyntaxError(`unterminated condition: expected ${keyword}`);
+}
+
+export function parseCompoundScript(source, firstLine = 1, sourceLines = null) {
+  const {logical, lineNumbers} = compoundLogicalSource(source, firstLine, sourceLines);
+  const lines = logical.split(/\r?\n/);
   const parseSequence = (start, stops = []) => {
     const nodes = [];
     let i = start;
@@ -3223,51 +3855,63 @@ export function parseCompoundScript(source) {
       if (stops.some((stop) => stop.test(trimmed))) break;
       if (!trimmed || trimmed.startsWith("#")) { i++; continue; }
 
-      const functionMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\{\s*$/.exec(trimmed);
+      const functionMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*(\{)?\s*(?:#.*)?$/.exec(trimmed);
       if (functionMatch) {
-        const body = parseSequence(i + 1, [/^}\s*;?$/]);
+        if (!functionMatch[2]) {
+          do { i++; } while (i < lines.length && (!lines[i].trim() || lines[i].trim().startsWith("#")));
+          if (lines[i]?.trim() !== "{") throw new ShellSyntaxError(`unterminated function ${functionMatch[1]}: expected {`);
+        }
+        const body = parseSequence(i + 1, [/^}(?:\s|;|$)/]);
         if (body.index >= lines.length) throw new ShellSyntaxError(`unterminated function ${functionMatch[1]}`);
         nodes.push({ type: "function", name: functionMatch[1], body: body.nodes });
         i = body.index + 1;
         continue;
       }
 
-      const subshellMatch = /^\((.*)\)\s*;?$/.exec(trimmed);
-      if (subshellMatch) {
-        nodes.push({ type: "subshell", source: subshellMatch[1] });
-        i++;
+      if (trimmed === "{") {
+        const body = parseSequence(i + 1, [/^}(?:\s|;|$)/]);
+        if (body.index >= lines.length) throw new ShellSyntaxError(`unterminated brace group near ${lines.slice(i, i + 5).join("\n")}`);
+        const compound = { type: "group", body: body.nodes, source: [...lines.slice(i, body.index), "}"].join("\n") };
+        const postfix = makeCompoundPostfix(compound, lines[body.index].trim().slice(1), lines, body.index + 1);
+        nodes.push(postfix.node);
+        i = postfix.nextLine;
         continue;
+      }
+
+      if (trimmed.startsWith("(")) {
+        let end=i, text=line, group=leadingSubshell(text);
+        while (!group && ++end < lines.length) { text += `\n${lines[end]}`; group=leadingSubshell(text); }
+        if (!group) throw new ShellSyntaxError("unterminated subshell");
+        // Preserve the existing rewriteSubshells -> external Bun path for &.
+        if (group.suffix.trim() === "&") {
+          nodes.push({type:"command",source:text,lineNumber:lineNumbers[i]}); i=end+1; continue;
+        }
+        const compound={type:"subshell",source:group.body};
+        const postfix=makeCompoundPostfix(compound,group.suffix,lines,end+1);
+        nodes.push(postfix.node); i=postfix.nextLine; continue;
       }
 
       if (/^if(?:\s|$)/.test(trimmed)) {
         const compoundStart = i;
         const branches = [];
-        let header = trimmed;
-        while (!/(?:;\s*|\s+)then(?:\s+.*)?$/.test(header) && ++i < lines.length)
-          header += ` ${lines[i].trim()}`;
-        let then = /(?:;\s*|\s+)then(?:\s+(.*))?$/.exec(header);
-        if (!then) throw new ShellSyntaxError("if requires then");
-        let condition = header.slice(0, then.index).replace(/^if\s*/, "").trim();
-        let thenCommand = then[1]?.trim() ?? "";
-        i++;
+        let header = readCompoundHeader(lines, i, "then");
+        let condition = header.condition;
+        let thenCommand = header.tail;
+        i = header.end + 1;
         while (true) {
-          const body = parseSequence(i, [/^elif(?:\s|$)/, /^else\s*;?$/, /^fi\b/]);
+          const body = parseSequence(i, [/^elif(?:\s|$)/, /^else(?:\s*;\s*|\s+|$)(?:#.*)?$/, /^fi\b/]);
           branches.push({ condition, body: body.nodes, thenCommand });
           i = body.index;
           const stop = lines[i]?.trim() ?? "";
           if (/^elif(?:\s|$)/.test(stop)) {
-            header = stop;
-            while (!/(?:;\s*|\s+)then(?:\s+.*)?$/.test(header) && ++i < lines.length)
-              header += ` ${lines[i].trim()}`;
-            then = /(?:;\s*|\s+)then(?:\s+(.*))?$/.exec(header);
-            if (!then) throw new ShellSyntaxError("elif requires then");
-            condition = header.slice(0, then.index).replace(/^elif\s*/, "").trim();
-            thenCommand = then[1]?.trim() ?? "";
-            i++;
+            header = readCompoundHeader(lines, i, "then");
+            condition = header.condition;
+            thenCommand = header.tail;
+            i = header.end + 1;
             continue;
           }
           let otherwise = [];
-          if (/^else\s*;?$/.test(stop)) {
+          if (/^else(?:\s*;\s*|\s+|$)(?:#.*)?$/.test(stop)) {
             const body = parseSequence(i + 1, [/^fi\b/]);
             otherwise = body.nodes;
             i = body.index;
@@ -3297,7 +3941,7 @@ export function parseCompoundScript(source) {
         if (!/(?:;\s*|\s+)do\s*$/.test(header)) throw new ShellSyntaxError(`${kind} requires do`);
         const condition = header.replace(new RegExp(`^${kind}\\s*`), "").replace(/(?:;\s*|\s+)do\s*$/, "");
         const body = parseSequence(i + 1, [/^done\b/]);
-        const done = /^done(?:\s*<\s*(.+?))?\s*;?\s*((?:\|\||&&|\||;).*)?$/.exec(lines[body.index]?.trim() ?? "");
+        const done = /^done(?=$|[\s;<|&])(?:\s*<\s*(.+?))?\s*;?\s*((?:\|\||&&|\||;|#).*)?$/.exec(lines[body.index]?.trim() ?? "");
         if (!done)
           throw new ShellSyntaxError(`unterminated ${kind}`);
         const compound = {
@@ -3344,61 +3988,43 @@ export function parseCompoundScript(source) {
         continue;
       }
       if (/^case(?:\s|$)/.test(trimmed)) {
-        const compoundStart = i;
-        let header = trimmed;
-        while (!/\s+in(?:\s|$)/.test(header) && ++i < lines.length)
-          header += ` ${lines[i].trim()}`;
-        const match = /^case\s+(.+?)\s+in(?:\s+(.*))?$/.exec(header);
-        if (!match) throw new ShellSyntaxError("case requires in");
-        const inlineEsac = findShellKeyword(match[2] ?? "", "esac");
-        if (inlineEsac >= 0) {
-          const inlineArms = match[2].slice(0, inlineEsac);
-          const suffix = match[2].slice(inlineEsac + "esac".length);
-          const compound = {
-            type: "case",
-            word: match[1],
-            arms: parseCaseArms(inlineArms),
-            source: `case ${match[1]} in\n${inlineArms}\nesac`,
-          };
-          const result = makeCompoundPostfix(compound, suffix, lines, i + 1);
-          nodes.push(result.node);
-          i = result.nextLine;
-          continue;
-        }
-        const bodyLines = match[2] ? [match[2]] : [];
-        i++;
-        let nestedCases = 0;
-        while (i < lines.length) {
-          const current = lines[i].trim();
-          const nestedCase = findShellKeyword(current, "case");
-          if (nestedCase >= 0 && /\s/.test(current[nestedCase + "case".length] ?? ""))
-            nestedCases++;
-          // In an enclosing case arm, mksh tokenises `esac;;` as two
-          // independent tokens: ESAC followed by the enclosing arm's BREAK.
-          // Count that as the end of the nested case while retaining the
-          // whole line for parseCaseArms to assign the `;;` to its parent.
-          const closingCase = findShellKeyword(current, "esac");
-          if (closingCase >= 0) {
-            if (!nestedCases) break;
-            nestedCases--;
+        const remaining = lines.slice(i).join("\n");
+        const headerTokens=tokenize(remaining).slice(0,3);
+        if (headerTokens[2]?.fragments?.map(f=>f.text).join("") !== "in")
+          throw new ShellSyntaxError(`case requires in: ${remaining.slice(0,180)}`);
+        const caseWord=remaining.slice(headerTokens[1].offset,headerTokens[2].offset).trim();
+        const start = headerTokens[2].offset + 2;
+        let depth = 0, end = -1;
+        for (const [offset, word] of caseKeywords(tokenize(remaining.slice(start)))) {
+          if (word === "case") depth++;
+          if (word === "esac") {
+            if (!depth) { end = start + offset; break; }
+            depth--;
           }
-          bodyLines.push(lines[i++]);
         }
-        if (!/^esac\b/.test(lines[i]?.trim() ?? ""))
-          throw new ShellSyntaxError(`unterminated case: ${trimmed} (at ${lines[i]?.trim() ?? "EOF"})`);
-        const compound = {
-          type: "case", word: match[1], arms: parseCaseArms(bodyLines.join("\n")),
-          source: [...lines.slice(compoundStart, i), "esac"].join("\n"),
-        };
-        const close = /^esac\b(.*)$/.exec(lines[i].trim());
-        const result = makeCompoundPostfix(compound, close?.[1] ?? "", lines, i + 1);
-        nodes.push(result.node);
-        i = result.nextLine;
+        if (end < 0) throw new ShellSyntaxError(`unterminated case: ${trimmed}`);
+        const compound = {type:"case", word:caseWord, arms:parseCaseArms(remaining.slice(start,end),lineNumbers.slice(i + remaining.slice(0,start).split("\n").length - 1)), source:remaining.slice(0,end+4)};
+        const nextLine = i + remaining.slice(0,end+4).split("\n").length;
+        const suffix = remaining.slice(end+4).split("\n")[0];
+        const postfix = makeCompoundPostfix(compound,suffix,lines,nextLine);
+        nodes.push(postfix.node);
+        i = postfix.nextLine;
         continue;
       }
       const grown = growLogicalCommand(lines, i);
-      nodes.push({ type: "command", source: grown.source });
+      nodes.push({ type: "command", source: grown.source, lineNumber:lineNumbers[i], sourceLines:lineNumbers.slice(i,grown.next) });
       i = grown.next;
+    }
+    for (let n = nodes.length - 2; n >= 0; n--) {
+      let pending = nodes[n];
+      while (pending.right) pending = pending.right;
+      if (pending.rightPending) {
+        pending.right = nodes[n+1]; delete pending.rightPending; nodes.splice(n+1,1); continue;
+      }
+      if (nodes[n].type !== "command") continue;
+      const last = tokenize(nodes[n].source).at(-1);
+      if (last?.type !== "op" || !["&&", "||", "|"].includes(last.value)) continue;
+      nodes.splice(n,2,{type:"compoundPostfix",compound:{...nodes[n],source:removeSourceToken(nodes[n].source,last)},operator:last.value,right:nodes[n+1]});
     }
     return { nodes, index: i };
   };
@@ -3436,22 +4062,53 @@ export function needsMoreInput(source) {
   return false;
 }
 
+// Buffered compound pipelines need the same descriptor routing as leaf commands.
+function routeCommandOutput(execution, bindings) {
+  const output = [], errors = [];
+  for (const [number, data] of [[1, execution.stdout], [2, execution.stderr]]) {
+    if (!data.byteLength) continue;
+    const endpoint = bindings[number] ?? {channel:number};
+    if (endpoint.closed) { execution.status = 1; errors.push(bytes("bunmsh: bad file descriptor\n")); }
+    else if (endpoint.fd !== undefined) writeSync(endpoint.fd, data);
+    else (endpoint.channel === 2 ? errors : output).push(data);
+  }
+  execution.stdout = concatBytes(output);
+  execution.stderr = concatBytes(errors);
+  return execution;
+}
+
 async function executeNodeList(nodes, state, options = {}) {
   const capture = options.capture ?? true;
   const stdout = [], stderr = [];
-  let execution = result(state.lastStatus);
+  let execution = result();
   const append = (value) => {
     if (!capture) return;
     if (value.stdout.byteLength) stdout.push(value.stdout);
     if (value.stderr.byteLength) stderr.push(value.stderr);
   };
   for (const node of nodes) {
+    if (state.exitRequested || state.flow) break;
+    append(await runPendingTraps(state,{capture}));
     if (state.exitRequested) break;
+    if (node.type === "redirected") {
+      execution = await runCommand({words:parse(":")[0].pipeline[0].words,redirects:node.redirects,body:[node.compound]},state,{captureStdout:capture,captureStderr:capture,input:options.input});
+      append(execution);
+      if (!capture) {
+        if (execution.stdout.byteLength) await writeStream(process.stdout,execution.stdout);
+        if (execution.stderr.byteLength) await writeStream(process.stderr,execution.stderr);
+      }
+      continue;
+    }
+    if (node.type === "group") {
+      execution = await executeNodeList(node.body, state, options);
+      append(execution);
+      continue;
+    }
     if (node.type === "compoundPostfix") {
       if (node.operator === "|") {
         const link = new TransformStream();
         const leftPromise = runExternal(
-          pipelineCompoundArgv(node.compound.source),
+          pipelineCompoundArgv(compoundSource(node.compound)),
           pipelineBuiltinState(state),
           options.input ?? null,
           false,
@@ -3465,30 +4122,34 @@ async function executeNodeList(nodes, state, options = {}) {
           aliases: { ...state.aliases },
           functions: { ...state.functions },
           readonly: new Set(state.readonly),
+          exported: new Set(state.exported),
           directoryHistory: [...state.directoryHistory],
           tabs: [...state.tabs],
           exitRequested: false,
           exitStatus: 0,
         };
         const right = await runExternal(
-          pipelineCompoundArgv(node.command),
+          pipelineCompoundArgv(node.right ? compoundSource(node.right) : node.command),
           pipelineBuiltinState(rightState),
           link.readable,
           true,
           true,
         );
         const left = await leftPromise;
-        execution = result(right.status, right.stdout, concatBytes([left.stderr, right.stderr]));
+        execution = routeCommandOutput(result(right.status, right.stdout, concatBytes([left.stderr, right.stderr])), state.fdBindings ?? {});
       } else {
-        execution = await executeNodeList([node.compound], state, { capture });
+        const previousIgnore = state.ignoreErrexit;
+        if (["&&","||"].includes(node.operator)) state.ignoreErrexit++;
+        try { execution = await executeNodeList([node.compound], state, { capture }); }
+        finally { state.ignoreErrexit=previousIgnore; }
         append(execution);
         const shouldRun = node.operator === "&&"
           ? execution.status === 0
           : node.operator === "||"
             ? execution.status !== 0
             : true;
-        if (shouldRun) {
-          execution = await execute(node.command, state, { capture });
+        if (shouldRun && !state.flow && !state.exitRequested) {
+          execution = node.right ? await executeNodeList([node.right],state,{capture}) : await execute(node.command, state, { capture });
           append(execution);
         }
         state.lastStatus = execution.status;
@@ -3504,26 +4165,16 @@ async function executeNodeList(nodes, state, options = {}) {
     }
     if (node.type === "function") {
       state.functions[node.name] = node.body;
+      state.lastStatus = 0; execution = result();
       continue;
     }
     if (node.type === "command") {
-      execution = await execute(node.source, state, { capture, simple: true });
+      execution = await execute(node.source, state, { capture, simple: true, firstLine:node.lineNumber, sourceLines:node.sourceLines });
       append(execution);
       continue;
     }
     if (node.type === "subshell") {
-      const child = {
-        ...state,
-        env: { ...state.env },
-        aliases: { ...state.aliases },
-        functions: { ...state.functions },
-        readonly: new Set(state.readonly),
-        directoryHistory: [...state.directoryHistory],
-        tabs: [...state.tabs],
-        exitRequested: false,
-        exitStatus: 0,
-      };
-      execution = await execute(node.source, child, { capture });
+      execution = await execute(`(${node.source})`,state,{capture,input:options.input});
       append(execution);
       state.lastStatus = execution.status;
       continue;
@@ -3531,6 +4182,7 @@ async function executeNodeList(nodes, state, options = {}) {
     if (node.type === "loop") {
       const previousReadLines = state.readLines;
       let ranBody = false;
+      state.loopDepth++;
       try {
         if (node.input !== null) {
           const parsed = parse(`__input ${node.input}`)[0]?.pipeline[0];
@@ -3541,7 +4193,7 @@ async function executeNodeList(nodes, state, options = {}) {
           if (state.readLines.at(-1) === "") state.readLines.pop();
         }
         while (true) {
-          const checked = await execute(node.condition, state, { capture, simple: true });
+          const checked = await execute(node.condition, state, { capture, errexitIgnored:true });
           append(checked);
           const proceed = node.kind === "until" ? checked.status !== 0 : checked.status === 0;
           if (!proceed || state.exitRequested) {
@@ -3551,12 +4203,13 @@ async function executeNodeList(nodes, state, options = {}) {
           execution = await executeNodeList(node.body, state, { capture });
           ranBody = true;
           append(execution);
-          if (state.exitRequested) break;
+          if (state.exitRequested || consumeLoopFlow(state)) break;
         }
       } catch (error) {
         execution = result(1, "", `bunmsh: ${error.message}\n`);
         append(execution);
       } finally {
+        state.loopDepth--;
         state.readLines = previousReadLines;
       }
       state.lastStatus = execution.status;
@@ -3571,13 +4224,14 @@ async function executeNodeList(nodes, state, options = {}) {
         for (const word of parsed?.words.slice(1) ?? []) values.push(...await expandWord(word, state));
       }
       execution = result();
-      for (const value of values) {
+      state.loopDepth++;
+      try { for (const value of values) {
         if (state.readonly.has(node.name)) { execution = readonlyError(node.name); break; }
         state.env[node.name] = value;
         execution = await executeNodeList(node.body, state, { capture });
         append(execution);
-        if (state.exitRequested) break;
-      }
+        if (state.exitRequested || consumeLoopFlow(state)) break;
+      } } finally { state.loopDepth--; }
       state.lastStatus = execution.status;
       continue;
     }
@@ -3605,11 +4259,9 @@ async function executeNodeList(nodes, state, options = {}) {
     let selectedThen = "";
     for (const branch of node.branches) {
       let condition = branch.condition.trim();
-      let negate = false;
-      while (/^!\s+/.test(condition)) { negate = !negate; condition = condition.replace(/^!\s+/, ""); }
-      const checked = await execute(condition, state, { capture, simple: true });
+      const checked = await execute(condition, state, { capture, errexitIgnored:true });
       append(checked);
-      if ((checked.status === 0) !== negate) {
+      if (checked.status === 0) {
         selected = branch.body;
         selectedThen = branch.thenCommand ?? "";
         break;
@@ -3630,9 +4282,17 @@ async function executeNodeList(nodes, state, options = {}) {
 
 async function executeFunction(name, argv, state) {
   const previousArgs = state.args;
+  const previousLoopDepth = state.loopDepth;
+  state.loopDepth = 0;
   state.args = [previousArgs[0], ...argv.slice(1)];
+  state.returnDepth++;
   try { return await executeNodeList(state.functions[name], state); }
-  finally { state.args = previousArgs; }
+  finally {
+    state.returnDepth--;
+    state.loopDepth = previousLoopDepth;
+    if (state.flow?.kind === "return") state.flow = null;
+    state.args = previousArgs;
+  }
 }
 
 async function runExternal(
@@ -3652,7 +4312,7 @@ async function runExternal(
   const options = {
     cmd: spawnArgv,
     cwd: nativePath(state.cwd),
-    env: state.env,
+    env: externalEnvironment(state),
     stdin: runtimeOptions.background ? "ignore" : input === null ? "inherit" : input,
     stdout: runtimeOptions.background ? "inherit" : captureStdout || stdoutSink ? "pipe" : "inherit",
     stderr: runtimeOptions.background ? "inherit" : captureStderr || runtimeOptions.stderrSink ? "pipe" : "inherit",
@@ -3660,7 +4320,30 @@ async function runExternal(
       runtimeOptions.onExit?.(proc, exitCode, signalCode, error);
     },
   };
+  let stateDirectory;
   try {
+    if (options.env[PIPELINE_STATE_ENV] === "@current")
+      options.env[PIPELINE_STATE_ENV] = pipelineBuiltinState(state).env[PIPELINE_STATE_ENV];
+    const serialized = options.env[PIPELINE_STATE_ENV];
+    if (serialized?.length > 2048 && !runtimeOptions.background) {
+      stateDirectory = mkdtempSync(resolvePath(tmpdir(), "bunmsh-state-"));
+      const file = resolvePath(stateDirectory, "state.json");
+      writeFileSync(file, serialized, {mode:0o600});
+      options.env = {...options.env, [PIPELINE_STATE_ENV]: `@file:${file}`};
+    }
+    if (!runtimeOptions.background) {
+      options.stdout = runtimeOptions.stdoutFd ?? options.stdout;
+      options.stderr = runtimeOptions.stderrFd ?? options.stderr;
+      const extra = Object.keys(state.fdBindings ?? {}).map(Number).filter(n => n > 2);
+      if (extra.length) {
+        options.stdio = [options.stdin, options.stdout, options.stderr];
+        for (let n = 3; n <= Math.max(...extra); n++) {
+          const endpoint = state.fdBindings[n];
+          options.stdio[n] = endpoint?.fd ?? endpoint?.channel ?? "ignore";
+        }
+        delete options.stdin; delete options.stdout; delete options.stderr;
+      }
+    }
     const proc = Bun.spawn(options);
     if (runtimeOptions.background) {
       if (!Array.isArray(Bun.sha.procs)) Bun.sha.procs = [];
@@ -3685,10 +4368,21 @@ async function runExternal(
     const abandonStreaming = new Promise((resolve) => {
       runtimeOptions.onSpawn?.(proc, pipelineKillSignal, resolve);
     });
-    const outputPromise = captureStdout
+    const sharedSink = stdoutSink && stdoutSink === runtimeOptions.stderrSink;
+    const sharedStreamPromise = sharedSink ? Promise.race([
+      (async()=>{
+        const writer=stdoutSink.getWriter();
+        const pump=async stream=>{const reader=stream.getReader();try{while(true){const chunk=await reader.read();if(chunk.done)break;await writer.write(chunk.value);}}finally{reader.releaseLock();}};
+        try {await Promise.all([pump(proc.stdout),pump(proc.stderr)]);await writer.close();}
+        catch {try{proc.kill(pipelineKillSignal);}catch{}}
+        finally {writer.releaseLock();}
+      })(),
+      abandonStreaming,
+    ]) : Promise.resolve();
+    const outputPromise = captureStdout && !stdoutSink
       ? new Response(proc.stdout).arrayBuffer()
       : Promise.resolve(new ArrayBuffer(0));
-    const streamPromise = stdoutSink
+    const streamPromise = stdoutSink && !sharedSink
       ? Promise.race([
           proc.stdout.pipeTo(stdoutSink).catch(() => {
             try { proc.kill(pipelineKillSignal); } catch {}
@@ -3696,13 +4390,13 @@ async function runExternal(
           abandonStreaming,
         ])
       : Promise.resolve();
-    const errorStreamPromise = runtimeOptions.stderrSink
+    const errorStreamPromise = runtimeOptions.stderrSink && !sharedSink
       ? Promise.race([
           proc.stderr.pipeTo(runtimeOptions.stderrSink).catch(() => {}),
           abandonStreaming,
         ])
       : Promise.resolve();
-    const errorPromise = captureStderr
+    const errorPromise = captureStderr && !runtimeOptions.stderrSink
       ? new Response(proc.stderr).arrayBuffer()
       : Promise.resolve(new ArrayBuffer(0));
     const [status, output, error] = await Promise.all([
@@ -3711,13 +4405,18 @@ async function runExternal(
       errorPromise,
       streamPromise,
       errorStreamPromise,
+      sharedStreamPromise,
     ]);
     const execution = result(status, new Uint8Array(output), new Uint8Array(error));
-    execution.stdoutStreamed = Boolean(stdoutSink);
+    execution.stdoutStreamed = Boolean(stdoutSink || runtimeOptions.stderrSink);
     execution.stderrStreamed = Boolean(runtimeOptions.stderrSink);
     return execution;
   } catch (error) {
     return result(127, "", `bunmsh: ${argv[0]}: ${error.message}\n`);
+  } finally {
+    if (stateDirectory) {
+      try { unlinkSync(resolvePath(stateDirectory,"state.json")); rmdirSync(stateDirectory); } catch {}
+    }
   }
 }
 
@@ -3742,11 +4441,39 @@ function pipelineCompoundArgv(source) {
     : [...BUN_RUNTIME_COMMAND, BUNMSH_ENTRY, "-c", source];
 }
 
+function heredocRanges(source, tokens = tokenize(source)) {
+  const ranges = new Map();
+  let previousEnd = 0;
+  for (const token of tokens) {
+    if (!token.heredoc) continue;
+    const delimiter = token.fragments.map(f=>f.text.replaceAll("\u0000", "")).join("");
+    const start = Math.max(source.indexOf("\n",token.offset)+1, previousEnd);
+    if (!start) continue;
+    let end=start;
+    while (end < source.length) {
+      const newline=source.indexOf("\n",end);
+      const lineEnd=newline<0 ? source.length : newline;
+      const line=source.slice(end,lineEnd);
+      end=newline<0 ? source.length : newline+1;
+      if (line === delimiter || line.replace(/^\t+/,"") === delimiter) break;
+    }
+    ranges.set(start,end); previousEnd=end;
+  }
+  return ranges;
+}
+
 function leadingSubshell(source) {
   const leading = source.length - source.trimStart().length;
   if (source[leading] !== "(") return null;
   let depth = 0, quote = null;
+  let keywords, ranges;
+  try { const tokens=tokenize(source); keywords = caseKeywords(tokens); ranges=heredocRanges(source,tokens); } catch (error) {
+    if (error.message.startsWith("unterminated")) return null;
+    throw error;
+  }
+  const cases = [];
   for (let i = leading; i < source.length; i++) {
+    if (ranges.has(i)) { i=ranges.get(i)-1; continue; }
     const ch = source[i];
     if (quote === "'") { if (ch === "'") quote = null; continue; }
     if (quote === '"') {
@@ -3754,6 +4481,14 @@ function leadingSubshell(source) {
       if (ch === '"') quote = null;
       continue;
     }
+    if (ch === "#" && (i === leading || /[\s;|&]/.test(source[i-1]))) {
+      const end=source.indexOf("\n",i); if (end<0) return null; i=end; continue;
+    }
+    const keyword=keywords.get(i);
+    if (keyword === "case") cases.push("head");
+    else if (keyword === "esac") cases.pop();
+    if (cases.at(-1) === "head" && source.slice(i).match(/^in(?:\s|$)/) && /\s/.test(source[i-1] ?? "")) cases[cases.length-1]="pattern";
+    if (cases.at(-1) === "body" && source.startsWith(";;",i)) cases[cases.length-1]="pattern";
     if (ch === "\\") { i++; continue; }
     if (ch === "'" || ch === '"') { quote = ch; continue; }
     if (ch === "`") {
@@ -3762,6 +4497,10 @@ function leadingSubshell(source) {
     }
     if (ch === "$" && source[i + 1] === "(") {
       try { i = substitutionEnd(source, i) - 1; } catch { return null; }
+      continue;
+    }
+    if (cases.at(-1) === "pattern" && (ch === "(" || ch === ")")) {
+      if (ch === ")") cases[cases.length-1]="body";
       continue;
     }
     if (ch === "(") depth++;
@@ -3773,7 +4512,9 @@ function leadingSubshell(source) {
 
 function rewriteSubshells(source, state) {
   let output = "", quote = null;
+  const ranges=heredocRanges(source);
   for (let i = 0; i < source.length;) {
+    if (ranges.has(i)) { const end=ranges.get(i); output+=source.slice(i,end); i=end; continue; }
     const ch = source[i];
     if (quote === "'") {
       output += ch;
@@ -3803,8 +4544,9 @@ function rewriteSubshells(source, state) {
       const group = leadingSubshell(source.slice(i));
       if (group) {
         const argv = pipelineCompoundArgv(group.body);
-        const serialized = pipelineBuiltinState(state).env[PIPELINE_STATE_ENV];
-        output += `BUNMSH_INTERNAL_PIPELINE_STATE=${quoteShellWord(serialized)} ${argv.map(quoteShellWord).join(" ")}`;
+        // Snapshot only when this command runs: earlier commands in the same
+        // list may still change variables, functions, options or positional args.
+        output += `BUNMSH_INTERNAL_PIPELINE_STATE=@current ${argv.map(quoteShellWord).join(" ")}`;
         i += group.body.length + 2;
         continue;
       }
@@ -3821,11 +4563,16 @@ function pipelineBuiltinState(state) {
     env: {
       ...state.env,
       [PIPELINE_STATE_ENV]: JSON.stringify({
+        env: Object.fromEntries(Object.entries(state.env).filter(([name]) => name !== PIPELINE_STATE_ENV)),
+        exported: [...state.exported],
         aliases: state.aliases,
         functions: state.functions,
         readonly: [...state.readonly],
         args: state.args,
         pathSearch: state.pathSearch,
+        shellOptions:state.shellOptions,
+        ignoreErrexit:state.ignoreErrexit,
+        fdBindings: Object.fromEntries(Object.entries(state.fdBindings ?? {}).filter(([n]) => Number(n)>2).map(([n,v]) => [n, v.fd === undefined ? v : {fd:Number(n)}])),
       }),
     },
   };
@@ -3919,7 +4666,12 @@ async function runCommandArgv(
   )) return result(2, "", "bunmsh: &: only a single external command is supported\n");
   
   let commandState = state;
-  if (options.pipelineStage && runsInPipelineSubprocess(commandArgv, commandState))
+  const ioCommand = ["builtin", "__builtin", "command"].includes(commandArgv[0])
+    ? commandArgv.slice(1).filter(arg => arg !== "--")[0] : commandArgv[0];
+  const redirectedStream = (options.stdoutFd !== undefined || options.stderrFd !== undefined) &&
+    !Object.hasOwn(state.functions, ioCommand) &&
+    (ioCommand === "yes" || Object.hasOwn(fallbackBuiltins, ioCommand));
+  if ((options.pipelineStage || redirectedStream) && runsInPipelineSubprocess(commandArgv, commandState))
     return runExternal(
       pipelineBuiltinArgv(commandArgv),
       pipelineBuiltinState(commandState),
@@ -3929,6 +4681,8 @@ async function runCommandArgv(
       options.stdoutSink,
       { ...options, pipelineKillSignal: "SIGTERM" },
     );
+  if (typeof input === "number" && ioCommand !== "read" && runsInPipelineSubprocess(commandArgv,commandState))
+    input = Readable.toWeb(createReadStream("",{fd:input,autoClose:false}));
   while (["command", "builtin", "__builtin"].includes(commandArgv[0])) {
     if (requestsBuiltinHelp(commandArgv) && hasBuiltinHelp(commandArgv[0]))
       return builtinHelp(commandArgv[0]);
@@ -4034,16 +4788,6 @@ async function runCommandArgv(
   );
 }
 
-function redirectInput(path) {
-  const fd = openSync(path, "r");
-  return Readable.toWeb(createReadStream(path, { fd, autoClose: true }));
-}
-
-function redirectOutput(path, append) {
-  const fd = openSync(path, append ? "a" : "w");
-  return Writable.toWeb(createWriteStream(path, { fd, autoClose: true }));
-}
-
 // Mirrors the double-quote scanning in tokenize(): an unquoted heredoc body
 // only lets backslash escape $, `, \, and a trailing newline before the rest
 // goes through the normal $/`` expansion pipeline.
@@ -4076,6 +4820,7 @@ function redirectHeredoc(content) {
 
 async function runCommand(command, state, options = {}) {
   state.expansionStatus = null;
+  if (command.lineNumber != null) state.lineNumber = command.lineNumber;
   const standaloneTilde =
     command.words.length === 1 &&
     command.words[0].fragments.length === 1 &&
@@ -4104,129 +4849,132 @@ async function runCommand(command, state, options = {}) {
     localEnv[assignment.name] = assignment.value;
     expanded.shift();
   }
-  if (expanded.length === 0) {
+  const assignmentOnly = expanded.length === 0;
+  if (assignmentOnly) {
     for (const name of Object.keys(localEnv))
       if (state.readonly.has(name)) return readonlyError(name);
     Object.assign(state.env, localEnv);
-    return result(state.expansionStatus ?? 0);
+    if (!command.redirects.length) return result(state.expansionStatus ?? 0);
+    expanded.push(":");
   }
   const alias = aliasEligible ? state.aliases[expanded[0]] : null;
   if (alias) expanded.splice(0, 1, ...alias);
 
+  const prefixSaved = new Map();
+  const special = [":", ".", "break", "continue", "eval", "exec", "exit", "export", "readonly", "return", "set", "shift", "trap", "unset"].includes(expanded[0]);
+  const temporaryPrefix = state.shellOptions.posix && !assignmentOnly && !special;
+  const previousBindings = state.fdBindings;
+  const bindings = {...previousBindings};
+  if (options.stdoutSink) bindings[1] = {channel:1};
+  if (options.input !== null && options.input !== undefined) delete bindings[0];
+  const opened = [];
+  const redirectedFds = new Set();
   let input = options.input ?? null;
-  let stdoutPath = null;
-  let stdoutAppend = false;
-  let stderrPath = null;
-  let stderrAppend = false;
-  let stdoutToStderr = false;
-  let stderrToStdout = false;
-  for (const redirect of command.redirects) {
-    if (redirect.op === "1>&2") { stdoutToStderr = true; continue; }
-    if (redirect.op === "2>&1") { stderrToStdout = true; continue; }
-    if (/^\d+>&\d+$/.test(redirect.op)) continue;
-    if (redirect.op === "<<" || redirect.op === "<<-") {
-      const heredoc = redirect.heredoc ?? { body: "", expand: false };
-      const content = heredoc.expand
-        ? stripExpansionMarkers(
-            (await expandText(heredocLiteralPass(heredoc.body), state)).replaceAll("\u0000", ""),
-          )
-        : heredoc.body;
-      if (input instanceof ReadableStream) {
-        try { await input.cancel(); } catch {}
-      }
-      input = redirectHeredoc(content);
-      continue;
-    }
-    if (redirect.op === "<<<") {
-      const [word] = await expandWord(redirect.target, state, { single: true, noTilde: true });
-      if (input instanceof ReadableStream) {
-        try { await input.cancel(); } catch {}
-      }
-      input = redirectHeredoc(`${word}\n`);
-      continue;
-    }
-    const targets = await expandWord(redirect.target, state, { single: true });
-    const target = targets[0];
-    const path = target.startsWith("/") ? target : `${state.cwd}/${target}`;
-    if (redirect.op === "<") {
-      try {
-        if (input instanceof ReadableStream) {
-          try { await input.cancel(); } catch {}
-        }
-        input = redirectInput(path);
-      } catch (error) {
-        return result(1, "", `bunmsh: ${target}: ${error.message}\n`);
-      }
-    } else if (redirect.op === ">" || redirect.op === ">>") {
-      stdoutPath = path;
-      stdoutAppend = redirect.op === ">>";
-    } else {
-      stderrPath = path;
-      stderrAppend = redirect.op === "2>>";
-    }
-  }
-
-
-  let stdoutRedirect = null;
-  let stderrRedirect = null;
+  let persistent = expanded[0] === "exec" && expanded.length === 1;
   try {
-    if (stdoutPath !== null) {
-      // A command-level redirect replaces the pipeline's stdout connection.
-      // Close that unused connection now so the next stage observes EOF.
-      if (options.stdoutSink) {
-        try { await options.stdoutSink.getWriter().close(); } catch {}
+    for (const redirect of command.redirects) {
+      if (["<<", "<<-", "<<<"].includes(redirect.op)) {
+        redirectedFds.add(0);
+        let content;
+        if (redirect.op === "<<<") content = `${(await expandWord(redirect.target,state,{single:true,noTilde:true}))[0]}\n`;
+        else {
+          const heredoc = redirect.heredoc ?? {body:"",expand:false};
+          content = heredoc.expand ? stripExpansionMarkers((await expandText(heredocLiteralPass(heredoc.body),state)).replaceAll("\u0000","")) : heredoc.body;
+        }
+        bindings[0] = {content};
+        continue;
       }
-      stdoutRedirect = redirectOutput(stdoutPath, stdoutAppend);
+      const dup = /^(\d+)([<>]&)(\d+|-)$/.exec(redirect.op);
+      const match = /^(\d*)(>&|<&|<>|>>|>|<)$/.exec(redirect.op);
+      if (!dup && !match) throw new Error(`unsupported redirection ${redirect.op}`);
+      const op = dup ? dup[2] : match[2];
+      const fd = Number((dup ? dup[1] : match[1]) || (op.startsWith("<") ? 0 : 1));
+      redirectedFds.add(fd);
+      if (fd > 1023) throw new Error("file descriptor out of range");
+      const target = dup ? dup[3] : (await expandWord(redirect.target,state,{single:true}))[0];
+      if (op.endsWith("&")) {
+        if (target === "-") bindings[fd] = {closed:true};
+        else {
+          if (!/^\d+$/.test(target)) throw new Error(`${target}: bad file descriptor`);
+          const from = bindings[Number(target)] ?? (Number(target) <= 2 ? {channel:Number(target)} : null);
+          if (!from || from.closed) throw new Error(`${target}: bad file descriptor`);
+          bindings[fd] = from;
+        }
+      } else {
+        const path = isAbsolute(nativePath(target)) ? nativePath(target) : resolvePath(nativePath(state.cwd),nativePath(target));
+        const handle = openSync(path, op === "<" ? "r" : op === ">>" ? "a" : op === "<>" ? fsConstants.O_RDWR | fsConstants.O_CREAT : "w");
+        opened.push(handle);
+        bindings[fd] = {fd:handle};
+      }
     }
-    if (stderrPath !== null)
-      stderrRedirect = redirectOutput(stderrPath, stderrAppend);
+    const commandState = options.subshell ? {...state,env:{...state.env,...localEnv},exported:new Set(state.exported),fdBindings:bindings,flow:null,loopDepth:0,returnDepth:0} : state;
+    if (!options.subshell) {
+      for (const name of Object.keys(localEnv)) if (state.readonly.has(name)) return readonlyError(name);
+      // Internal subprocess transport is command-scoped in both modes.
+      // Otherwise an unrelated later shell inherits the parent's functions/options.
+      for (const name of Object.keys(localEnv)) if (temporaryPrefix || name === PIPELINE_STATE_ENV)
+        prefixSaved.set(name, {present:Object.hasOwn(state.env,name),value:state.env[name],exported:state.exported.has(name)});
+      Object.assign(commandState.env,localEnv);
+    }
+    if (!assignmentOnly) for (const name of Object.keys(localEnv)) commandState.exported.add(name);
+    commandState.fdBindings = bindings;
+    if (persistent) {
+      for (const fd of opened) state.ownedFds.add(fd);
+      return result();
+    }
+    const stdin = bindings[0];
+    if (stdin?.content !== undefined) input = redirectHeredoc(stdin.content);
+    else if (stdin?.closed) input = redirectHeredoc("");
+    else if (stdin?.fd !== undefined) input = stdin.fd;
+    if (state.shellOptions.x) {
+      const line = bytes(`${state.env.PS4 ?? "+ "}${expanded.join(" ")}\n`);
+      const traceFd = bindings[2];
+      if (traceFd?.fd !== undefined) writeSync(traceFd.fd,line);
+      else await writeStream(process.stderr,line);
+    }
+    const nested = Boolean(command.body) || Object.hasOwn(commandState.functions,expanded[0]) || ["eval",".","source"].includes(expanded[0]);
+    const stdout = bindings[1] ?? {channel:1};
+    const stderr = bindings[2] ?? {channel:2};
+    const direct = (endpoint) => endpoint.fd !== undefined || endpoint.closed;
+    const execution = command.body ? await executeNodeList(command.body,commandState,{capture:true,input}) : await runCommandArgv(expanded,commandState,input,
+      direct(stdout) ? false : Boolean(options.captureStdout || stdout.channel !== 1),
+      direct(stderr) ? false : Boolean(options.captureStderr || stderr.channel !== 2), {
+        ...options,
+        pipelineStage: Boolean(options.pipelineStage),
+        stdoutSink: !direct(stdout)&&stdout.channel===1 ? options.stdoutSink : null,
+        stderrSink: !direct(stderr)&&stderr.channel===1 ? options.stdoutSink : null,
+        stdoutFd: stdout.fd ?? (stdout.closed ? "ignore" : undefined),
+        stderrFd: stderr.fd ?? (stderr.closed ? "ignore" : undefined),
+      });
+    if (!nested) routeCommandOutput(execution, bindings);
+    return execution;
   } catch (error) {
-    return result(1, "", `bunmsh: ${stdoutPath ?? stderrPath}: ${error.message}\n`);
-  }
-
-  const commandState = options.subshell
-    ? {
-        ...state,
-        env: { ...state.env, ...localEnv },
-        directoryHistory: [...state.directoryHistory],
-        tabs: [...state.tabs],
-        readonly: new Set(state.readonly),
+    persistent = false;
+    return result(1,"",`bunmsh: ${error.message}\n`);
+  } finally {
+    for (const [name,saved] of prefixSaved) {
+      if (saved.present) state.env[name]=saved.value; else delete state.env[name];
+      if (saved.exported) state.exported.add(name); else state.exported.delete(name);
+    }
+    if (!persistent) {
+      if (options.subshell) state.fdBindings = previousBindings;
+      else if (command.redirects.length) {
+        // Restore just the redirected descriptors (mksh's savedfd scope),
+        // not descriptors opened independently by exec inside the body.
+        const restored = {...state.fdBindings};
+        for (const fd of redirectedFds) {
+          if (Object.hasOwn(previousBindings,fd)) restored[fd] = previousBindings[fd];
+          else delete restored[fd];
+        }
+        state.fdBindings = restored;
       }
-    : state;
-  if (!options.subshell) {
-    for (const name of Object.keys(localEnv))
-      if (commandState.readonly.has(name)) return readonlyError(name);
-    Object.assign(commandState.env, localEnv);
+      for (const fd of opened) {
+        if (Object.values(state.fdBindings).some(endpoint => endpoint.fd === fd)) state.ownedFds.add(fd);
+        else { try { closeSync(fd); } catch {} }
+      }
+    }
   }
 
-  const captureStdout = (options.captureStdout || stdoutToStderr) && stdoutRedirect === null;
-  const captureStderr = (options.captureStderr || stderrToStdout) && stderrRedirect === null;
-  const execution = await runCommandArgv(
-    expanded,
-    commandState,
-    input,
-    captureStdout,
-    captureStderr,
-    {
-      pipelineStage: Boolean(options.pipelineStage || stdoutRedirect || stderrRedirect),
-      stdoutSink: stdoutRedirect ?? options.stdoutSink ?? null,
-      stderrSink: stderrRedirect,
-      onSpawn: options.onSpawn,
-      onExit: options.onExit,
-      background: Boolean(options.background),
-    },
-  );
-
-  if (stdoutToStderr && execution.stdout.byteLength) {
-    execution.stderr = concatBytes([execution.stderr, execution.stdout]);
-    execution.stdout = bytes();
-  }
-  if (stderrToStdout && execution.stderr.byteLength) {
-    execution.stdout = concatBytes([execution.stdout, execution.stderr]);
-    execution.stderr = bytes();
-  }
-
-  return execution;
 }
 
 async function runPipeline(pipeline, state, options = {}) {
@@ -4247,9 +4995,9 @@ async function runPipeline(pipeline, state, options = {}) {
   );
   const linksConnected = links.map((_, i) => {
     const stdoutRedirected = pipeline[i].redirects.some((redirect) =>
-      redirect.op === ">" || redirect.op === ">>");
+      /^(?:1)?>(?:>|&.*)?$/.test(redirect.op));
     const stdinRedirected = pipeline[i + 1].redirects.some((redirect) =>
-      ["<", "<<", "<<-", "<<<"].includes(redirect.op));
+      /^(?:0)?<(?:<<?-?|&.*|>)?$/.test(redirect.op));
     return !stdoutRedirected && !stdinRedirected;
   });
   const processes = Array(pipeline.length).fill(null);
@@ -4311,6 +5059,18 @@ async function runPipeline(pipeline, state, options = {}) {
 }
 
 export async function execute(source, state = createState(), io = {}) {
+  const previous = state.ignoreErrexit;
+  if (io.errexitIgnored) state.ignoreErrexit++;
+  try { return await executeInternal(source,state,io); }
+  catch (error) {
+    const failure = result(state.exitRequested ? state.exitStatus : 2,"",`bunmsh: ${error.message}\n`);
+    if (!io.capture) await writeStream(process.stderr,failure.stderr);
+    return failure;
+  }
+  finally { state.ignoreErrexit = previous; }
+}
+
+async function executeInternal(source, state, io) {
   source = normalizeSource(source);
   if (source === "?") {
     const execution = result(0, `${state.lastStatus}\n`);
@@ -4321,44 +5081,12 @@ export async function execute(source, state = createState(), io = {}) {
   const rawSource = source.trimStart();
   const group = leadingSubshell(source);
   if (group) {
-    let suffix = group.suffix;
-    let discardStdout = false, discardStderr = false;
-    while (true) {
-      const redirect = /^\s*(?:(\d+)?(>>?|<)\s*([^\s;&|]+)|(\d+>&\d+))/.exec(suffix);
-      if (!redirect) break;
-      if (redirect[2] === ">" || redirect[2] === ">>") {
-        if (redirect[1] === "2") discardStderr ||= redirect[3] === "/dev/null";
-        else discardStdout ||= redirect[3] === "/dev/null";
-      }
-      suffix = suffix.slice(redirect[0].length);
+    const previous = state.env[PIPELINE_STATE_ENV];
+    try { return await execute(rewriteSubshells(source,state),state,io); }
+    finally {
+      if (previous === undefined) delete state.env[PIPELINE_STATE_ENV];
+      else state.env[PIPELINE_STATE_ENV] = previous;
     }
-    const child = await runExternal(
-      pipelineCompoundArgv(group.body),
-      pipelineBuiltinState(state),
-      io.input ?? null,
-      true,
-      true,
-    );
-    let execution = result(child.status,
-      discardStdout ? "" : child.stdout,
-      discardStderr ? "" : child.stderr);
-    const connector = /^\s*(\|\||&&|;)\s*([\s\S]*)$/.exec(suffix);
-    if (connector) {
-      const shouldRun = connector[1] === ";" ||
-        (connector[1] === "&&" ? execution.status === 0 : execution.status !== 0);
-      if (shouldRun) {
-        const tail = await execute(connector[2], state, io);
-        execution = result(tail.status,
-          concatBytes([execution.stdout, tail.stdout]),
-          concatBytes([execution.stderr, tail.stderr]));
-      }
-    }
-    state.lastStatus = execution.status;
-    if (!io.capture) {
-      if (execution.stdout.byteLength) await writeStream(process.stdout, execution.stdout);
-      if (execution.stderr.byteLength) await writeStream(process.stderr, execution.stderr);
-    }
-    return execution;
   }
   if (isJavaScriptMode(rawSource)) {
     let execution;
@@ -4416,7 +5144,7 @@ export async function execute(source, state = createState(), io = {}) {
           if (execution.stdout.byteLength) stdout.push(execution.stdout);
           if (execution.stderr.byteLength) stderr.push(execution.stderr);
         }
-        if (state.exitRequested) break;
+        if (state.exitRequested || state.flow) break;
       }
       return io.capture
         ? result(execution.status, concatBytes(stdout), concatBytes(stderr))
@@ -4428,7 +5156,7 @@ export async function execute(source, state = createState(), io = {}) {
   if (compoundSyntax) {
     let execution;
     try {
-      execution = await executeNodeList(parseCompoundScript(source), state, {
+      execution = await executeNodeList(parseCompoundScript(source, io.firstLine ?? 1, io.sourceLines), state, {
         capture: Boolean(io.capture),
         input: io.input ?? null,
       });
@@ -4454,6 +5182,7 @@ export async function execute(source, state = createState(), io = {}) {
   let jobs;
   try {
     jobs = parse(source);
+    for (const job of jobs) for (const command of job.pipeline) command.lineNumber = io.sourceLines?.[command.lineNumber-1] ?? command.lineNumber + (io.firstLine ?? 1) - 1;
   } catch (error) {
     const message = error instanceof ShellSyntaxError ? error.message : String(error);
     const output = `bunmsh: syntax error: ${message}\n`;
@@ -4466,15 +5195,24 @@ export async function execute(source, state = createState(), io = {}) {
   let execution = result(state.lastStatus);
   const capturedStdout = [];
   const capturedStderr = [];
-  for (const job of jobs) {
+  for (const [jobIndex,job] of jobs.entries()) {
+    const trapped = await runPendingTraps(state,io);
+    if (io.capture) { capturedStdout.push(trapped.stdout); capturedStderr.push(trapped.stderr); }
+    if (state.exitRequested || state.flow) break;
     if (job.connector === "&&" && execution.status !== 0) continue;
     if (job.connector === "||" && execution.status === 0) continue;
-    execution = await runPipeline(job.pipeline, state, {
+    const ignored = state.ignoreErrexit || job.negate || ["&&","||"].includes(jobs[jobIndex+1]?.connector);
+    const previousIgnore = state.ignoreErrexit;
+    if (ignored) state.ignoreErrexit++;
+    try { execution = await runPipeline(job.pipeline, state, {
       capture: io.capture,
       background: job.background,
       input: io.input ?? null,
       stdoutSink: io.stdoutSink ?? null,
-    });
+    }); } catch (error) {
+      execution = result(state.exitRequested ? state.exitStatus : 2,"",`bunmsh: ${error.message}\n`);
+    } finally { state.ignoreErrexit = previousIgnore; }
+    if (!ignored && state.shellOptions.e && execution.status && !state.flow) { state.exitRequested=true; state.exitStatus=execution.status; }
     if (job.negate) execution.status = execution.status === 0 ? 1 : 0;
     state.lastStatus = execution.status;
     if (execution.stdout.byteLength) {
@@ -4485,7 +5223,7 @@ export async function execute(source, state = createState(), io = {}) {
       if (io.capture) capturedStderr.push(execution.stderr);
       else await writeStream(process.stderr, execution.stderr);
     }
-    if (state.exitRequested) break;
+    if (state.exitRequested || state.flow) break;
   }
   return io.capture
     ? result(execution.status, concatBytes(capturedStdout), concatBytes(capturedStderr))
@@ -4515,11 +5253,13 @@ export function pipelineChildState() {
   const serialized = process.env[PIPELINE_STATE_ENV];
   if (!serialized) return createState();
   try {
-    const inherited = JSON.parse(serialized);
-    const env = { ...process.env };
+    const inherited = JSON.parse(serialized.startsWith("@file:") ? readFileSync(serialized.slice(6),"utf8") : serialized);
+    const env = { ...process.env, ...(inherited.env ?? {}) };
     delete env[PIPELINE_STATE_ENV];
     return createState({
       env,
+      inheritEnvironment: false,
+      exported: inherited.exported,
       cwd: process.cwd(),
       aliases: inherited.aliases,
       functions: inherited.functions,
@@ -4527,6 +5267,9 @@ export function pipelineChildState() {
       args: inherited.args,
       pathSearch: inherited.pathSearch,
       pipelineChild: true,
+      fdBindings: inherited.fdBindings,
+      shellOptions:inherited.shellOptions,
+      ignoreErrexit:inherited.ignoreErrexit,
     });
   } catch {
     return createState();

@@ -43,8 +43,8 @@ function classifySuffix(stats) {
 }
 
 function displayEntry(entry, options) {
-  const suffix = options.classify ? classifySuffix(entry.stats) : entry.stats.isDirectory() ? "/" : "";
-  return `${iconFor(entry.name, entry.stats, entry.path)} ${entry.name}${suffix}`;
+  const suffix = options.classify ? classifySuffix(entry.stats) : !options.plain && entry.stats.isDirectory() ? "/" : "";
+  return `${options.inode ? `${entry.stats.ino} ` : ""}${options.plain ? "" : `${iconFor(entry.name, entry.stats, entry.path)} `}${entry.name}${suffix}`;
 }
 
 function columns(items, width) {
@@ -98,7 +98,7 @@ function listDirectory(path, options) {
     .filter((entry) => options.all || options.almostAll || !entry.name.startsWith("."))
     .map((entry) => {
       const entryPath = resolve(path, entry.name);
-      return { name: entry.name, stats: lstatSync(entryPath), path: entryPath };
+      return { name: entry.name, stats: options.dereference ? statSync(entryPath) : lstatSync(entryPath), path: entryPath };
     });
   if (options.all) entries = [
     { name: ".", stats: lstatSync(path), path },
@@ -116,6 +116,7 @@ function listDirectory(path, options) {
 
 export function fancyLs(argv, state, terminal = Boolean(process.stdout.isTTY)) {
   const options = {
+    plain: argv[0] === "ls" && Boolean(state.shellOptions?.posix),
     all: false, almostAll: false, directory: false, long: false, human: false,
     recursive: false, time: false, reverse: false, size: false, one: false, classify: false,
   };
@@ -128,6 +129,8 @@ export function fancyLs(argv, state, terminal = Boolean(process.stdout.isTTY)) {
       for (const flag of argument.slice(1)) {
         if (flag === "a") options.all = true;
         else if (flag === "A") options.almostAll = true;
+        else if (flag === "L") options.dereference = true;
+        else if (flag === "i") options.inode = true;
         else if (flag === "d") options.directory = true;
         else if (flag === "l") options.long = true;
         else if (flag === "h") options.human = true;
@@ -148,7 +151,7 @@ export function fancyLs(argv, state, terminal = Boolean(process.stdout.isTTY)) {
   const show = (operand, heading = operands.length > 1, separate = true) => {
     const path = isAbsolute(operand) ? operand : resolve(state.cwd, operand);
     try {
-      const stats = lstatSync(path);
+      const stats = options.dereference ? statSync(path) : lstatSync(path);
       let listingDirectory = stats.isDirectory() && !options.directory;
       // GNU/POSIX-style ls follows a command-line symlink to a directory for
       // an ordinary listing and for -R. -d, -l, and -F request information
@@ -196,6 +199,14 @@ export function fancyLs(argv, state, terminal = Boolean(process.stdout.isTTY)) {
       stderr += `bunmsh: ${argv[0]}: ${operand}: ${error.message}\n`;
     }
   };
+  if (options.time || options.size) operands.sort((a,b) => {
+    try {
+      const stat = options.dereference ? statSync : lstatSync;
+      const left=stat(resolve(state.cwd,a)), right=stat(resolve(state.cwd,b));
+      const order=(options.size ? right.size-left.size : right.mtimeMs-left.mtimeMs) || a.localeCompare(b);
+      return options.reverse ? -order : order;
+    } catch { return 0; }
+  });
   for (const operand of operands) show(operand);
   return { status, stdout, stderr };
 }

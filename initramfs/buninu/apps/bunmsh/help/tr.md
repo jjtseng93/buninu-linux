@@ -24,3 +24,7 @@ Output:
 ```text
 HELLO
 ```
+
+`-s SET` squeezes repeated characters in SET. With two sets, translation happens
+before squeezing SET2. `-ds SET1 SET2` deletes SET1 then squeezes SET2.
+`--` ends option parsing; unsupported options report an error.

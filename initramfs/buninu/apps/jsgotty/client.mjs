@@ -3,6 +3,7 @@
 import process from "node:process";
 import { Buffer } from "node:buffer";
 import WebSocket from "ws";
+import { encodeKittyGraphics, syntheticKittyCursorMotion } from "./client-kitty.mjs";
 
 const MSG_INPUT = "1";
 const MSG_PING = "2";
@@ -15,6 +16,7 @@ const MSG_SET_WINDOW_TITLE = "3";
 const MSG_SET_PREFERENCES = "4";
 const MSG_SET_RECONNECT = "5";
 const MSG_SET_BUFFER_SIZE = "6";
+const MSG_KITTY_GRAPHICS = "7";
 const MSG_SET_ROLE = "a";
 const MSG_CONTROL_RESULT = "b";
 
@@ -420,6 +422,7 @@ async function main() {
   let fallbackOutputTail = "";
   let viewerInputActive = false;
   let sessionPid = "(unknown)";
+  let pendingKittyCursorMotion = "";
 
   const normalizeEcho = (value) => String(value)
     .replaceAll("\r", "")
@@ -603,6 +606,11 @@ pid:
       case MSG_OUTPUT:
         {
           const output = Buffer.from(payload, "base64");
+          if (pendingKittyCursorMotion && output.equals(Buffer.from(pendingKittyCursorMotion, "utf8"))) {
+            pendingKittyCursorMotion = "";
+            break;
+          }
+          pendingKittyCursorMotion = "";
           process.stdout.write(output);
           if (fallbackProbe && accessRole === "") {
             fallbackOutputTail = normalizeEcho(
@@ -624,6 +632,14 @@ pid:
         if (process.stdout.isTTY && payload) {
           process.stdout.write(`\u001b]0;${payload}\u0007`);
         }
+        break;
+      case MSG_KITTY_GRAPHICS:
+        try {
+          const message = JSON.parse(payload);
+          const encoded = encodeKittyGraphics(message);
+          pendingKittyCursorMotion = syntheticKittyCursorMotion(message);
+          if (encoded) process.stdout.write(encoded);
+        } catch {}
         break;
       case MSG_SET_RECONNECT: {
         try {

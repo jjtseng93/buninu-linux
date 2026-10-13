@@ -1,6 +1,6 @@
 ## mkdir
 
-Create directories with Bun Shell's fallback.
+Create directories with Bun Shell's fallback, processing operands in order.
 
 ### Usage
 

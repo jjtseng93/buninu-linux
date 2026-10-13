@@ -1,11 +1,11 @@
 ## ls
 
-Use the lsfancy emoji and terminal-width-aware listing.
+Use the lsfancy emoji and terminal-width-aware listing. With `set -o posix`, fallback `ls` omits icons and automatic directory suffixes. Explicit `-F` suffixes still apply; `lsfancy` always retains its icons.
 
 ### Usage
 
 ```sh
-ls [-aAdlhRtrS1F] [PATH ...]
+ls [-aAdilhLRtrS1F] [PATH ...]
 ```
 
 Because `-h` means human-readable sizes, use `--help` to display this page.
@@ -16,6 +16,8 @@ Because `-h` means human-readable sizes, use `--help` to display this page.
 - `-A`: Include hidden entries except `.` and `..`.
 - `-d`: List directories themselves rather than their contents.
 - `-l`: Use long format.
+- `-i`: Print inode numbers.
+- `-L`: Follow symbolic links.
 - `-h`: Show human-readable sizes; use `--help` for this page.
 - `-R`: Recurse into directories.
 - `-t`: Sort by modification time.

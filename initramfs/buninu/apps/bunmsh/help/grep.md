@@ -32,3 +32,7 @@ Output:
 ```text
 beta
 ```
+
+Repeated `-e PATTERN` options combine patterns with OR. `-c` prints the number of selected lines per input file.
+
+The fallback names `egrep` and `fgrep` select `grep -E` and `grep -F`.

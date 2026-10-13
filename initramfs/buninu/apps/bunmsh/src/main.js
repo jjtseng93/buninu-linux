@@ -6,6 +6,7 @@ import {
   createState,
   execute,
   executeArgv,
+  finishShell,
   executeBunShellFallback,
   isJavaScriptMode,
   needsMoreInput,
@@ -440,6 +441,10 @@ async function interactive(state) {
     }
   };
   const interrupt = () => {
+    if (Object.hasOwn(state.traps,"SIGINT")) {
+      if (state.traps.SIGINT && !state.pendingTraps.includes("SIGINT")) state.pendingTraps.push("SIGINT");
+      return;
+    }
     state.lastStatus = 130;
     if (foregroundCommand || promptAbort?.signal.aborted) return;
     process.stdout.write("\n");
@@ -456,6 +461,7 @@ async function interactive(state) {
   // periodic autosave.
   const SIGNAL_EXIT_STATUS = { SIGHUP: 129, SIGTERM: 143 };
   const terminate = (signal) => {
+    if (Object.hasOwn(state.traps,signal)) return;
     state.exitRequested = true;
     state.exitStatus = SIGNAL_EXIT_STATUS[signal] ?? state.exitStatus;
     if (foregroundCommand) {
@@ -725,7 +731,7 @@ async function interactive(state) {
     process.off("SIGHUP", terminate);
     readline.close();
   }
-  return state.exitRequested ? state.exitStatus : state.lastStatus;
+  return (await finishShell(state,state.exitRequested ? state.exitStatus : state.lastStatus)).status;
 }
 
 async function main(argv) {
@@ -736,6 +742,7 @@ async function main(argv) {
   let forceInteractive = false;
   let forceMouse = false;
   let builtinOnly = false;
+  const shellOptions = {};
   let i = 0;
   for (; i < argv.length; i++) {
     const arg = argv[i];
@@ -785,6 +792,10 @@ async function main(argv) {
       await printChangelog();
       return 0;
     }
+    if (/^-[eufxv]+$/.test(arg)) {
+      for (const key of arg.slice(1)) shellOptions[key]=true;
+      continue;
+    }
     if (arg.startsWith("-")) {
       console.error(`bunmsh: ${arg}: unknown option`);
       return 2;
@@ -801,7 +812,7 @@ async function main(argv) {
     if (forceMouse) state.mouseTracking = true;
     if (builtinOnly) state.pathSearch = false;
     const result = await executeArgv(forwardedArgv, state);
-    return state.exitRequested ? state.exitStatus : result.status;
+    return (await finishShell(state,state.exitRequested ? state.exitStatus : result.status)).status;
   }
 
   if (command !== null) {
@@ -813,8 +824,10 @@ async function main(argv) {
           mouseTracking: forceMouse || undefined,
           pathSearch: builtinOnly ? false : undefined,
         });
+    Object.assign(state.shellOptions,shellOptions);
+    if (state.shellOptions.v) console.error(command);
     const result = await execute(command, state);
-    return state.exitRequested ? state.exitStatus : result.status;
+    return (await finishShell(state,state.exitRequested ? state.exitStatus : result.status)).status;
   }
 
   if (i < argv.length) {
@@ -826,9 +839,11 @@ async function main(argv) {
         mouseTracking: forceMouse || undefined,
         pathSearch: builtinOnly ? false : undefined,
       });
+      Object.assign(state.shellOptions,shellOptions);
+      if (state.shellOptions.v) console.error(source);
       const result = await execute(source, state);
       if (forceInteractive && !state.exitRequested) return interactive(state);
-      return state.exitRequested ? state.exitStatus : result.status;
+      return (await finishShell(state,state.exitRequested ? state.exitStatus : result.status)).status;
     } catch (error) {
       console.error(`bunmsh: ${script}: ${error.message}`);
       return 1;
@@ -839,10 +854,11 @@ async function main(argv) {
     mouseTracking: forceMouse || undefined,
     pathSearch: builtinOnly ? false : undefined,
   });
+  Object.assign(state.shellOptions,shellOptions);
   if (forceInteractive || process.stdin.isTTY) return interactive(state);
   const source = await Bun.stdin.text();
   const result = await execute(source, state);
-  return state.exitRequested ? state.exitStatus : result.status;
+  return (await finishShell(state,state.exitRequested ? state.exitStatus : result.status)).status;
 }
 
 // Lets --define process.env.SERVE_AUTO_OPEN=/index.html, =off, or =yes

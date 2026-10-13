@@ -28,3 +28,6 @@ Output:
 ```text
 hello world
 ```
+
+Short flags may be combined: `print -rn -- text` is equivalent to
+`print -r -n -- text`.
