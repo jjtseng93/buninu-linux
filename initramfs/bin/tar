@@ -1,6 +1,7 @@
 #!/bin/bun
 // tar — a small tar/gzip/zstd CLI over Bun.Archive.
 
+import { gunzipSync } from "node:zlib";
 import { lstat, readdir } from "node:fs/promises";
 import { linkSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -180,11 +181,20 @@ const scanEntries = (bytes) => {
   let longName = null;
   let longTarget = null;
   let extended = {};
+  let ended = false;
+  entries.concatenated = false;
   while (offset + BLOCK <= bytes.length) {
     const block = bytes.subarray(offset, offset + BLOCK);
     offset += BLOCK;
-    if (block.every((byte) => byte === 0)) break; // end-of-archive blocks
+    if (block.every((byte) => byte === 0)) {
+      // APK v2 joins tar streams; another header may follow the end markers.
+      ended = true;
+      longName = longTarget = null;
+      extended = {};
+      continue;
+    }
     if (!checksumMatches(block)) return entries.length ? entries : null;
+    if (ended) { entries.concatenated = true; ended = false; }
     const flag = String.fromCharCode(block[156] || 0x30);
     const size = extended.size !== undefined ? Number(extended.size) : octal(block, 124, 12);
     const dataBlocks = Math.ceil(size / BLOCK) * BLOCK;
@@ -227,7 +237,7 @@ const scanEntries = (bytes) => {
 };
 
 const tarBytes = (bytes) => {
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return Bun.gunzipSync(bytes);
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return gunzipSync(bytes);
   if (bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd) {
     return Bun.zstdDecompressSync(bytes);
   }
@@ -292,59 +302,37 @@ const restoreLinks = (entries) => {
   }
 };
 
-// Opt-in path only: keep the existing Bun.Archive extraction unchanged for
-// ordinary extraction and --strip-components=0 without excludes. Reuse the
-// scanned-entry extractor for excludes: no glob whitelist can accidentally
-// reinterpret literal metacharacters in retained archive names.
-if (options.operation === "x" && (options.strip > 0 || options.excludes.length)) {
+// Read stdin only once. node:zlib expands every concatenated gzip member
+// (APK signature, control and data), rather than just the first stream.
+if (options.operation === "x" || options.operation === "t") {
   try {
     const bytes = tarBytes(await archiveBytes());
-    const entries = scanEntries(bytes);
-    if (!entries) throw new Error("invalid tar archive");
+    const scanned = scanEntries(bytes);
     const wanted = options.operands.length ? patterns().map((pattern) => new Bun.Glob(pattern)) : null;
+    const useScannedExtraction = options.strip > 0 || options.excludes.length || scanned?.concatenated;
+    if (useScannedExtraction && !scanned) throw new Error("invalid tar archive");
+    // Bun.Archive stops at the first tar end marker. Use the existing scanned
+    // extractor when later streams contain more entries; ordinary tar files
+    // retain the Bun.Archive extraction path.
+    const archive = useScannedExtraction ? null : new Bun.Archive(bytes);
+    const entries = scanned ?? [...(await archive.files(options.operands.length ? patterns() : undefined))]
+      .map(([name, file]) => ({ name, kind: "file", target: "", size: file.size, mode: 0o644, mtime: file.lastModified }));
     const members = entries.filter((entry) => !excluded(entry.name)
       && !(entry.kind === "hardlink" && excluded(entry.target))
       && (!wanted || wanted.some((glob) => glob.match(entry.name))));
-    extractStripped(bytes, members, options.directory, options.strip, {
-      verbose: options.verbose, filtered: options.operands.length > 0 || options.excludes.length > 0,
-    });
-  } catch (error) {
-    fail(error?.message || String(error));
-  }
-  process.exit(0);
-}
-
-if (options.operation === "x" || options.operation === "t") {
-  let archive;
-  try {
-    archive = new Bun.Archive(await archiveBytes());
-  } catch (error) {
-    fail(error?.message || String(error));
-  }
-
-  // The header scan is what makes listing and links complete; if the bytes
-  // do not parse as tar, fall back to what Bun.Archive reports.
-  const scanned = scanEntries(tarBytes(await archiveBytes()));
-  const wanted = options.operands.length ? patterns().map((pattern) => new Bun.Glob(pattern)) : null;
-  const members = scanned
-    ? scanned.filter((entry) => !wanted || wanted.some((glob) => glob.match(entry.name)))
-    : [...(await archive.files(options.operands.length ? patterns() : undefined))]
-      .map(([name, file]) => ({ name, kind: "file", target: "", size: file.size, mode: 0o644, mtime: file.lastModified }));
-
-  if (options.operation === "t") {
-    for (const entry of members.filter((entry) => !excluded(entry.name))) {
-      console.log(options.verbose ? verboseListing(entry) : entry.name);
-    }
-  } else {
-    try {
-      if (options.verbose) {
-        for (const entry of members) console.log(entry.name);
-      }
+    if (options.operation === "t") {
+      for (const entry of members) console.log(options.verbose ? verboseListing(entry) : entry.name);
+    } else if (useScannedExtraction) {
+      extractStripped(bytes, members, options.directory, options.strip, {
+        verbose: options.verbose, filtered: options.operands.length > 0 || options.excludes.length > 0,
+      });
+    } else {
+      if (options.verbose) for (const entry of members) console.log(entry.name);
       await archive.extract(options.directory, options.operands.length ? { glob: patterns() } : undefined);
       restoreLinks(members);
-    } catch (error) {
-      fail(error?.message || String(error));
     }
+  } catch (error) {
+    fail(error?.message || String(error));
   }
   process.exit(0);
 }

@@ -3,6 +3,17 @@
 `/bin/tar` is a small Bun script over `Bun.Archive`. It handles uncompressed
 tar archives plus gzip and zstd without invoking another program.
 
+Alpine APK v2 archives are supported directly, including their concatenated
+gzip streams and tar sections. For example:
+
+```sh
+tar -tf musl-dev-1.2.6-r2.apk
+tar -xf musl-dev-1.2.6-r2.apk -C ./musl-dev
+```
+
+This extracts archive contents, including package metadata; it does not
+install the package or execute its package scripts.
+
 ## Synopsis
 
 ```sh

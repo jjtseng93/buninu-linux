@@ -216,3 +216,39 @@ test("does not follow a pre-existing symlink parent or an archive symlink parent
   expect(result.status).toBe(2);
   expect(existsSync(join(outside, "nested"))).toBe(false);
 });
+
+test("APK concatenated gzip/tar streams list and extract every section", () => {
+  const signature = tar([{ name: ".SIGN.test", data: "signature" }]);
+  const control = tar([{ name: ".PKGINFO", data: "pkgname = sample\n" }]);
+  const data = tar([
+    { name: "usr/include/stdio.h", data: "header\n" },
+    { name: "usr/lib/crt1.o", data: "object\n" },
+    { name: "usr/lib/link", type: "2", target: "crt1.o" },
+  ]);
+  // APK signature/control streams can omit end markers; also cover complete
+  // concatenated tar archives, and a single gzip stream containing them all.
+  for (const raw of [false, true]) {
+    const parts = [raw ? signature.subarray(0, -1024) : signature,
+      raw ? control.subarray(0, -1024) : control, data];
+    for (const bytes of [Buffer.concat(parts.map(p => Bun.gzipSync(p))), Bun.gzipSync(Buffer.concat(parts))]) {
+      const result = extract(bytes, [], true);
+      expect(result.status).toBe(0);
+      expect(readFileSync(join(result.dir, ".PKGINFO"), "utf8")).toBe("pkgname = sample\n");
+      expect(readFileSync(join(result.dir, "usr/include/stdio.h"), "utf8")).toBe("header\n");
+      expect(readlinkSync(join(result.dir, "usr/lib/link"))).toBe("crt1.o");
+      const listed = run(["-tf", "-"], bytes);
+      expect(listed.status).toBe(0);
+      expect(listed.stdout.trim().split("\n")).toEqual([
+        ".SIGN.test", ".PKGINFO", "usr/include/stdio.h", "usr/lib/crt1.o", "usr/lib/link",
+      ]);
+      const selected = extract(bytes, ["usr/include"], true);
+      expect(selected.status).toBe(0);
+      expect(existsSync(join(selected.dir, ".PKGINFO"))).toBe(false);
+      expect(readFileSync(join(selected.dir, "usr/include/stdio.h"), "utf8")).toBe("header\n");
+      const stripped = extract(bytes, ["--strip-components=2", "--exclude=usr/lib", "usr"], true);
+      expect(stripped.status).toBe(0);
+      expect(readFileSync(join(stripped.dir, "stdio.h"), "utf8")).toBe("header\n");
+      expect(existsSync(join(stripped.dir, "crt1.o"))).toBe(false);
+    }
+  }
+});
