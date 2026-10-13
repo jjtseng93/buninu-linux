@@ -98,6 +98,8 @@ export const readTar = (path) => {
     if (type === "0" || type === "\0") files.set(name.replace(/^\.\//, ""), body);
   }
   return {
+    // Enumerate regular files without exposing the Map's mutation methods.
+    entries() { return files.entries(); },
     get(name) {
       const bytes = files.get(name);
       if (!bytes) throw new Error(`${path}: no ${name}`);
