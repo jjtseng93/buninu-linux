@@ -3,6 +3,7 @@
 # recreates all of it from the tracked
 # scripts and the pinned downloads.
 
+releases/
 
 # Downloaded archives and the files
 # extracted from them, per guest
