@@ -18,6 +18,40 @@ Alpine's CDN serves only the current pkgrel of each branch, so the package
 URLs below stop working once a build is superseded. The pinned aports commits
 are permanent and are the Corresponding Source for each exact build.
 
+## Bootstrap source archives
+
+`initramfs/usr/lib/bootstrap/sources/` additionally carries uncompiled source:
+
+- musl 1.2.6, from https://musl.libc.org/releases/musl-1.2.6.tar.gz;
+  its full `COPYRIGHT` is preserved inside the archive.
+- TinyCC commit `05f0faf`, with `COPYING` and per-file license notices preserved
+  in `tinycc-05f0faf-upstream.tar.gz`.
+- Local TinyCC bootstrap recipes in `tinycc-local-bootstrap-files.tar.gz`.
+
+### Bootstrap route credit and build-time downloads
+
+Credit to [ZilchOS/bootstrap-from-tcc](https://github.com/ZilchOS/bootstrap-from-tcc)
+by Alexander Sosedkin (Copyright (c) 2021 Alexander Sosedkin), whose bootstrap
+route and recipes informed Buninu's TinyCC-to-GCC stages. The complete MIT
+notice is preserved in `LICENSES/MIT-ZilchOS-bootstrap-from-tcc.txt` and in
+the bootstrap payload. Reference checkout:
+`d2f9454b34fef570cfb32cf5b17d85a90dba81bf`.
+
+Stages 5–12 additionally fetch GNU Make 4.4.1, Binutils 2.39, GMP 4.3.2,
+MPFR 2.4.2, MPC 0.8.1, GNU m4 1.4.18, Flex 2.6.4 and the pinned GCC 4.7
+vendor snapshot. These source archives and compiled results are not bundled
+in the npm package. Their own licenses apply, independently of Buninu's and
+ZilchOS's MIT licenses.
+
+See [the bootstrap-specific notices](initramfs/usr/lib/bootstrap/NOTICE.md)
+for component licenses, provenance, runtime-helper exceptions and where
+upstream license texts are retained. The credit and MIT license are copied
+into each prepared rootfs and the final result's license directory.
+
+The numbered bootstrap scripts extract these sources into the new rootfs.
+See `initramfs/usr/lib/bootstrap/README.md` for the source-generation steps
+and the ARM64 ordinary-CRT compatibility adjustment.
+
 ## Components tracked in this repository
 
 These files are committed under `native/x86_64/lib/` and
