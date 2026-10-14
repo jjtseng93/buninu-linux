@@ -14,6 +14,11 @@ import {
 } from "./lib/build.js";
 
 const gccCommit = "9d2b63d100ae7c99ee8b128fb41086fd85c8f57d";
+// GCC clears MAKEOVERRIDES. Preserve its normal explicit submake flags
+// and append our header-install selection to that forwarding list.
+const headerInstallFlags =
+  "FLAGS_TO_PASS=$(BASE_FLAGS_TO_PASS) $(EXTRA_HOST_FLAGS) " +
+  "INSTALL_HEADERS_DIR=install-include-dir";
 
 async function main(args) {
   const { arch, triple } = stage(
@@ -71,12 +76,21 @@ async function main(args) {
   ]);
   // Install compiler, headers, CRT
   // support and libgcc into result.
+  // Create include directories via
+  // Make; copy headers with JS below.
+  // No tar pipe or cp -p -r needed.
   await makeIn(build, [
-    "install-gcc",
+    headerInstallFlags, "install-gcc",
   ]);
   await makeIn(build, [
     "install-target-libgcc",
   ]);
+  // libgcc installs unwind.h too.
+  // Copy headers last to remove links
+  // back into the source tree.
+  installCompilerHeaders(
+    src, build, triple
+  );
   // Test with all intermediate trees
   // hidden, then restore them.
   await verifyGcc(arch, triple);
@@ -126,6 +140,7 @@ function prepareGcc(src, arch) {
 function verificationSource(arch) {
   return  `#include <stdint.h>
 #include <stdio.h>
+#include <unwind.h>
 #ifdef __gnu_linux__
 #error musl must not claim glibc
 #endif
@@ -139,6 +154,21 @@ int main(void){unsigned __int128 a=large,b=divisor,q=a/b,r=a%b;
 if(q*b+r!=a||r>=b)return 1;
 puts("GCC 4.7 C and libgcc runtime verified");return 0;}
 `;
+}
+
+function installCompilerHeaders(src, build, triple) {
+  const version = readFileSync(src + "/gcc/BASE-VER", "utf8").trim();
+  if (!/^4\.7\.\d+$/.test(version)) throw new Error(`Unexpected GCC version: ${version}`);
+  const destination = `${resultRoot}/lib/gcc/${triple}/${version}`;
+  for (const name of ["include", "include-fixed"]) {
+    const source = `${build}/gcc/${name}`;
+    if (!statSync(source).isDirectory()) throw new Error(`Missing GCC headers: ${source}`);
+    const target = `${destination}/${name}`;
+    // Replace only the generated private header directory. Dereference
+    // unwind.h and other source/build links so result survives their removal.
+    rmSync(target, { recursive: true, force: true });
+    cpSync(source, target, { recursive: true, dereference: true, preserveTimestamps: true });
+  }
 }
 
 function installBinutils() {

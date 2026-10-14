@@ -8,7 +8,7 @@ import {
 } from "./lib/build.js";
 
 async function main(args) {
-  const { triple } = stage(
+  const { arch, triple } = stage(
     7, "gmp", args
   );
   const src = await source(
@@ -21,15 +21,25 @@ async function main(args) {
     "char *alloca ();",
     "void *alloca ();"
   );
-  const env = { ABI: "standard" };
+  // GMP 4.3 uses CPU "none" for C;
+  // --disable-assembly is ignored.
+  // Keep build/host equal: native,
+  // with 64-bit unsigned-long limbs.
+  const generic = arch === "x86_64";
+  const host = generic
+    ? "none-unknown-linux-musl"
+    : triple;
+  const env = {
+    ABI: generic ? "long" : "standard",
+    CPPFLAGS: "-DNO_ASM",
+  };
   await configure(src, build, [
-    "--build=" + triple,
-    "--host=" + triple,
+    "--build=" + host,
+    "--host=" + host,
     "--prefix=" + deps,
     "--disable-shared",
     "--enable-static",
     "--disable-dependency-tracking",
-    "--disable-assembly",
     "--disable-cxx",
     "--enable-alloca=malloc-reentrant",
   ], env);

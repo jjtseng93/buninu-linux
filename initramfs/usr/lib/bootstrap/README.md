@@ -62,8 +62,12 @@ bun /usr/lib/bootstrap/1.prepare-rootfs.js ./my-root
 bun /usr/lib/bootstrap/2.enter-rootfs.js
 ```
 
-- Accepts the same optional architecture/destination as stage 1.
-- Prints commands; it does not enter the rootfs itself.
+- Accepts `[ARCH] [ROOTFS]`, with the same architecture aliases as stage 1.
+- Without a destination (including an architecture-only invocation), prints
+  `/path/to/your/rootfs` as a placeholder instead of assuming `roota` or `rootx`.
+- Prints commands only; it does not enter, modify or read the rootfs or its
+  marker file. The destination does not need to exist to print instructions.
+- Reads the host's os-release only to choose chroot versus bunproot.
 - Buninu Linux example (requires chroot privileges):
 
 ```sh
@@ -153,6 +157,9 @@ cc /bootstrap/src/tinycc/bun-hello-libc.c -o /tmp/hello
   interpreter, architecture/type macros and 128-bit runtime arithmetic.
 - Stage 12 runs GCC's `install-gcc` and `install-target-libgcc` rules with
   `--prefix=/bootstrap/result`, and includes native Binutils executables.
+- GCC's private `include` and `include-fixed` directories are installed using
+  JavaScript with symlinks dereferenced, avoiding the tar pipe and recursive
+  `cp -p` requirements and retaining headers after source/build removal.
 - The installed compiler is `/bootstrap/result/bin/gcc`; it is not an `xgcc`
   wrapper and needs no `-B` pointing into a build directory.
 - The final check temporarily renames `src`, `toolchain`, `deps` and `build`
