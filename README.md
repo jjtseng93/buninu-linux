@@ -24,9 +24,6 @@
 - Buninu userspace source: [github.com/jjtseng93/buninu](https://github.com/jjtseng93/buninu)
   + **BUNinu Is Not Unix** 🐮
   + **幫你牛** 🐂 ・ **Bunに入魂** 🔥
-- [Bootstrap a C compiler from Bun](initramfs/usr/lib/bootstrap/README.md):
-  numbered scripts generate musl headers/CRT, build TinyCC and download the
-  sources needed to continue through GCC 4.7, starting with `bun /usr/lib/bootstrap/1.prepare-rootfs.js`.
 - <img src="https://raw.githubusercontent.com/jjtseng93/buninu/main/icon.png" width="256">
 
 ---
@@ -50,6 +47,9 @@
     + Simplified browser works: buninu-browser natively or casty in chroot debian
     + Playing YouTube with sound (experimental); see [Playing YouTube with sound](#playing-youtube-with-sound-experimental)
     + See [Buninu Browser](#buninu-browser-early-stage-experimental) for the built-in browser, or [Debian and Chromium with casty](#debian-and-chromium-with-casty) for the optional chroot setup
+  * [Bootstrap a C compiler from Bun](initramfs/usr/lib/bootstrap/README.md):
+    + numbered scripts generate musl headers/CRT, 
+    + build TinyCC and download the sources needed to continue through GCC 4.7, starting with `bun /usr/lib/bootstrap/1.prepare-rootfs.js`.
 
 ---
 
