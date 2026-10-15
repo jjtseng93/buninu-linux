@@ -1,0 +1,26 @@
+#!/bin/bun
+// Keep the offline casty launcher outside the npm package so package updates
+// preserve the distribution entry point.
+import { resolve, join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const root = resolve(import.meta.dir, "..");
+const modules = join(root, "usr/lib/node_modules");
+const browser = join(modules, "buninu-land");
+const entry = join(browser, "index.js");
+const { chooseFrontend } = await import(pathToFileURL(entry).href);
+const args = process.argv.slice(2);
+const choice = chooseFrontend(args);
+const casty = choice.frontend === "casty";
+const forwarded = casty ? choice.args : args;
+// Bun consumes a leading separator after the script path; preserve Casty's
+// own separator when --casty is followed directly by -- engine flags.
+const runtimeArgs = forwarded[0] === "--" ? ["--", ...forwarded] : forwarded;
+const child = Bun.spawn({
+  cmd: [process.execPath, casty ? join(modules, "@drxiaozhi/casty/index.js") : entry,
+    ...runtimeArgs],
+  env: casty ? { ...process.env, CASTY_BROWSER: join(browser, "compositor.js") } : process.env,
+  stdio: ["inherit", "inherit", "inherit"],
+});
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => child.kill(signal));
+process.exit(await child.exited);

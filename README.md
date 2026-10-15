@@ -689,6 +689,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | --- | --- | --- |
 | `buninu-linux-help` | render this buninu-linux README from `/usr/share/doc/buninu-linux/README.md` | `buninu-linux-help` |
 | `buninu-browser` | early-stage, experimental JavaScript/WASM browser with the bundled casty terminal frontend; not yet a general-purpose browser replacement | `buninu-browser --help` |
+| `buninu-land` | experimental software-rendered Wayland compositor with the bundled casty terminal frontend | `buninu-land --help` |
 | `jspulse` | PulseAudio-compatible audio server and ALSA mixer controls; use `--alsa` on Buninu Linux | `jspulse --help` |
 | `jspinyin` | Chinese pinyin input panel, opened with the system jsmdcui in TUI mode; not a system-wide input method | — |
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
@@ -707,7 +708,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `mmd`, `mcopy`, `mdir` | create directories, copy files and list contents in a FAT image without mounting it; use `-i IMAGE` and `::/path` | — |
 | `parted` | create and inspect GPT partitions in a disk image; script-mode subset | `parted --help` |
 | `stripansi` | remove ANSI escape sequences from stdin, `-`, or one or more files and concatenate the results | — |
-| `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you and unmounting them afterwards | `chroot --help` |
+| `chroot` | `chroot(2)` into another root directory, mounting `/proc`, `/sys`, `/dev`, `/dev/pts`, `/run`, `/tmp` and `/etc/resolv.conf` for you; supports `-b HOST[:GUEST]` and `--shared-tmp`, with automatic cleanup on exit | `chroot --help` |
 | `bunterm` | a graphical terminal on the framebuffer: Skia (CanvasKit) text with CJK, colour emoji, seamless box drawing, kitty graphics images, with the mouse working, wheel scrollback included (`--no-mouse` turns it off); xterm.js's emulator core over Bun's built-in PTY | `bunterm --help` |
 
 Besides `bun` (and `sh`/`node` pointing at it), `/bin` includes the commands
@@ -737,6 +738,32 @@ REPL, then run `jspulse --alsa` in another terminal or use `jspulse --alsa &` to
 ```sh
 buninu-browser about:audio
 ```
+
+### Buninu Land (early-stage, experimental)
+
+Run `buninu-land` inside `bunterm` (or another Kitty-graphics terminal) to
+open the Wayland desktop. The compositor and Casty are bundled; startup
+requires no npm download.
+
+```sh
+buninu-land
+```
+
+The socket directory defaults to `$TMPDIR`, or the system temporary directory
+if `TMPDIR` is unset; an explicitly set `XDG_RUNTIME_DIR` takes precedence.
+No environment setup is needed to launch the compositor.
+
+In another terminal, set the Wayland client's `XDG_RUNTIME_DIR` to that socket
+directory and `WAYLAND_DISPLAY` to the compositor's socket name (normally `wayland-buninu`;
+additional instances use `wayland-buninu1`, `wayland-buninu2`, and so on),
+then start a Wayland client. Clients inside a chroot can share the socket
+with `chroot --shared-tmp` when the host's `TMPDIR` points to that directory.
+
+The `/bin/buninu-land` launcher sets `CASTY_BROWSER` to
+`/usr/lib/node_modules/buninu-land/compositor.js` and runs the bundled Casty.
+`--casty` forwards arguments to Casty; `--headless`, `--help`, `--version`,
+README options and reserved native frontends go through the package entry.
+The package's CanvasKit WASM and license files are retained unchanged.
 
 ### Archive tools and other examples
 
@@ -872,8 +899,44 @@ apk add libgcc libstdc++
 # and /etc/resolv.conf are mounted for you and removed again on exit
 chroot /mnt
 chroot /mnt /bin/bun --version
-chroot -n /mnt /bin/sh        # traditional: mount nothing
+chroot -n /mnt /bin/sh        # skip automatic mounts (explicit -b still applies)
 ```
+
+
+Share host files and directories with repeatable `-b` options, placed before
+the root filesystem path:
+
+```sh
+# Mount a host directory at a different path inside the guest
+chroot -b /home/user/project:/work /mnt /bin/sh
+
+# Omit the guest path to expose the same absolute path inside the guest
+chroot -b /home/user/project /mnt /bin/sh
+
+# Share multiple paths, including individual files
+chroot -b /home/user/project:/work -b /etc/hosts:/etc/hosts /mnt /bin/sh
+
+# Share the host temporary directory, including Wayland sockets
+export TMPDIR=/tmp
+chroot --shared-tmp /mnt /bin/sh
+# Equivalent to:
+chroot -b "$TMPDIR:/tmp" /mnt /bin/sh
+```
+
+`--shared-tmp` expands to `-b "$TMPDIR:/tmp"` and replaces the automatic
+`/tmp` tmpfs. `TMPDIR` must be set and its source path must exist. The option
+does not rewrite environment variables inside the guest; set `TMPDIR=/tmp`
+there if the host uses a different path. For Buninu Land clients, set the
+guest's `XDG_RUNTIME_DIR=/tmp` and `WAYLAND_DISPLAY` to the compositor's socket
+name, and ensure the host's `TMPDIR` is the directory containing that socket.
+
+Host paths may be relative; guest paths must be absolute. Missing guest
+mount destinations are created. Directories are bound recursively, and a
+repeated destination uses the last argument. Bind failures abort setup and
+clean up its mounts, even with `-k`. Normally mounts are removed when the
+command exits; `-k` / `--keep-mounts` keeps them after a successful setup.
+Use `-v` to report mounts and unmounts. Full details: `chroot --help` or the
+[chroot manual](initramfs/usr/share/doc/buninu-linux/chroot.md).
 
 ## Environment and dependencies
 
@@ -1101,7 +1164,7 @@ index.js                  entry point: -f / -b / -r / --arch / --docker / --expo
 Dockerfile                Debian-based oven/bun:1.4.2 plus the shell build toolchain
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
-fetch-npm.sh              [fetch]  pinned browser, casty, jspulse and jspinyin tarballs (download only)
+fetch-npm.sh              [fetch]  pinned browser, land, casty, jspulse and jspinyin tarballs (download only)
 build-uki.sh              [build]  UKI; calls scripts/pack-initramfs.sh
 build-image.sh            [build]  GPT disk image; shared with the hello-world EFI
 run-qemu.sh               [run]    QEMU q35 (x86_64) or virt (aarch64), KVM/HVF/TCG
@@ -1129,11 +1192,12 @@ tampered with is fetched again and has to pass the same hash before a script
 extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
-The four application packages are pinned separately in
-`scripts/npm-packages.md`: `buninu-browser@0.2.3`,
-`@drxiaozhi/casty@1.3.4`, `@drxiaozhi/jspulse@0.2.1`, and
+The five application packages are pinned separately in
+`scripts/npm-packages.md`: `buninu-browser@0.2.3`, `buninu-land@0.1.2`,
+`@drxiaozhi/casty@1.3.6`, `@drxiaozhi/jspulse@0.2.1`, and
 `@drxiaozhi/jspinyin@0.1.1`. These were npm's `latest` versions when checked
-on 2026-10-11, with buninu-browser updated to npm's `latest` on 2026-10-12;
+on 2026-10-11, with buninu-browser updated on 2026-10-12, and
+casty 1.3.6 and buninu-land 0.1.2 verified on 2026-10-16;
 fetch never resolves `latest` or a version range at runtime.
 Each registry tarball was checked against its published SHA-512 integrity
 before its SHA-256 was recorded in the shared pins file.
@@ -1159,7 +1223,7 @@ dependency resolution run. JS extraction uses the initramfs JS `tar` and
 requires a host Bun; shell/Docker extraction uses the host `tar`, without Bun.
 The source `initramfs/` and project `package.json` are not modified by packing.
 
-The image gets `/usr/lib/package.json` with the four exact dependencies and
+The image gets `/usr/lib/package.json` with the five exact dependencies and
 standard `node_modules/.bin` links. This reserves a normal package-manager
 layout for later `cd /usr/lib` and `bun i --backend=copyfile`; no lockfile is
 fabricated. `bun i` alone retains the pinned versions, not newer releases.
@@ -1556,6 +1620,7 @@ for the userspace session.
   * [Playing YouTube with sound (experimental)](#playing-youtube-with-sound-experimental)
 - [Commands inside /bin](#commands-inside-bin)
   * [Buninu Browser (early-stage, experimental)](#buninu-browser-early-stage-experimental)
+  * [Buninu Land (early-stage, experimental)](#buninu-land-early-stage-experimental)
   * [Archive tools and other examples](#archive-tools-and-other-examples)
 - [Optional chroot and native binaries](#optional-chroot-and-native-binaries)
   * [Debian and Chromium with casty](#debian-and-chromium-with-casty)
@@ -1609,8 +1674,8 @@ architecture under `native/<arch>/lib/`, and the built image redistributes
 several more. Each stays
 under its own terms, with platform license texts in [`LICENSES/`](LICENSES/).
 
-The build also fetches four SHA-256-pinned npm releases and redistributes
-them under `/usr/lib/node_modules`: `buninu-browser`, `@drxiaozhi/casty`,
+The build also fetches five SHA-256-pinned npm releases and redistributes
+them under `/usr/lib/node_modules`: `buninu-browser`, `buninu-land`, `@drxiaozhi/casty`,
 `@drxiaozhi/jspulse` and `@drxiaozhi/jspinyin`. Their license and notice files
 remain inside their package directories. Exact download URLs and hashes are
 in [`scripts/npm-packages.md`](scripts/npm-packages.md); versions, upstream
@@ -1630,9 +1695,10 @@ when redistributing the image.
 | Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
-| buninu-browser 0.2.2 | MIT for its own code; bundled components have their own licenses | npm download → image |
+| buninu-browser 0.2.3 | MIT for its own code; bundled components have their own licenses | npm download → image |
+| buninu-land 0.1.2 | MIT for its own code; bundled components retain their own licenses and notices | npm download → image |
 | wasmpeg / FFmpeg (`@wasmpeg/cpu` 1.0.1, bundled in buninu-browser) | LGPL-2.1-or-later, plus component notices; source archive and rebuild documentation retained | browser package → image |
-| `@drxiaozhi/casty` 1.3.4 | MIT | npm download → image |
+| `@drxiaozhi/casty` 1.3.6 | MIT | npm download → image |
 | `@drxiaozhi/jspulse` 0.2.1 | LGPL-2.1-or-later, plus component notices | npm download → image |
 | `@drxiaozhi/jspinyin` 0.1.1 | MIT; hanzipinyin material under the Unlicense | npm download → image |
 | CanvasKit 0.41.1 (`initramfs/lib/canvaskit/`, Skia compiled to WebAssembly) | BSD-3-Clause (`LICENSES/BSD-3-Clause-Skia.txt`) | committed |

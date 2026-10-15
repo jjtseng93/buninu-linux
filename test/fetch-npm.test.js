@@ -21,9 +21,9 @@ const server = Bun.serve({
 afterAll(() => { server.stop(true); rmSync(work, { recursive: true, force: true }); });
 const url = `http://127.0.0.1:${server.port}/archive`;
 
-test("four exact registry pins share an architecture-independent cache", () => {
+test("five exact registry pins share an architecture-independent cache", () => {
   expect(npmPackages.map(({ name, version }) => `${name}@${version}`)).toEqual([
-    "buninu-browser@0.2.3", "@drxiaozhi/casty@1.3.4",
+    "buninu-browser@0.2.3", "buninu-land@0.1.2", "@drxiaozhi/casty@1.3.6",
     "@drxiaozhi/jspulse@0.2.1", "@drxiaozhi/jspinyin@0.1.1",
   ]);
   expect(basename(npmDownloadsDir)).toBe("npm");

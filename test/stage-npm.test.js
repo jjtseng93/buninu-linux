@@ -16,7 +16,7 @@ const fresh = () => { const dir = join(work, String(sequence++)); mkdirSync(dir)
 async function fixture() {
   const downloadsDir = fresh();
   const packages = [];
-  for (const name of ["buninu-browser", "@drxiaozhi/casty", "@drxiaozhi/jspulse", "@drxiaozhi/jspinyin"]) {
+  for (const name of ["buninu-browser", "buninu-land", "@drxiaozhi/casty", "@drxiaozhi/jspulse", "@drxiaozhi/jspinyin"]) {
     const bin = name.split("/").pop();
     const data = await new Bun.Archive({
       "package/package.json": JSON.stringify({ name, version: "1.0.0", type: "module", bin: { [bin]: "index.js" } }),
@@ -104,6 +104,39 @@ test("distribution launcher ensures resources then forwards to local casty witho
   expect(JSON.parse(result.stdout)).toEqual({ args: ["https://example.test", "--", "--chromium"], engine: join(browser, "buninu-browser.js") });
 });
 
+test("land launcher selects bundled casty and preserves package frontend dispatch", async () => {
+  const cfg = await fixture(), root = fresh();
+  stageNpm(root, cfg);
+  const land = join(root, "usr/lib/node_modules/buninu-land");
+  mkdirSync(join(root, "bin"));
+  const launcher = join(root, "bin/buninu-land");
+  copyFileSync(new URL("../initramfs/bin/buninu-land", import.meta.url), launcher);
+  writeFileSync(join(land, "index.js"), `
+    export const chooseFrontend = args => ({
+      frontend: !args.length || args[0] === '--casty' || args[0] === 'about:blank' ? 'casty' : 'other',
+      args: args[0] === '--casty' ? args.slice(1) : args,
+    });
+    if (import.meta.main) console.log(JSON.stringify({ package: true, args: process.argv.slice(2) }));
+  `);
+  writeFileSync(join(root, "usr/lib/node_modules/@drxiaozhi/casty/index.js"),
+    "console.log(JSON.stringify({args:process.argv.slice(2),engine:process.env.CASTY_BROWSER}));");
+  for (const args of [[], ['about:blank'], ['--casty', '--', '--socket=wayland-test']]) {
+    const result = spawnSync(process.execPath, [launcher, ...args], {
+      encoding: "utf8", env: { ...process.env, CASTY_BROWSER: '/previous/browser' },
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      args: args[0] === '--casty' ? args.slice(1) : args,
+      engine: join(land, "compositor.js"),
+    });
+  }
+  for (const args of [['--headless', '--help'], ['--help'], ['--version'], ['--docs'], ['--gtk']]) {
+    const result = spawnSync(process.execPath, [launcher, ...args], { encoding: "utf8" });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ package: true, args });
+  }
+});
+
 test.skipIf(!npmPackages.every(pkg => existsSync(join(npmDownloadsDir, pkg.archive))))("real cached pins: JS and shell staging agree; browser headless help starts", () => {
   const js = fresh(), shell = fresh();
   stageNpm(js);
@@ -127,4 +160,12 @@ test.skipIf(!npmPackages.every(pkg => existsSync(join(npmDownloadsDir, pkg.archi
   const help = spawnSync(process.execPath, [join(js, "bin/buninu-browser"), "--headless", "--help"], { encoding: "utf8", timeout: 15000 });
   expect(help.status).toBe(0);
   expect(help.stdout).toContain("Usage");
+  copyFileSync(new URL("../initramfs/bin/buninu-land", import.meta.url), join(js, "bin/buninu-land"));
+  for (const args of [["--help"], ["--headless", "--help"], ["--version"]]) {
+    const landHelp = spawnSync(process.execPath, [join(js, "bin/buninu-land"), ...args], { encoding: "utf8", timeout: 15000 });
+    expect(landHelp.status).toBe(0);
+    expect(landHelp.stdout).toContain(args[0] === "--version" ? "0.1.2" : args[0] === "--headless" ? "Wayland compositor" : "Usage");
+  }
+  expect(existsSync(join(js, "usr/lib/node_modules/buninu-land/vendor/canvaskit/canvaskit.wasm"))).toBe(true);
+  expect(existsSync(join(js, "usr/lib/node_modules/buninu-land/LICENSES/hyprland.txt"))).toBe(true);
 }, 30000);
