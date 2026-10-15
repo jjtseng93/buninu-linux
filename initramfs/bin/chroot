@@ -10,6 +10,8 @@
 
 import { chmodSync, existsSync, mkdirSync, realpathSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { libc, cString, ptr, errno, strerror, Errno } from "../lib/dlopen.js";
+import { dirname } from "node:path";
+import { parseChrootArguments, resolveBindings, resolveGuestPath } from "../lib/chroot-options.js";
 import { showDocument } from "../lib/document.js";
 
 const MS = { RDONLY: 1n, NOSUID: 2n, NODEV: 4n, NOEXEC: 8n, BIND: 4096n, REC: 16384n, SLAVE: 1n << 19n };
@@ -23,27 +25,18 @@ const fail = (message, status = 125) => {
 const usage = () => {
   console.error(`Usage:
   chroot NEWROOT [COMMAND [ARGUMENT...]]
-  chroot [-n] [-k] [-v] NEWROOT [COMMAND [ARGUMENT...]]
+  chroot [-n] [-k] [-v] [-b HOST[:GUEST]] [--shared-tmp] NEWROOT [COMMAND [ARGUMENT...]]
   chroot -h | --help          full manual (chroot.md)`);
   process.exit(125);
 };
 
 // ------------------------------------------------------------- arguments --
 
-const options = { mount: true, keep: false, verbose: false };
-const positional = [];
-const argv = process.argv.slice(2);
-for (let index = 0; index < argv.length; index++) {
-  const argument = argv[index];
-  if (positional.length > 0) { positional.push(argument); continue; }
-  if (argument === "--") { positional.push(...argv.slice(index + 1)); break; }
-  if (argument === "-h" || argument === "--help") { await showDocument("chroot"); process.exit(0); }
-  else if (argument === "-n" || argument === "--no-mount") options.mount = false;
-  else if (argument === "-k" || argument === "--keep-mounts") options.keep = true;
-  else if (argument === "-v" || argument === "--verbose") options.verbose = true;
-  else if (argument.startsWith("-") && argument.length > 1) { console.error(`chroot: unknown option ${argument}`); usage(); }
-  else positional.push(argument);
-}
+let parsed;
+try { parsed = parseChrootArguments(process.argv.slice(2)); }
+catch (error) { fail(error.message); }
+const { options, positional } = parsed;
+if (parsed.help) { await showDocument("chroot"); process.exit(0); }
 if (positional.length === 0) usage();
 
 const [target, ...command] = positional;
@@ -55,6 +48,10 @@ try {
   fail(`cannot change root directory to ${target}: ${error.code === "ENOENT" ? "no such directory" : error.message}`);
 }
 if (root === "/") fail("refusing to chroot to /");
+let bindings;
+try { bindings = resolveBindings(options.binds); }
+catch (error) { fail(`invalid bind: ${error.message}`); }
+
 
 const report = (message) => { if (options.verbose) console.error(`chroot: ${message}`); };
 
@@ -80,57 +77,39 @@ const made = [];
 // Prepares one mount. `inside` is the path within the new root. A target that
 // is already a mount point, or that cannot be created on a read-only root, is
 // left alone rather than treated as a failure: the command may still run.
-const prepare = ({ inside, source, type, flags = 0n, data, file = false }) => {
+const prepare = ({ inside, source, type, flags = 0n, data, file = false, required = false }) => {
+  inside = resolveGuestPath(root, inside);
+  if (!required && bindings.some(bind => {
+    const destination = resolveGuestPath(root, bind.inside);
+    return inside === destination || inside.startsWith(destination + "/");
+  })) return;
+  if (required && made.includes(inside)) throw Error(`bind destination is already used by this invocation: ${inside}`);
   const point = `${root}${inside}`;
-  if (mountPoints().includes(point)) {
+  if (!required && mountPoints().includes(point)) {
     report(`${inside} is already mounted`);
     return;
   }
   if (!existsSync(point)) {
     try {
-      if (file) writeFileSync(point, "");
+      if (file) { mkdirSync(dirname(point), { recursive: true, mode: 0o755 }); writeFileSync(point, "", { flag: "wx" }); }
       else mkdirSync(point, { recursive: true, mode: 0o755 });
     } catch (error) {
+      if (required) throw Error(`cannot create ${inside}: ${error.message}`);
       report(`cannot create ${inside}: ${error.message}; skipped`);
       return;
     }
   }
   if (mountSyscall(source, point, type, flags, data) === -1) {
+    if (required) throw Error(`bind ${source} -> ${inside}: ${strerror(errno())}`);
     report(`mount ${inside}: ${strerror(errno())}; skipped`);
     return;
   }
   made.push(inside);
   report(`mounted ${inside}`);
+  if (required && !file && mountSyscall("none", point, "none", MS.REC | MS.SLAVE) === -1) {
+    throw Error(`making ${inside} a slave mount: ${strerror(errno())}`);
+  }
 };
-
-if (options.mount) {
-  prepare({ inside: "/proc", source: "proc", type: "proc", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
-  prepare({ inside: "/sys", source: "sysfs", type: "sysfs", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
-  // /dev is bound rather than mounted fresh so the devices, the pty
-  // multiplexer and anything the host added are all there. The bind is then
-  // made a slave: mounts appearing inside do not propagate back to the host,
-  // and unmounting it later does not take the host's /dev with it.
-  prepare({ inside: "/dev", source: "/dev", type: "none", flags: MS.BIND | MS.REC });
-  if (made.includes("/dev")) {
-    if (mountSyscall("none", `${root}/dev`, "none", MS.REC | MS.SLAVE) === -1) {
-      report(`making /dev a slave mount: ${strerror(errno())}`);
-    }
-    // Only needed when the host has no /dev/pts of its own to bring along.
-    if (!existsSync(`${root}/dev/pts/ptmx`)) {
-      prepare({ inside: "/dev/pts", source: "devpts", type: "devpts", flags: MS.NOSUID | MS.NOEXEC, data: "gid=5,mode=620,ptmxmode=666" });
-    }
-  }
-  prepare({ inside: "/run", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=755" });
-  prepare({ inside: "/tmp", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=1777" });
-  // A bound file, so name resolution inside follows the host's configuration
-  // and nothing inside the root is modified.
-  if (existsSync("/etc/resolv.conf") && existsSync(`${root}/etc`)) {
-  
-    chmodSync(`/etc/resolv.conf`, 0o644);
-    
-    prepare({ inside: "/etc/resolv.conf", source: "/etc/resolv.conf", type: "none", flags: MS.BIND, file: true });
-  }
-}
 
 // Mount points are recorded by their path inside the new root. Until
 // chroot(2) has happened they are reached through this prefix; afterwards
@@ -167,10 +146,52 @@ const cleanup = () => {
 
 process.on("exit", cleanup);
 
+try {
+  if (options.mount) {
+    prepare({ inside: "/proc", source: "proc", type: "proc", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
+    prepare({ inside: "/sys", source: "sysfs", type: "sysfs", flags: MS.NOSUID | MS.NODEV | MS.NOEXEC });
+    // /dev is bound rather than mounted fresh so the devices, the pty
+    // multiplexer and anything the host added are all there. The bind is then
+    // made a slave: mounts appearing inside do not propagate back to the host,
+    // and unmounting it later does not take the host's /dev with it.
+    prepare({ inside: "/dev", source: "/dev", type: "none", flags: MS.BIND | MS.REC });
+    if (made.includes("/dev")) {
+      if (mountSyscall("none", `${root}/dev`, "none", MS.REC | MS.SLAVE) === -1) {
+        report(`making /dev a slave mount: ${strerror(errno())}`);
+      }
+      // Only needed when the host has no /dev/pts of its own to bring along.
+      if (!existsSync(`${root}/dev/pts/ptmx`)) {
+        prepare({ inside: "/dev/pts", source: "devpts", type: "devpts", flags: MS.NOSUID | MS.NOEXEC, data: "gid=5,mode=620,ptmxmode=666" });
+      }
+    }
+    prepare({ inside: "/run", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=755" });
+    prepare({ inside: "/tmp", source: "tmpfs", type: "tmpfs", flags: MS.NOSUID | MS.NODEV, data: "mode=1777" });
+    // A bound file, so name resolution inside follows the host's configuration
+    // and nothing inside the root is modified.
+    if (existsSync("/etc/resolv.conf") && existsSync(`${root}/etc`)) {
+
+      chmodSync(`/etc/resolv.conf`, 0o644);
+
+      prepare({ inside: "/etc/resolv.conf", source: "/etc/resolv.conf", type: "none", flags: MS.BIND, file: true });
+    }
+  }
+
+  for (const binding of bindings) {
+    prepare({ ...binding, type: "none", flags: MS.BIND | (binding.file ? 0n : MS.REC), required: true });
+  }
+} catch (error) {
+  // --keep-mounts applies to a prepared session, not a failed setup.
+  options.keep = false;
+  cleanup();
+  fail(error.message);
+}
+
+
 // ----------------------------------------------------------------- enter --
 
 if (libc.symbols.chroot(ptr(cString(root))) === -1) {
   const code = errno();
+  options.keep = false;
   cleanup();
   fail(`cannot change root directory to ${target}: ${code === Errno.EPERM ? "must be superuser" : strerror(code)}`);
 }

@@ -11,7 +11,7 @@ every mount it made when the command exits.
 
 ```sh
 chroot NEWROOT [COMMAND [ARGUMENT...]]
-chroot [-n] [-k] [-v] NEWROOT [COMMAND [ARGUMENT...]]
+chroot [-n] [-k] [-v] [-b HOST[:GUEST]] [--shared-tmp] NEWROOT [COMMAND [ARGUMENT...]]
 chroot -h | --help
 ```
 
@@ -30,7 +30,7 @@ With no COMMAND it runs `$SHELL` if that exists inside NEWROOT, otherwise
 | `/tmp` | `tmpfs` | scratch space that does not touch the root filesystem |
 | `/etc/resolv.conf` | bind of the host's file | name resolution, without editing anything inside |
 
-A mount point that already exists as a mount is left alone. A directory that
+For automatic mounts, a destination that is already mounted is left alone. A directory that
 is missing is created; if the root filesystem is read-only and that fails,
 that one mount is skipped and the rest still happen — use `-v` to see which.
 
@@ -42,10 +42,29 @@ host's `/dev` with it.
 
 | Option | Meaning |
 |---|---|
-| `-n`, `--no-mount` | Do not mount anything: the behaviour of the traditional `chroot`. Note that Bun itself cannot start without `/proc` and `/dev/urandom`, so `-n` suits statically linked programs. |
+| `-n`, `--no-mount` | Skip automatic system mounts; explicit `-b` mounts still apply. Without binds, this is the behaviour of the traditional `chroot`. Note that Bun itself cannot start without `/proc` and `/dev/urandom`, so `-n` suits statically linked programs. |
+| `-b HOST[:GUEST]`, `--bind HOST[:GUEST]` | Bind a host directory or file into the new root; repeat for multiple paths. Without GUEST, use HOST’s absolute path inside the guest. |
+| `--shared-tmp` | Equivalent to `-b "$TMPDIR:/tmp"`; TMPDIR must be set and exist. Replaces the automatic `/tmp` tmpfs. |
 | `-k`, `--keep-mounts` | Leave the mounts in place after the command exits, to enter the same root again cheaply. Clean up later with `umount -R`. |
 | `-v`, `--verbose` | Report every mount and unmount. |
 | `--` | End of options; everything after it is NEWROOT and COMMAND. |
+
+Bind options must appear before NEWROOT. Host paths may be relative to the
+current directory; guest paths must be absolute. Missing destination directories
+and file placeholders are created. Guest symlinks are resolved relative to
+NEWROOT, including absolute symlinks. Binding over the guest root `/` is rejected.
+
+Explicit binds replace automatic mounts at or below their destination. Directories
+are bound recursively and made slave mounts, like `/dev`; files use a plain bind.
+A repeated destination uses the last argument, so a later `-b HOST:/tmp` can
+override `--shared-tmp` (and vice versa). Parent binds are applied before children.
+Explicit bind failures abort with status 125 and clean up this invocation's mounts,
+even with `-k`. Existing mounts may be covered by a new explicit bind and are
+revealed again when it is removed. Source data is shared, not copied.
+
+`--shared-tmp` only adds the bind; it does not rewrite environment variables.
+If the host's TMPDIR path is different from `/tmp`, applications in the guest may
+need `TMPDIR=/tmp` in their environment.
 
 ## Examples
 
@@ -62,6 +81,21 @@ chroot -v /mnt /bin/sh -c 'ls /proc | head -3'
 
 # Traditional behaviour: nothing is mounted for you
 chroot -n /mnt /bin/sh
+
+# Share a host directory at a different guest path
+chroot -b /home/user/project:/work /mnt /bin/sh
+
+# Share the same absolute path inside the guest
+chroot -b /home/user/project /mnt /bin/sh
+
+# Share files, or multiple paths
+chroot -b /home/user/project:/work -b /etc/hosts:/etc/hosts /mnt /bin/sh
+
+# Share the host temporary directory (including Unix sockets)
+export TMPDIR=/tmp
+chroot --shared-tmp /mnt /bin/sh
+# Equivalent explicit bind:
+chroot -b "$TMPDIR:/tmp" /mnt /bin/sh
 
 # Keep the mounts for repeated visits
 chroot -k /mnt /bin/sh -c 'true'
