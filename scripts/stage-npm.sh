@@ -45,7 +45,15 @@ for ((i=0; i<${#names[@]}; i++)); do
     extra=()
     [[ "$name" != buninu-browser ]] || extra+=(--exclude=package/usr/lib/canvaskit --exclude=package/usr/share/fonts)
     tar -xf "downloads/npm/${archives[i]}" -C "$destination" --strip-components=1 "${extra[@]}"
-    # Bin entries of the four SHA-pinned packages; no package scripts execute.
+    if [[ "$name" == buninu-land ]]; then
+        wasm="$destination/vendor/canvaskit/canvaskit.wasm"
+        shared="$staging/lib/canvaskit/canvaskit.wasm"
+        [[ -f "$shared" ]] || shared=initramfs/lib/canvaskit/canvaskit.wasm
+        if [[ -f "$wasm" && -f "$shared" ]] && cmp -s "$wasm" "$shared"; then
+            rm -- "$wasm"
+        fi
+    fi
+    # Bin entries of the SHA-pinned packages; no package scripts execute.
     bin=${name##*/}; entry=index.js
     [[ "$name" != @drxiaozhi/jspulse ]] || entry=jspulse.js
     chmod 755 "$destination/$entry"

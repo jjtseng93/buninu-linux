@@ -23,3 +23,14 @@ export function ensureBrowserResources(browser, systemRoot = "/") {
     catch (error) { if (error.code !== "EEXIST") throw error; }
   }
 }
+
+// Land keeps its own loader and notices; only the identical WASM is shared.
+export function ensureLandResources(land, systemRoot = "/") {
+  const path = join(land, "vendor/canvaskit/canvaskit.wasm");
+  if (lstat(path)) return;
+  const target = resolve(systemRoot, "lib/canvaskit/canvaskit.wasm");
+  if (!statSync(target).isFile()) throw new Error(`missing compositor resource: ${target}`);
+  mkdirSync(dirname(path), { recursive: true });
+  try { symlinkSync(relative(dirname(path), target), path); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+}

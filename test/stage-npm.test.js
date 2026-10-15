@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { stageNpm } from "../scripts/stage-npm.js";
 import { npmPackages, npmDownloadsDir } from "../scripts/fetch-npm.js";
-import { ensureBrowserResources } from "../initramfs/lib/browser-resources.js";
+import { ensureBrowserResources, ensureLandResources } from "../initramfs/lib/browser-resources.js";
 
 const work = mkdtempSync(join(tmpdir(), "buninu-stage-npm-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -26,6 +26,7 @@ async function fixture() {
       "package/usr/lib/canvaskit/data": "only browser excludes this",
       "package/usr/share/fonts/data": "only browser excludes this",
       "package/lib/data": "keep data",
+      "package/vendor/canvaskit/canvaskit.wasm": "different wasm must be retained",
     }, { compress: "gzip" }).bytes();
     const archive = bin + ".tgz";
     writeFileSync(join(downloadsDir, archive), data);
@@ -47,6 +48,7 @@ test("stages standard scoped layout, manifest, bins and browser-only exclusion",
     expect(readFileSync(join(dir, "usr/README.md"), "utf8")).toBe("keep resource documentation");
     expect(existsSync(join(dir, "usr/lib/canvaskit"))).toBe(pkg.name !== "buninu-browser");
     expect(existsSync(join(dir, "usr/share/fonts"))).toBe(pkg.name !== "buninu-browser");
+    expect(readFileSync(join(dir, "vendor/canvaskit/canvaskit.wasm"), "utf8")).toBe("different wasm must be retained");
     expect(statSync(join(dir, "index.js")).mode & 0o111).toBe(0o111);
     expect(readlinkSync(join(lib, "node_modules/.bin", pkg.name.split("/").pop())))
       .toBe(`../${pkg.name}/index.js`);
@@ -109,6 +111,8 @@ test("land launcher selects bundled casty and preserves package frontend dispatc
   stageNpm(root, cfg);
   const land = join(root, "usr/lib/node_modules/buninu-land");
   mkdirSync(join(root, "bin"));
+  mkdirSync(join(root, "lib"), { recursive: true });
+  copyFileSync(new URL("../initramfs/lib/browser-resources.js", import.meta.url), join(root, "lib/browser-resources.js"));
   const launcher = join(root, "bin/buninu-land");
   copyFileSync(new URL("../initramfs/bin/buninu-land", import.meta.url), launcher);
   writeFileSync(join(land, "index.js"), `
@@ -144,6 +148,7 @@ test.skipIf(!npmPackages.every(pkg => existsSync(join(npmDownloadsDir, pkg.archi
   expect(result.status).toBe(0);
   expect(readFileSync(join(shell, "usr/lib/package.json"), "utf8")).toBe(readFileSync(join(js, "usr/lib/package.json"), "utf8"));
   for (const root of [js, shell]) {
+    expect(existsSync(join(root, "usr/lib/node_modules/buninu-land/vendor/canvaskit/canvaskit.wasm"))).toBe(false);
     expect(existsSync(join(root, "usr/lib/node_modules/buninu-browser/usr/README.md"))).toBe(true);
     expect(existsSync(join(root, "usr/lib/node_modules/buninu-browser/usr/lib/canvaskit"))).toBe(false);
     expect(existsSync(join(root, "usr/lib/node_modules/buninu-browser/usr/share/fonts"))).toBe(false);
@@ -164,8 +169,23 @@ test.skipIf(!npmPackages.every(pkg => existsSync(join(npmDownloadsDir, pkg.archi
   for (const args of [["--help"], ["--headless", "--help"], ["--version"]]) {
     const landHelp = spawnSync(process.execPath, [join(js, "bin/buninu-land"), ...args], { encoding: "utf8", timeout: 15000 });
     expect(landHelp.status).toBe(0);
-    expect(landHelp.stdout).toContain(args[0] === "--version" ? "0.1.2" : args[0] === "--headless" ? "Wayland compositor" : "Usage");
+    expect(landHelp.stdout).toContain(args[0] === "--version" ? "0.1.3" : args[0] === "--headless" ? "Wayland compositor" : "Usage");
   }
-  expect(existsSync(join(js, "usr/lib/node_modules/buninu-land/vendor/canvaskit/canvaskit.wasm"))).toBe(true);
+  const landWasm = join(js, "usr/lib/node_modules/buninu-land/vendor/canvaskit/canvaskit.wasm");
+  expect(readlinkSync(landWasm).startsWith("/")).toBe(false);
+  expect(readFileSync(landWasm).equals(readFileSync(join(js, "lib/canvaskit/canvaskit.wasm")))).toBe(true);
   expect(existsSync(join(js, "usr/lib/node_modules/buninu-land/LICENSES/hyprland.txt"))).toBe(true);
 }, 30000);
+
+test("land resource link is relative, repeatable, and preserves a package-owned WASM", () => {
+  const root = fresh(), land = join(root, "usr/lib/node_modules/buninu-land");
+  mkdirSync(join(root, "lib/canvaskit"), { recursive: true });
+  writeFileSync(join(root, "lib/canvaskit/canvaskit.wasm"), "shared");
+  ensureLandResources(land, root); ensureLandResources(land, root);
+  const wasm = join(land, "vendor/canvaskit/canvaskit.wasm");
+  expect(readlinkSync(wasm).startsWith("/")).toBe(false);
+  expect(readFileSync(wasm, "utf8")).toBe("shared");
+  rmSync(wasm); writeFileSync(wasm, "package-owned");
+  ensureLandResources(land, root);
+  expect(readFileSync(wasm, "utf8")).toBe("package-owned");
+});

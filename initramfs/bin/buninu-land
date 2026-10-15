@@ -3,10 +3,12 @@
 // preserve the distribution entry point.
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { ensureLandResources } from "../lib/browser-resources.js";
 
 const root = resolve(import.meta.dir, "..");
 const modules = join(root, "usr/lib/node_modules");
 const browser = join(modules, "buninu-land");
+ensureLandResources(browser, root);
 const entry = join(browser, "index.js");
 const { chooseFrontend } = await import(pathToFileURL(entry).href);
 const args = process.argv.slice(2);

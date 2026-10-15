@@ -1,7 +1,7 @@
 // Assemble fetched packages in a disposable pack staging tree, never in the
 // source initramfs. No registry access, dependency resolution or lifecycle code.
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { jsRuntime, rootDir, runIfMain } from "./arch.js";
@@ -34,6 +34,13 @@ export function stageNpm(staging, { packages = npmPackages, downloadsDir = npmDo
       "--exclude=package/usr/lib/canvaskit", "--exclude=package/usr/share/fonts");
     const result = spawnSync(runtime, args, { stdio: "inherit" });
     if (result.status !== 0) throw new Error(`npm extraction failed: ${pkg.name}`);
+    if (pkg.name === "buninu-land") {
+      const wasm = join(destination, "vendor/canvaskit/canvaskit.wasm");
+      const shared = join(staging, "lib/canvaskit/canvaskit.wasm");
+      const systemWasm = existsSync(shared) ? shared : join(rootDir, "initramfs/lib/canvaskit/canvaskit.wasm");
+      // Deduplicate only byte-identical releases; future differing WASM stays bundled.
+      if (existsSync(wasm) && existsSync(systemWasm) && readFileSync(wasm).equals(readFileSync(systemWasm))) unlinkSync(wasm);
+    }
     const info = JSON.parse(readFileSync(join(destination, "package.json"), "utf8"));
     if (info.name !== pkg.name || info.version !== pkg.version) throw new Error(`npm identity mismatch: ${pkg.name}`);
     const entries = typeof info.bin === "string" ? { [pkg.name.split("/").pop()]: info.bin } : info.bin ?? {};
