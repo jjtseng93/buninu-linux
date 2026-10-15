@@ -21,6 +21,8 @@ import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
 import { claimVirtualConsole } from "./vt.js";
+import { attachGeometry } from "./geometry.js";
+import { terminalMouseEvent } from "./pointer-report.js";
 import { attachClipboard } from "./clipboard.js";
 
 const require = createRequire(import.meta.url);
@@ -160,6 +162,7 @@ export const createSession = ({
   });
   backend.onData(pump);
   term.onData((data) => backend.write(Buffer.from(data, "utf8")));
+  attachGeometry({ term, renderer, reply: text => backend.write(Buffer.from(text, "utf8")) });
   // OSC 52 copy and paste go straight to xclip; replies return to the program.
   // Without it (--no-clipboard) xterm.js ignores OSC 52 and nothing reaches xclip.
   if (clipboard) attachClipboard({ term, reply: (text) => backend.write(Buffer.from(text, "utf8")), onError });
@@ -181,7 +184,7 @@ export const createSession = ({
   // Turns a pointer report from mouse.js into the mouse sequences the
   // program asked for. xterm.js's CoreMouseService owns the protocol: it
   // knows which events the program enabled (DECSET 1000/1002/1003), encodes
-  // them (SGR 1006 or the default form) and sends them through onData, so
+  // them (SGR 1006, pixel 1016, or the default form) and sends them through onData, so
   // nothing here builds an escape sequence. Reports arrive only while a
   // pointer is open, and this is the only place the terminal sees one.
   const CoreMouseButton = { LEFT: 0, MIDDLE: 1, RIGHT: 2, NONE: 3, WHEEL: 4 };
@@ -223,11 +226,9 @@ export const createSession = ({
       if (report.wheel) wheelScroll(report.wheel);
       return;
     }
-    const column = Math.floor((report.x - renderer.offsetX) / renderer.cellWidth);
-    const row = Math.floor((report.y - renderer.offsetY) / renderer.cellHeight);
     const send = (button, action) => {
       try {
-        service.triggerMouseEvent({ col: column, row, button, action, ctrl: false, alt: false, shift: false });
+        service.triggerMouseEvent(terminalMouseEvent(report, renderer, button, action));
       } catch (error) {
         onError(error);
       }

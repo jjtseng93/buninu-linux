@@ -82,7 +82,10 @@ Every pointing device under `/dev/input/event*` is opened and an arrow is
 drawn on the screen. Clicks, drags and wheel notches reach the program as
 the xterm mouse sequences it asked for: nothing is sent unless the program
 enabled reporting (`DECSET 1000`, `1002` or `1003`), and what is sent follows
-the mode it chose, SGR (`1006`) included. `jsmdcui`, `micro`, `htop`, `vim`
+the mode it chose, including SGR cell coordinates (`1006`) and SGR pixel
+coordinates (`1016`). Mode 1016 also answers DECRQM queries; pixel positions
+exclude the framebuffer margins and preserve movement within a cell.
+CSI 14t/16t report the content and cell dimensions in those same pixel units. `jsmdcui`, `micro`, `htop`, `vim`
 and anything else that speaks the protocol work with no configuration.
 
 When the program is not reading the mouse, the wheel scrolls instead: back
