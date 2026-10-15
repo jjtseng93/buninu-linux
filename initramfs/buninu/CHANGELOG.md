@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.21 - 2026-10-15
+
+- Sync jsgotty to 1.1.16: Turn on pixel report
+
+## 0.4.20 - 2026-10-13
+
+- Sync bunmsh to 0.4.0:
+  * Add a pure JavaScript awk fallback, file diff with line alignment, cmp,
+    uniq, expr, and egrep/fgrep aliases; extend sed and other utility builtins
+    for configure scripts and compiler builds.
+  * Improve compound commands, here-documents, parameter expansion, function
+    and loop control, descriptor redirection, and pipeline/subshell state
+    transfer for Autoconf and GCC bootstrap workloads.
+  * In `set -o posix` mode, use plain ls output and pass only exported variables
+    and command-prefix assignments to external programs. Default mode retains
+    ls icons and its existing environment behavior.
+  * Preserve the existing background-process behavior and stable
+    `Bun.sha.procs` indices. POSIX and awk compatibility remain partial; see
+    the bundled bunmsh PORTING.md for limitations.
+- Sync jsgotty to 1.1.15: forward Kitty graphics to the terminal in `--client`
+  mode and avoid applying the corresponding cursor movement twice.
+
 ## 0.4.19 - 2026-10-12
 
 - Sync bunmsh to 0.3.11: more POSIX syntax

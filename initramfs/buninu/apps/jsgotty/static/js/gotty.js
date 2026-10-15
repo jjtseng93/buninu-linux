@@ -12530,6 +12530,7 @@
 	              (this.fontSizeOverride = fontSizeValue),
 	              (this.term = new r.Terminal({
 	                allowProposedApi: !0,
+	                windowOptions: { getWinSizePixels: true, getCellSizePixels: true },
 	                customGlyphs: !0,
 	                rescaleOverlappingGlyphs: !0,
 	                fontFamily:
