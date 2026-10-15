@@ -16,7 +16,8 @@ const number = (value, fallback = 0) => {
 // encoded format Skia knows); 24 and 32 are raw RGB / RGBA. Bun.Image, when
 // present, transcodes encodings Skia cannot read on its own.
 export const decodeImage = async (CanvasKit, image) => {
-  const bytes = Buffer.from(image.data, "base64");
+  // The local parser supplies bytes; retain compatibility with base64 callers.
+  const bytes = typeof image.data === "string" ? Buffer.from(image.data, "base64") : image.data;
   if (image.format === 24 || image.format === 32) {
     const { width, height } = image;
     if (!width || !height) throw new Error("raw image without dimensions");

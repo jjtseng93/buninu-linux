@@ -1001,7 +1001,9 @@ class CursorStateTracker {
 }
 
 class KittyGraphicsParser {
-  constructor() {
+  constructor({ binaryData = false } = {}) {
+    // Local renderers can consume bytes directly; browser clients retain base64.
+    this.binaryData = binaryData;
     this.pending = Buffer.alloc(0);
     this.transfers = new Map();
     this.images = new Map();
@@ -1220,7 +1222,7 @@ class KittyGraphicsParser {
       width: Number.parseInt(existing.control.s || "0", 10),
       height: Number.parseInt(existing.control.v || "0", 10),
       mime: existing.control.U || existing.control.mime || null,
-      data: binary.toString("base64")
+      data: this.binaryData ? binary : binary.toString("base64")
     };
 
     this.images.set(imageId, image);

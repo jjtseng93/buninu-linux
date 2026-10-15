@@ -70,7 +70,7 @@ export const createSession = ({
   term.loadAddon(new UnicodeGraphemesAddon());
   term.unicode.activeVersion = "15-graphemes";
   const images = new ImageStore({ CanvasKit, term, renderer });
-  const kitty = new KittyGraphicsParser();
+  const kitty = new KittyGraphicsParser({ binaryData: true });
 
   const backend = new BunPtyBackend({
     command,
