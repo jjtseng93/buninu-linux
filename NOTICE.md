@@ -285,8 +285,8 @@ committed source files, but their contents are redistributed in the image.
 | Package | Version | Package license | Project / package page | Installed license and notices (relative to `/usr/lib/node_modules/`) |
 |---|---|---|---|---|
 | `buninu-browser` | 0.2.3 | MIT for the browser's own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-browser | `buninu-browser/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/` and vendor notices within that package |
-| `buninu-land` | 0.1.2 | MIT for its own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-land | `buninu-land/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `SOURCES.md`, protocol XML notices and vendor notices |
-| `@drxiaozhi/casty` | 1.3.6 | MIT | https://github.com/jjtseng93/casty | `@drxiaozhi/casty/LICENSE` |
+| `buninu-land` | 0.1.3 | MIT for its own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-land | `buninu-land/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `SOURCES.md`, protocol XML notices and vendor notices |
+| `@drxiaozhi/casty` | 1.3.7 | MIT | https://github.com/jjtseng93/casty | `@drxiaozhi/casty/LICENSE` |
 | `@drxiaozhi/jspulse` | 0.2.1 | LGPL-2.1-or-later, with additional component notices | https://github.com/jjtseng93/jspulse | `@drxiaozhi/jspulse/LICENSE`, `NOTICE.md`, `LICENSES/` and source-file notices within that package |
 | `@drxiaozhi/jspinyin` | 0.1.1 | MIT; hanzipinyin material under the Unlicense | https://www.npmjs.com/package/@drxiaozhi/jspinyin | `@drxiaozhi/jspinyin/LICENSE` and `@drxiaozhi/jspinyin/LICENSE-hanzipinyin.md` |
 
@@ -320,8 +320,11 @@ the source archive or rebuild material merely to reduce the image size.
 
 ### Buninu Land
 
-The compositor package is extracted in full, including its CanvasKit WASM,
-loader, protocol XML, source provenance, patches and license collection.
+The compositor package retains its loader, protocol XML, source provenance,
+patches and license collection. When its CanvasKit WASM is byte-identical to
+the system copy, packing omits the duplicate and the distribution launcher
+creates a relative symlink to `/lib/canvaskit/canvaskit.wasm`. Differing WASM
+versions remain bundled. All associated licenses and notices are retained.
 Retain `THIRD_PARTY_NOTICES.md`, `SOURCES.md`, `vendor-manifest.json`,
 `LICENSES/`, `vendor/canvaskit/LICENSE`, and the notices embedded in the
 Wayland protocol XML files. These cover Buninu Browser-derived code,

@@ -763,7 +763,8 @@ The `/bin/buninu-land` launcher sets `CASTY_BROWSER` to
 `/usr/lib/node_modules/buninu-land/compositor.js` and runs the bundled Casty.
 `--casty` forwards arguments to Casty; `--headless`, `--help`, `--version`,
 README options and reserved native frontends go through the package entry.
-The package's CanvasKit WASM and license files are retained unchanged.
+The package's CanvasKit WASM shares the system copy when byte-identical;
+its loader and license files are retained.
 
 ### Archive tools and other examples
 
@@ -1193,11 +1194,11 @@ extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
 The five application packages are pinned separately in
-`scripts/npm-packages.md`: `buninu-browser@0.2.3`, `buninu-land@0.1.2`,
-`@drxiaozhi/casty@1.3.6`, `@drxiaozhi/jspulse@0.2.1`, and
+`scripts/npm-packages.md`: `buninu-browser@0.2.3`, `buninu-land@0.1.3`,
+`@drxiaozhi/casty@1.3.7`, `@drxiaozhi/jspulse@0.2.1`, and
 `@drxiaozhi/jspinyin@0.1.1`. These were npm's `latest` versions when checked
 on 2026-10-11, with buninu-browser updated on 2026-10-12, and
-casty 1.3.6 and buninu-land 0.1.2 verified on 2026-10-16;
+casty 1.3.7 and buninu-land 0.1.3 verified on 2026-10-16;
 fetch never resolves `latest` or a version range at runtime.
 Each registry tarball was checked against its published SHA-512 integrity
 before its SHA-256 was recorded in the shared pins file.
@@ -1696,9 +1697,9 @@ when redistributing the image.
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
 | buninu-browser 0.2.3 | MIT for its own code; bundled components have their own licenses | npm download → image |
-| buninu-land 0.1.2 | MIT for its own code; bundled components retain their own licenses and notices | npm download → image |
+| buninu-land 0.1.3 | MIT for its own code; bundled components retain their own licenses and notices | npm download → image |
 | wasmpeg / FFmpeg (`@wasmpeg/cpu` 1.0.1, bundled in buninu-browser) | LGPL-2.1-or-later, plus component notices; source archive and rebuild documentation retained | browser package → image |
-| `@drxiaozhi/casty` 1.3.6 | MIT | npm download → image |
+| `@drxiaozhi/casty` 1.3.7 | MIT | npm download → image |
 | `@drxiaozhi/jspulse` 0.2.1 | LGPL-2.1-or-later, plus component notices | npm download → image |
 | `@drxiaozhi/jspinyin` 0.1.1 | MIT; hanzipinyin material under the Unlicense | npm download → image |
 | CanvasKit 0.41.1 (`initramfs/lib/canvaskit/`, Skia compiled to WebAssembly) | BSD-3-Clause (`LICENSES/BSD-3-Clause-Skia.txt`) | committed |
