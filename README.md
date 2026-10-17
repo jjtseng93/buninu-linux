@@ -227,8 +227,10 @@ It supports Chinese text, emoji and the browser's terminal graphics. Use
 `Ctrl+Alt+F1` to return to the original console and `Ctrl+Alt+F2` to return
 to this terminal.
 
-There is no DHCP client yet; configure a detected wired interface with `ip` as
-described under [Basic configuration](#basic-configuration). Run `poweroff` for a synced
+Use `dhclient -v INTERFACE` to acquire and maintain a DHCPv4 lease on a detected
+wired interface, or configure it with `ip` as described under
+[Basic configuration](#basic-configuration). `dhclient` runs in the foreground;
+`-1 -timeout 20` acquires once without maintaining the lease. Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
@@ -695,6 +697,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+| `dhclient` | DHCPv4 acquisition, renewal and release; reuses `ip` for addresses/routes | `dhclient --help` |
 | `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |

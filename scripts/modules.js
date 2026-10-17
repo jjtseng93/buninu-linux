@@ -21,6 +21,7 @@ export const requests = ({ arch, flavor, real }) => [
     "failover",
     "net_failover",
     "virtio_net",
+    "af_packet", // DHCP before an interface has an IPv4 address
   ]),
   ...optional([
     "virtio_pci",

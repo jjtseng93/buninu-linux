@@ -63,7 +63,7 @@ select_optional_module() {
 # Network: virtio-net for QEMU (init.js loads these at boot). virtio_pci is
 # the PCI transport for every virtio device, disk included; linux-virt builds
 # it in, linux-lts has it as a module that nothing in modules.dep pulls in.
-for module in failover net_failover virtio_net; do select_module "$module"; done
+for module in failover net_failover virtio_net af_packet; do select_module "$module"; done
 select_optional_module virtio_pci
 # Storage: what /bin/mount loads on demand. ext4 brings jbd2, mbcache and
 # crc16; FAT, exFAT and NTFS ask the kernel for the NLS tables at mount

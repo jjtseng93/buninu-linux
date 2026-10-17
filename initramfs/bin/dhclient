@@ -1,0 +1,8 @@
+#!/bin/bun
+import {parseDhclient,runDhclient} from '../lib/dhclient.js';
+import {showDocument} from '../lib/document.js';
+try {
+  const options=parseDhclient(Bun.argv.slice(2));
+  if(options.help)await showDocument('dhclient');
+  else process.exitCode=await runDhclient(options);
+}catch(error){console.error(`dhclient: ${error.message}`);process.exitCode=1;}
