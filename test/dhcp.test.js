@@ -11,7 +11,9 @@ function reply(request,type,{ip='10.20.0.10',server=[10,20,0,1],duration=120}={}
 }
 test('DHCP CLI validates options before opening sockets',()=>{
  expect(parseDhclient(['-4','-d','-1','-v','-timeout','8','--no-dns','-H','buninu','eth0'])).toMatchObject({interface:'eth0',once:true,timeout:8,dns:false});
- for(const args of [[],['-6','eth0'],['-timeout','NaN','eth0'],['-r','-1','eth0'],['eth0','eth1'],['../bad']])expect(()=>parseDhclient(args)).toThrow();
+ expect(parseDhclient(['usb0']).interface).toBe('usb0');
+ expect(parseDhclient(['--metric','120','usb0']).metric).toBe(120);
+ for(const args of [['--metric','32767','eth0'],[],['-6','eth0'],['-timeout','NaN','eth0'],['-r','-1','eth0'],['eth0','eth1'],['../bad']])expect(()=>parseDhclient(args)).toThrow();
 });
 test('codec validates xid, MAC, truncation, options, mask and lease timers',()=>{
  const req=encode({type:TYPE.DISCOVER,xid:123,mac}),ack=reply(req,TYPE.ACK);
@@ -56,21 +58,23 @@ test('configuration uses existing ip commands, preserves DNS across renewal and 
  const dir=mkdtempSync(`${tmpdir()}/dhcp-test-`),path=`${dir}/resolv.conf`,calls=[];
  try {
   writeFileSync(path,'nameserver 9.9.9.9\n');
-  const config=new Configuration({interface:'eth0',dns:true,resolv:path},async args=>calls.push(args));
+  const config=new Configuration({interface:'eth0',dns:true,resolv:path,metric:100},async args=>calls.push(args));
   const lease={address:'10.20.0.10',prefix:24,routers:['10.20.0.1'],dns:['1.1.1.1']};
   await config.apply(lease);const renewed={...lease,dns:['8.8.8.8']};await config.apply(renewed,lease);
   expect(calls[0]).toEqual(['addr','replace','10.20.0.10/24','brd','+','dev','eth0']);
   expect(readFileSync(path,'utf8')).toContain('8.8.8.8');await config.clear(renewed);
+  expect(calls).toContainEqual(['route','replace','default','via','10.20.0.1','dev','eth0','metric','100']);
+  expect(calls).toContainEqual(['route','del','default','via','10.20.0.1','dev','eth0','metric','100']);
   expect(readFileSync(path,'utf8')).toBe('nameserver 9.9.9.9\n');
   await config.apply(lease);writeFileSync(path,'external edit\n');await config.clear(lease);expect(readFileSync(path,'utf8')).toBe('external edit\n');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
-test('lease expiry removes configuration before rediscovery; cancellation releases the lease',async()=>{
- let time=0,acquires=0;const events=[],abort=new AbortController();
- const lease={address:'10.20.0.10',prefix:24,seconds:2,renewAt:1,rebindAt:2,expiresAt:3};
- const client={async acquire(){events.push('acquire');if(++acquires===2)abort.abort();return {...lease};},async renew(l,rebind){events.push(rebind?'rebind':'renew');time=rebind?3:2;return null;},release(){events.push('release');}};
- await manageLease(client,{async apply(){events.push('apply');},async clear(){events.push('clear');}},{signal:abort.signal,now:()=>time,sleep:async()=>{time++;},log:()=>{}});
- expect(events).toEqual(['acquire','apply','renew','rebind','clear','acquire','apply','release','clear']);
+test('default invocation configures once and returns without starting renewal',async()=>{
+ const events=[],lease={address:'10.20.0.10',prefix:24,seconds:60};
+ const client={async acquire(){events.push('acquire');return lease;},renew(){throw new Error('must not renew');},release(){events.push('release');}};
+ await manageLease(client,{async apply(){events.push('apply');},async clear(){events.push('clear');}},{log:()=>{}});
+ expect(events).toEqual(['acquire','apply']);
+ expect(parseDhclient(['usb0']).once).toBe(true);
 });
 test('one-shot keeps a successful lease but cleans up failed configuration',async()=>{
  const events=[],client={async acquire(){return {address:'10.0.0.2',prefix:24,seconds:60};},release(){events.push('release');}};

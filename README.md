@@ -227,10 +227,17 @@ It supports Chinese text, emoji and the browser's terminal graphics. Use
 `Ctrl+Alt+F1` to return to the original console and `Ctrl+Alt+F2` to return
 to this terminal.
 
-Use `dhclient -v INTERFACE` to acquire and maintain a DHCPv4 lease on a detected
+`cfg.net` starts DHCP in the background for every detected non-loopback interface.
+It returns immediately; failures and acquisition timeouts are logged without
+interrupting init. Each client exits after configuring its lease; no renewal process stays running.
+Repeated `cfg.net` calls do not launch duplicate active clients. Route metrics
+start at 100; only the first interface updates DNS, leaving the init fallback
+resolver available if it cannot acquire a lease.
+
+Use `dhclient INTERFACE` to acquire and configure a DHCPv4 lease on a detected
 wired interface, or configure it with `ip` as described under
-[Basic configuration](#basic-configuration). `dhclient` runs in the foreground;
-`-1 -timeout 20` acquires once without maintaining the lease. Run `poweroff` for a synced
+[Basic configuration](#basic-configuration). `dhclient` exits after configuration;
+`-timeout 20` limits acquisition to 20 seconds. Leases do not renew automatically. Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
@@ -697,7 +704,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
-| `dhclient` | DHCPv4 acquisition, renewal and release; reuses `ip` for addresses/routes | `dhclient --help` |
+| `dhclient` | DHCPv4 one-shot acquisition and release; reuses `ip` for addresses/routes | `dhclient --help` |
 | `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |

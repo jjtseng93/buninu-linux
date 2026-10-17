@@ -495,7 +495,7 @@ globalThis.start = launchBuninu;
 // cfg.net loads every packaged network module, including PHY and bus support
 // that a kernel userspace modprobe helper would normally load on demand. It
 // then reports the device matches and lists the resulting interfaces. The
-// address and route are still yours to set with `ip`.
+// DHCP runs independently afterward; errors and timeouts never block init.
 const configureEthernet = () => {
   const { autoload, modprobeAll } = require("/lib/modprobe.js");
   const { readdirSync, readFileSync } = require("node:fs");
@@ -529,12 +529,12 @@ const configureEthernet = () => {
     const carrier = read(`/sys/class/net/${name}/carrier`);
     console.log(`eth: ${name} ${read(`/sys/class/net/${name}/address`)} ${read(`/sys/class/net/${name}/operstate`)}${carrier === "1" ? " carrier" : ""}`);
   }
-  if (interfaces.length) console.log(`eth:
-  Next steps in shell( after start() ):
-  ip link set ${interfaces[0]} up
-  ip addr add A.B.C.D/24 dev ${interfaces[0]};
-  ip route add default via GATEWAY
-`);
+  try {
+    const { startDhcp } = require("/lib/dhcp-start.js");
+    startDhcp(interfaces);
+  } catch (error) {
+    console.log(`eth: DHCP unavailable: ${error?.message ?? error}; init continues`);
+  }
   return interfaces;
 };
 

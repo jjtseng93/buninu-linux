@@ -1,9 +1,9 @@
 import {readFileSync,writeFileSync,mkdirSync,renameSync,unlinkSync,openSync,closeSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
-import {DhcpClient,NakError} from './dhcp.js';
+import {DhcpClient} from './dhcp.js';
 import {interfaceInfo,openTransport} from './dhcp-transport.js';
 export function parseDhclient(args) {
-  const o={timeout:60,dns:true,resolv:'/etc/resolv.conf',once:false,release:false,verbose:false};
+  const o={timeout:60,dns:true,resolv:'/etc/resolv.conf',once:true,release:false,verbose:false};
   for(let i=0;i<args.length;i++){
     const a=args[i];
     if(['--help','-h','-help'].includes(a))return {...o,help:true};
@@ -13,9 +13,10 @@ export function parseDhclient(args) {
     else if(a==='-v')o.verbose=true;
     else if(a==='-q')o.quiet=true;
     else if(a==='--no-dns')o.dns=false;
-    else if(['-timeout','-lf','-H','--resolv-conf'].includes(a)){
+    else if(['-timeout','-lf','-H','--resolv-conf','--metric'].includes(a)){
       const value=args[++i];if(!value||value.startsWith('-'))throw new Error(`${a} requires a value`);
       if(a==='-timeout'){o.timeout=Number(value);if(!Number.isFinite(o.timeout)||o.timeout<=0)throw new Error('timeout must be positive');}
+      if(a==='--metric'){o.metric=Number(value);if(!Number.isInteger(o.metric)||o.metric<0||o.metric>32766)throw new Error('metric must be between 0 and 32766');}
       if(a==='-lf')o.leaseFile=resolve(value);
       if(a==='-H'){if(!/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(value))throw new Error('invalid hostname');o.hostname=value;}
       if(a==='--resolv-conf')o.resolv=resolve(value);
@@ -25,7 +26,7 @@ export function parseDhclient(args) {
   }
   if(!o.interface||!/^[a-zA-Z0-9_.:-]{1,15}$/.test(o.interface))throw new Error('specify an Ethernet interface, e.g. dhclient eth0');
   o.leaseFile??=`/var/lib/dhclient/${o.interface}.json`;
-  if(o.once&&o.release)throw new Error('-1 and -r cannot be combined');
+  if(args.includes('-1')&&o.release)throw new Error('-1 and -r cannot be combined');
   return o;
 }
 export async function runIp(args) {
@@ -41,16 +42,18 @@ export function saveLease(path,lease) {
 }
 export class Configuration {
   constructor(options,ip=runIp){this.options=options;this.ip=ip;}
+  metric(lease){return lease.metric===undefined?[]:['metric',String(lease.metric)];}
   async apply(lease,previous) {
     const o=this.options;
+    lease.metric=o.metric;
     if(previous&&previous.routers[0]!==lease.routers[0])await this.removeRoute(previous);
     await this.ip(['addr','replace',`${lease.address}/${lease.prefix}`,'brd','+','dev',o.interface]);
-    if(lease.routers[0])await this.ip(['route','replace','default','via',lease.routers[0],'dev',o.interface]);
+    if(lease.routers[0])await this.ip(['route','replace','default','via',lease.routers[0],'dev',o.interface,...this.metric(lease)]);
     if(previous?.resolver)lease.resolver=previous.resolver;
     if(o.dns&&lease.dns.length){
       const content=`# dhclient ${o.interface}\n`+lease.dns.map(ip=>`nameserver ${ip}\n`).join('');
       const old=lease.resolver;
-      // Keep the original resolver across renewals, unless another writer took over.
+      // Keep the original resolver across repeated invocations, unless another writer took over.
       const current=readOptional(o.resolv);
       lease.resolver={path:o.resolv,before:old?.path===o.resolv&&current===old.written?old.before:current,written:content};
       writeFileSync(o.resolv,content);
@@ -58,7 +61,7 @@ export class Configuration {
   }
   async removeRoute(lease) {
     if(!lease.routers[0])return;
-    try{await this.ip(['route','del','default','via',lease.routers[0],'dev',this.options.interface]);}
+    try{await this.ip(['route','del','default','via',lease.routers[0],'dev',this.options.interface,...this.metric(lease)]);}
     catch(e){if(!/No such process|No such device|Cannot find device/.test(e.message))throw e;}
   }
   async clear(lease) {
@@ -74,28 +77,21 @@ export class Configuration {
     if(errors.length)throw new AggregateError(errors,errors.map(e=>e.message).join('; '));
   }
 }
-export async function manageLease(client,config,{once=false,signal,log=console.log,save=()=>{},forget=()=>{},sleep=ms=>Bun.sleep(ms),now=Date.now}={}) {
-  let lease, kept=false;
+// A command invocation acquires once and exits. There is no renewal daemon.
+export async function manageLease(client,config,{previous,signal,log=console.log,save=()=>{},forget=()=>{}}={}) {
+  let lease,kept=false;
   try {
-    while(!signal?.aborted){
-      if(!lease){
-        lease=await client.acquire();
-        if(!lease){if(signal?.aborted)return 0;throw new Error('no DHCP lease received before timeout');}
-        await config.apply(lease);await save(lease);log(`bound to ${lease.address}/${lease.prefix}, lease ${lease.seconds}s`);
-        if(once){kept=true;return 0;}
-      }
-      while(!signal?.aborted&&(lease.seconds===0xffffffff||now()<lease.renewAt))await sleep(Math.min(1000,Math.max(1,lease.renewAt-now())));
-      if(signal?.aborted)break;
-      let next;
-      try {next=await client.renew(lease);if(!next&&!signal?.aborted)next=await client.renew(lease,true);}
-      catch(e){if(!(e instanceof NakError))throw e;log(e.message);}
-      if(signal?.aborted)break;
-      if(next){const previous=lease;lease=next;await config.apply(lease,previous);await save(lease);log(`renewed ${lease.address}, lease ${lease.seconds}s`);}
-      else {await config.clear(lease);lease=null;await forget();log('lease lost; restarting discovery');}
-    }
-    return 0;
+    lease=await client.acquire();
+    if(!lease){if(signal?.aborted)return 0;throw new Error('no DHCP lease received before timeout');}
+    if(signal?.aborted)return 0;
+    await config.apply(lease,previous);await save(lease);
+    log(`bound to ${lease.address}/${lease.prefix}, lease ${lease.seconds}s; configured and exiting (no automatic renewal)`);
+    kept=true;return 0;
   }finally{
-    if(lease&&!kept){try{client.release(lease);}catch(e){log(`release: ${e.message}`);}await config.clear(lease);await forget();}
+    if(lease&&!kept){
+      try{client.release(lease);}catch(e){log(`release: ${e.message}`);}
+      await config.clear(lease);await forget();
+    }
   }
 }
 export async function runDhclient(o) {
@@ -126,7 +122,13 @@ export async function runDhclient(o) {
       const lease=JSON.parse(text);if(lease.interface!==o.interface||lease.mac!==info.mac.toString('hex'))throw new Error('saved lease belongs to another interface');
       try{client.release(lease);}finally{await config.clear(lease);forget();}log(`released ${lease.address}`);return 0;
     }
-    return await manageLease(client,config,{...o,signal:controller.signal,log,save:lease=>saveLease(o.leaseFile,{...lease,interface:o.interface,mac:info.mac.toString('hex')}),forget});
+    let previous;
+    const saved=readOptional(o.leaseFile);
+    if(saved){
+      const candidate=JSON.parse(saved);
+      if(candidate.interface===o.interface&&candidate.mac===info.mac.toString('hex'))previous=candidate;
+    }
+    return await manageLease(client,config,{...o,previous,signal:controller.signal,log,save:lease=>saveLease(o.leaseFile,{...lease,interface:o.interface,mac:info.mac.toString('hex')}),forget});
   }finally{
     transport?.close();process.off('SIGINT',stop);process.off('SIGTERM',stop);closeSync(handle);unlinkSync(lock);
   }
