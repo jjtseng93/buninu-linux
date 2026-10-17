@@ -1,0 +1,8 @@
+#!/bin/bun
+import {parsePing,runPing} from '../lib/ping.js';
+import {showDocument} from '../lib/document.js';
+try {
+  const options=parsePing(Bun.argv.slice(2));
+  if(options.help)await showDocument('ping');
+  else process.exitCode=await runPing(options);
+} catch(error) {console.error(`ping: ${error.message}`);process.exitCode=2;}

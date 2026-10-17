@@ -3,8 +3,7 @@
 // init.js opens musl on its own because it runs before /proc exists and must
 // not import anything. Every other command imports this module instead, so
 // the symbol table, the errno plumbing and the error messages live in one
-// place. The library is located relative to this file (/lib in the guest),
-// which also lets the commands run from a checkout for testing.
+// place. Automatic lookup follows the runtime ABI; BUNINU_LIBC overrides it.
 
 import { dlopen, FFIType, ptr, read, CString, toArrayBuffer } from "bun:ffi";
 
@@ -20,11 +19,13 @@ const architectures = {
 export const arch = architectures[process.arch]
   ?? (() => { throw new Error(`unsupported CPU architecture ${process.arch}`); })();
 
-// BUNINU_LIBC lets the commands run on a glibc host for testing:
-//   BUNINU_LIBC=/lib/aarch64-linux-gnu/libc.so.6 bun initramfs/bin/ip addr
-export const libcPath = process.env.BUNINU_LIBC ?? `${import.meta.dir}/${arch.libc}`;
-
-export const libc = dlopen(libcPath, {
+// Automatic lookup must not mix bionic, glibc and musl runtime ABIs.
+// An explicit override is authoritative: report its error instead of hiding it.
+const android = process.platform === "android";
+const glibc = !android && !!process.report?.getReport?.().header?.glibcVersionRuntime;
+export const libcFamily = android ? "bionic" : glibc ? "glibc" : "musl";
+const errnoSymbol = android ? "__errno" : "__errno_location";
+const definitions = {
   mount: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
@@ -41,7 +42,7 @@ export const libc = dlopen(libcPath, {
     args: [],
     returns: FFIType.void,
   },
-  __errno_location: {
+  [errnoSymbol]: {
     args: [],
     returns: FFIType.ptr,
   },
@@ -77,6 +78,13 @@ export const libc = dlopen(libcPath, {
     args: [FFIType.i32, FFIType.i32, FFIType.i32],
     returns: FFIType.i32,
   },
+  bind: { args: [FFIType.i32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+  inet_pton: { args: [FFIType.i32, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+  connect: { args: [FFIType.i32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+  getsockname: { args: [FFIType.i32, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+  setsockopt: { args: [FFIType.i32, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+  send: { args: [FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.i32], returns: FFIType.i64 },
+  recv: { args: [FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.i32], returns: FFIType.i64 },
   syscall: {
     args: [FFIType.i64, FFIType.i64, FFIType.ptr, FFIType.i64],
     returns: FFIType.i32,
@@ -93,13 +101,51 @@ export const libc = dlopen(libcPath, {
     args: [FFIType.ptr],
     returns: FFIType.i32,
   },
-});
+};
+const override = process.env.BUNINU_LIBC;
+const candidates = override !== undefined ? [override]
+  : android ? ["libc.so", "/apex/com.android.runtime/lib64/bionic/libc.so", "/system/lib64/libc.so"]
+  : glibc ? ["libc.so.6", `/lib/${process.arch === "x64" ? "x86_64" : "aarch64"}-linux-gnu/libc.so.6`, `/usr/lib/${process.arch === "x64" ? "x86_64" : "aarch64"}-linux-gnu/libc.so.6`]
+  : [`${import.meta.dir}/${arch.libc}`, arch.libc, `/lib/${arch.libc}`, `/lib/ld-musl-${process.arch === "x64" ? "x86_64" : "aarch64"}.so.1`, "libc.so"];
+// Bun requires at least one symbol per dlopen call. Defer opening until a
+// symbol is requested; unrelated missing symbols never prevent an import.
+export let libcPath;
+const handles = [], bound = new Map();
+let closed = false;
+function resolve(name) {
+  if (bound.has(name)) return bound.get(name);
+  const failures = [];
+  for (const path of libcPath === undefined ? candidates : [libcPath]) {
+    try {
+      const handle = dlopen(path, { [name]: definitions[name] });
+      libcPath = path; handles.push(handle); bound.set(name, handle.symbols[name]);
+      return handle.symbols[name];
+    } catch (error) { failures.push(`${path}: ${error.message}`); }
+  }
+  throw new Error(`Cannot load libc symbol ${name}:\n${failures.join("\n")}`);
+}
+export const libc = {
+  symbols: new Proxy({}, {
+    get(_target, name) {
+      if (closed) throw new Error("libc is closed");
+      if (!Object.hasOwn(definitions, name)) return undefined;
+      const symbol = resolve(name);
+      // Compile the errno accessor before the native call, so first-use FFI
+      // compilation cannot clobber the errno that the caller wants to inspect.
+      // An absent accessor only fails when errno() is actually requested.
+      if (name !== errnoSymbol && !bound.has(errnoSymbol)) {
+        try { resolve(errnoSymbol); } catch {}
+      }
+      return symbol;
+    },
+  }),
+  close() { if (closed) return; closed = true; for (const handle of handles) handle.close(); },
+};
 
 export const cString = (value) => new TextEncoder().encode(`${value}\0`);
 
 // musl reports failure as -1 plus errno; the raw syscall() wrapper does too.
-const errnoLocation = libc.symbols.__errno_location();
-export const errno = () => read.i32(errnoLocation);
+export const errno = () => read.i32(libc.symbols[errnoSymbol]());
 export const strerror = (code) => new CString(libc.symbols.strerror(code)).toString();
 
 export const Errno = {

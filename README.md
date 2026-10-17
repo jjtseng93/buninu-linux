@@ -695,6 +695,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
+| `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
@@ -716,6 +717,14 @@ above, implemented as Bun scripts or thin launchers for bundled packages.
 
 For Debian/Alpine rootfs and Chromium examples, see
 [Optional chroot and native binaries](#optional-chroot-and-native-binaries).
+
+`ping -c 4 127.0.0.1` checks IPv4 connectivity; `ping -6 -c 4 ::1` checks
+IPv6. `ping -c 10 -i 0.2 -W 1 HOST` adjusts count, interval and reply timeout.
+The command uses ICMP sockets directly, with a raw-socket fallback when needed.
+It supports Linux glibc/musl and native Android bionic through the shared libc
+loader; `BUNINU_LIBC` remains an explicit override. Run
+`bun test test/ping.test.js test/libc.test.js` to compare against the installed
+system ping. See `ping --help` for permission requirements and supported flags.
 
 ### Buninu Browser (early-stage, experimental)
 
