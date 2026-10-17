@@ -16,7 +16,7 @@ test('launch returns immediately, isolates spawn failures and reuses running chi
  expect(calls[2]).toContain('--no-dns');expect(calls[2]).toContain('--metric');
  expect(logs.some(s=>s.includes('spawn denied'))).toBe(true);
  for(const child of children){child.end();child.resolve(1);}await pause(5);
- expect(logs.some(s=>s.includes('exited 1; init continues'))).toBe(true);
+ expect(logs.some(s=>s.includes('(exit 1); other interfaces are unaffected'))).toBe(true);
  expect(launch(['eth0'])).toEqual(['eth0']);children.at(-1).end();children.at(-1).resolve(0);
 });
 test('watchdog terminates hung acquisition and escalates if SIGTERM does not exit',async()=>{
@@ -24,7 +24,7 @@ test('watchdog terminates hung acquisition and escalates if SIGTERM does not exi
  const launch=createDhcpLauncher({spawn:()=>child,log:s=>logs.push(s),watchdogMs:10,killGraceMs:10});
  launch(['eth0']);await pause(60);
  expect(child.kills).toEqual(['SIGTERM','SIGKILL']);child.end();child.resolve(137);await pause(5);
- expect(logs.some(s=>s.includes('init continues'))).toBe(true);
+ expect(logs.some(s=>s.includes('timed out; other interfaces are unaffected'))).toBe(true);
 });
 test('successful one-shot exits and clears the watchdog',async()=>{
  const child=fakeChild();const launch=createDhcpLauncher({spawn:()=>child,log:()=>{},watchdogMs:20,killGraceMs:5});
@@ -37,8 +37,31 @@ test('stream rejection, exit rejection, kill failure and throwing logger cannot 
  child.kill=()=>{throw null;};
  const launch=createDhcpLauncher({spawn:()=>child,log:s=>logs.push(s),watchdogMs:5,killGraceMs:5});
  expect(()=>launch(['eth0'])).not.toThrow();await pause(30);child.end();child.reject(null);await pause(5);
- expect(logs.some(s=>s.includes('output: null'))).toBe(true);
- expect(logs.some(s=>s.includes('failed: null'))).toBe(true);
+ expect(logs.some(s=>s.startsWith('[dhcp eth0] failed: timed out'))).toBe(true);
  const bad=createDhcpLauncher({spawn(){throw null;},log(){throw new Error('console failed');}});
  expect(()=>bad(['eth0'])).not.toThrow();expect(()=>bad(null)).not.toThrow();
+});
+
+test('usb0 success and late eth0 failure each produce one correctly attributed result',async()=>{
+ const children={eth0:fakeChild(),usb0:fakeChild()},logs=[];let stderr;
+ children.eth0.stderr=new ReadableStream({start(c){stderr=c;}});
+ const launch=createDhcpLauncher({spawn:args=>children[args.at(-1)],log:s=>logs.push(s),watchdogMs:500});
+ launch(['eth0','usb0']);
+ children.usb0.output('dhclient: bound to 192.168.42.2/24, lease 3600s\n');children.usb0.end();children.usb0.resolve(0);
+ await pause(5);
+ children.eth0.resolve(1);children.eth0.end();
+ // Exit notification precedes delivery of the error; the final result must wait.
+ await pause(5);stderr.enqueue(Buffer.from('dhclient: no DHCP lease received before timeout\n'));stderr.close();await pause(10);
+ expect(logs.filter(s=>s.includes('configured '))).toEqual(['[dhcp usb0] configured 192.168.42.2/24; command finished']);
+ expect(logs.filter(s=>s.includes('failed:'))).toEqual(['[dhcp eth0] failed: no DHCP lease received before timeout (exit 1); other interfaces are unaffected']);
+ expect(logs.some(s=>s.includes('usb0')&&s.includes('failed'))).toBe(false);
+});
+
+test('unterminated output cannot hold the result open or prevent later invocations',async()=>{
+ const children=[],logs=[];
+ const launch=createDhcpLauncher({spawn(){const c=fakeChild();children.push(c);return c;},log:s=>logs.push(s),watchdogMs:500,outputGraceMs:10});
+ launch(['usb0']);children[0].output('dhclient: bound to 192.168.42.2/24, lease 3600s\n');children[0].resolve(0);
+ await pause(30);
+ expect(logs.some(s=>s.includes('configured 192.168.42.2/24'))).toBe(true);
+ expect(launch(['usb0'])).toEqual(['usb0']);children[1].end();children[1].resolve(0);
 });

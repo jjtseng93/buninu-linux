@@ -72,3 +72,8 @@ a 20-second acquisition deadline and an independent 25-second startup watchdog
 (SIGTERM, then SIGKILL after 2 seconds if necessary). Successful clients exit after configuration; none remain to renew. All child and output failures are caught and logged. Metrics start
 at 100 per interface; only the first interface may write DNS. Repeated calls
 reuse active clients; a later call can retry clients which have exited.
+
+Automatic calls report one final result per interface, prefixed with
+`[dhcp INTERFACE]`. A failed interface does not change another interface's
+success result or configuration; output is collected before reporting exit
+status so a delayed stderr message cannot appear after its final result.
