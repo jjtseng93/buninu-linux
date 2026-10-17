@@ -1206,7 +1206,7 @@ extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
 The five application packages are pinned separately in
-`scripts/npm-packages.md`: `buninu-browser@0.2.3`, `buninu-land@0.1.3`,
+`scripts/npm-packages.md`: `buninu-browser@0.2.4`, `buninu-land@0.1.4`,
 `@drxiaozhi/casty@1.3.7`, `@drxiaozhi/jspulse@0.2.1`, and
 `@drxiaozhi/jspinyin@0.1.1`. These were npm's `latest` versions when checked
 on 2026-10-11, with buninu-browser updated on 2026-10-12, and
