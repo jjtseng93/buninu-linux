@@ -35,10 +35,10 @@
   * Bun reaches its interactive REPL
   * `start` starts the Buninu userspace shell
   * `cfg.disk` + shell `mount` mounts local disks
-  * `cfg.net` loads common wired NIC and Android USB-tethering drivers
+  * `cfg.net` loads common wired NIC and Android USB-tethering drivers and automatically attempts DHCP configuration
   * `cfg.sound` loads every packaged ALSA sound module
   * Android phone USB tethering over RNDIS has been tested successfully, allowing Buninu Linux to access the Internet through an Android phone
-  * IP addresses and routes are configured manually because the image does not yet include a DHCP client.
+  * After a DHCP lease expires or when you need fresh network settings, run `dhclient usb0` (using your interface name). Manual configuration with `ip` remains available.
   * The bundled `jmi` editor, jsmdcui App runtime, and local JavaScript execution also work.
   * Multi-tasking with kernel VT or jsmdcui
     + See [Multitasking modes](#multitasking-modes)
@@ -383,9 +383,16 @@ cfg.power
 cfg.sound
 ```
 
-`cfg.net` loads the packaged wired-network and Android USB-tethering drivers and prints detected
-interfaces and MAC addresses. There is no DHCP client yet, so configure the
-interface manually after entering the Buninu shell with `start()`:
+`cfg.net` loads the packaged wired-network and Android USB-tethering drivers,
+prints detected interfaces and MAC addresses, and automatically attempts DHCP
+configuration. If it succeeds, no additional DHCP command is needed.
+
+After a lease expires or when you need to obtain network settings again,
+enter the Buninu shell with `start()` and run `dhclient usb0` (replace `usb0`
+with your interface name). It configures the interface once and exits;
+there is no automatic renewal.
+
+For a manually configured static address, use:
 
 ```sh
 ip link set eth0 up
@@ -694,7 +701,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `mount` | `mount(2)` with type detection, `-o` parsing, `LABEL=`/`UUID=`, bind/move/remount; loads required filesystem and disk modules | `mount --help` → `/usr/share/doc/buninu-linux/mount.md` |
 | `umount` | `umount2(2)` with `-l`, `-f`, `-R` | `umount --help` |
 | `ip` | iproute2 grammar over `SIOC*` ioctls and `/proc/net`: `link`, `addr`, `route`, `neigh` | `ip --help` |
-| `dhclient` | DHCPv4 one-shot acquisition and release; reuses `ip` for addresses/routes | `dhclient --help` |
+| `dhclient` | Reacquire DHCPv4 settings after expiry or when needed (`dhclient usb0`), then exit; also supports release | `dhclient --help` |
 | `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |
@@ -1577,8 +1584,8 @@ custom `libinit.so` is needed.
 On a `--real` boot, init starts `/etc/resolv.conf` with `1.1.1.1` and
 `8.8.8.8`; these are initial public resolvers until the user replaces them
 with DNS appropriate for the local network. Hardware networking remains down
-until `cfg.net` loads the packaged drivers and the user assigns an address and
-route.
+until `cfg.net` loads the packaged drivers and attempts DHCP configuration.
+Manual address and route configuration with `ip` remains available.
 
 `cfg.net` starts DHCP in the background for every detected non-loopback interface.
 It returns immediately; failures and acquisition timeouts are logged without
@@ -1587,10 +1594,12 @@ Repeated `cfg.net` calls do not launch duplicate active clients. Route metrics
 start at 100; only the first interface updates DNS, leaving the init fallback
 resolver available if it cannot acquire a lease.
 
-Use `dhclient INTERFACE` to acquire and configure a DHCPv4 lease on a detected
-wired interface, or configure it with `ip` as described under
-[Basic configuration](#basic-configuration). `dhclient` exits after configuration;
-`-timeout 20` limits acquisition to 20 seconds. Leases do not renew automatically.
+After a lease expires or when network settings need to be obtained again,
+run `dhclient usb0` (or `dhclient eth0`, depending on the interface name).
+This is not an extra step after successful automatic configuration by `cfg.net`.
+`dhclient` exits after configuration; `-timeout 20` limits acquisition to 20
+seconds. Leases do not renew automatically. For manual static configuration,
+see [Basic configuration](#basic-configuration).
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
 `cfg.net`, `cfg.disk`, `cfg.power`, `cfg.sound` and `cfg.all` run as soon as the property is read, without
