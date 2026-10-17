@@ -104,6 +104,17 @@ const mountFilesystems = () => {
 mountFilesystems();
 console.log("init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts");
 
+// /dev/console is opened by the kernel without a controlling session.
+// Configure it before readline or any local command inherits the terminal.
+try {
+  const { configureConsole } = await import("/lib/console.js");
+  const consoleState = configureConsole();
+  if (consoleState.configured) console.log(`init.js: console foreground process group ${consoleState.pgrp}`);
+} catch (error) {
+  console.error(`init.js: console setup failed: ${error.message}`);
+}
+
+
 // Num Lock. The keypad's lock state lives per virtual console in the
 // kernel's keyboard table, and the kernel starts every console with it off,
 // so the keypad types arrows instead of digits. KDSKBLED carries the current
@@ -533,7 +544,7 @@ const configureEthernet = () => {
     const { startDhcp } = require("/lib/dhcp-start.js");
     startDhcp(interfaces);
   } catch (error) {
-    console.log(`eth: DHCP unavailable: ${error?.message ?? error}; init continues`);
+    console.log(`[dhcp setup] unavailable: ${error?.message ?? error}; init continues`);
   }
   return interfaces;
 };

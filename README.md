@@ -1555,6 +1555,11 @@ was found.
 
 #### What init.js does
 
+At boot, init establishes the console as its controlling terminal and sets
+a foreground process group before starting the REPL or local shell. This lets
+Ctrl-C interrupt commands on the kernel console, including `ping` and
+`bunmsh serve`. Existing controlling terminals (such as a PTY) are preserved.
+
 It installs signal handlers, loads a separate physical copy of musl through
 `bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without
 the devpts mount every pty open fails with `ENODEV`, since `/dev/ptmx`
