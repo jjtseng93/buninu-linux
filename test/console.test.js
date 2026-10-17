@@ -34,3 +34,19 @@ test('session leader skips setsid and a rejected ownership request is not forced
  }};
  expect(()=>configureConsole({pid:1,symbols})).toThrow('TIOCSCTTY');expect(attempts).toBe(1);
 });
+
+test('REPL hands a cooked baseline to children and restores raw mode on return',async()=>{
+ const {handoffConsole}=await import('../initramfs/lib/console.js');
+ const events=[],input={isRaw:true,setRawMode(raw){this.isRaw=raw;events.push(raw?'raw':'cooked');}};
+ const restore=handoffConsole({input,repl:{pause(){events.push('pause');},resume(){events.push('resume');}}});
+ expect(input.isRaw).toBe(false);expect(events).toEqual(['pause','cooked']);
+ restore();restore();expect(input.isRaw).toBe(true);expect(events).toEqual(['pause','cooked','raw','resume']);
+});
+test('non-raw input is preserved and failed handoff resumes the REPL',async()=>{
+ const {handoffConsole}=await import('../initramfs/lib/console.js');
+ let resumed=0;
+ const repl={pause(){},resume(){resumed++;}};
+ handoffConsole({input:{isRaw:false},repl})();expect(resumed).toBe(1);
+ const input={isRaw:true,setRawMode(raw){if(!raw)throw Error('termios failed');}};
+ expect(()=>handoffConsole({input,repl})).toThrow('termios failed');expect(resumed).toBe(2);
+});

@@ -1556,6 +1556,10 @@ At boot, init establishes the console as its controlling terminal and sets
 a foreground process group before starting the REPL or local shell. This lets
 Ctrl-C interrupt commands on the kernel console, including `ping` and
 `bunmsh serve`. Existing controlling terminals (such as a PTY) are preserved.
+Before handing the console to the local shell, init pauses the REPL and
+restores normal terminal input mode. This prevents the child shell from
+inheriting raw mode as its normal mode and losing Ctrl-C signal delivery.
+When the shell exits, init restores the REPL input mode.
 
 It installs signal handlers, loads a separate physical copy of musl through
 `bun:ffi`, mounts `/proc`, `/sys`, `/dev`, `/tmp` and `/dev/pts` (without

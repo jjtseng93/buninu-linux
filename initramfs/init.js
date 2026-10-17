@@ -398,6 +398,8 @@ try {
   console.error("network setup failed:", error);
 }
 
+const { handoffConsole } = await import("/lib/console.js");
+
 const launchBunmsh = () => {
   const runtimeDirectory = "/tmp/bunmsh-runtime";
   const homeDirectory = "/tmp/home";
@@ -416,29 +418,34 @@ const launchBunmsh = () => {
     dependencies: { bunmsh: "0.3.6" },
   }));
 
-  console.log("bunmsh: installing bunmsh@0.3.6 into /tmp/bunmsh-runtime");
-  const install = Bun.spawnSync([
-    "/bin/bun", "install", "--cwd", runtimeDirectory, "--production", "--no-progress",
-  ], {
-    cwd: runtimeDirectory,
-    env: environment,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  if (install.exitCode !== 0) throw new Error(`bun install exited with ${install.exitCode}`);
+  const restoreConsole = handoffConsole({ repl: replServer });
+  try {
+    console.log("bunmsh: installing bunmsh@0.3.6 into /tmp/bunmsh-runtime");
+    const install = Bun.spawnSync([
+      "/bin/bun", "install", "--cwd", runtimeDirectory, "--production", "--no-progress",
+    ], {
+      cwd: runtimeDirectory,
+      env: environment,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (install.exitCode !== 0) throw new Error(`bun install exited with ${install.exitCode}`);
 
-  const entry = `${runtimeDirectory}/node_modules/bunmsh/src/main.js`;
-  console.log(`bunmsh: starting ${entry}`);
-  const shell = Bun.spawnSync(["/bin/bun", entry], {
-    cwd: "/",
-    env: environment,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  console.log(`bunmsh exited with status ${shell.exitCode}; returning to Bun REPL.`);
-  return shell.exitCode;
+    const entry = `${runtimeDirectory}/node_modules/bunmsh/src/main.js`;
+    console.log(`bunmsh: starting ${entry}`);
+    const shell = Bun.spawnSync(["/bin/bun", entry], {
+      cwd: "/",
+      env: environment,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    console.log(`bunmsh exited with status ${shell.exitCode}; returning to Bun REPL.`);
+    return shell.exitCode;
+  } finally {
+    restoreConsole();
+  }
 };
 
 
@@ -464,7 +471,7 @@ Type bunterm in bunmsh: Graphical Terminal
 
   const entry = `/buninu/bin/init.js`;
   console.log(`buninu: Starting ${entry} --local`);
-  replServer?.pause();
+  const restoreConsole = handoffConsole({ repl: replServer });
   try {
     const shell = Bun.spawn([
       "/bin/bun", entry, "--local"
@@ -486,7 +493,7 @@ Type bunterm in bunmsh: Graphical Terminal
     // The child inherits the console directly. Keep the REPL from consuming
     // the same input while it runs, but leave PID 1's event loop alive so its
     // SIGCHLD handler can reap orphaned grandchildren such as Chromium.
-    replServer?.resume();
+    restoreConsole();
   }
   
 }
