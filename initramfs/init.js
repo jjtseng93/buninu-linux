@@ -535,6 +535,7 @@ const configureEthernet = () => {
   } catch (error) {
     console.log(`[dhcp setup] unavailable: ${error?.message ?? error}; init continues`);
   }
+  console.log("[dhcp] If automatic DHCP fails, run start() to enter the shell, then try dhclient usb0 (replace usb0 with your interface) or configure the network manually with ip commands. Use ip link to list network interfaces.");
   return interfaces;
 };
 

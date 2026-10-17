@@ -1,5 +1,8 @@
 # dhclient — DHCPv4 client
 
+Use `ip link` to list available network interfaces, then choose the interface
+name for the command, for example `dhclient usb0`.
+
 Acquire an IPv4 lease on an Ethernet-compatible interface. DHCP packets are
 implemented in JavaScript; Bun FFI calls the runtime libc for packet/UDP
 sockets and interface identification. Address and route changes invoke the

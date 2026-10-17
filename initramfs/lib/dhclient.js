@@ -24,7 +24,7 @@ export function parseDhclient(args) {
     else if(o.interface)throw new Error('specify one interface per process');
     else o.interface=a;
   }
-  if(!o.interface||!/^[a-zA-Z0-9_.:-]{1,15}$/.test(o.interface))throw new Error('specify an Ethernet interface, e.g. dhclient eth0');
+  if(!o.interface||!/^[a-zA-Z0-9_.:-]{1,15}$/.test(o.interface))throw new Error('specify an Ethernet interface, e.g. dhclient usb0. Use ip link to list network interfaces; use dhclient -h or dhclient --help for help.');
   o.leaseFile??=`/var/lib/dhclient/${o.interface}.json`;
   if(args.includes('-1')&&o.release)throw new Error('-1 and -r cannot be combined');
   return o;
