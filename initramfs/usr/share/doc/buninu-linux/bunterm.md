@@ -35,7 +35,7 @@ identified from the process task name and its open console descriptor under
 | --- | --- |
 | `N`, `/dev/ttyN` | The virtual console to use for graphics and the keyboard; for example, `2` means `/dev/tty2`. Naming a VT other than the active one starts a detached bunterm there, switches the display to it, and immediately returns control to the calling shell. Without this argument, bunterm uses the active VT in the foreground. |
 | `-e command [argument...]` | The program to run; everything after `-e` belongs to it. Default `/bin/sh`. |
-| `-s N`, `--font-size N` | Font size in pixels (default 16). The cell is 0.6 × N wide and 1.16 × N tall with DejaVu Sans Mono, so 1024×768 at 16 px gives 106 × 41 cells. |
+| `-s N`, `--font-size N` | Font size in pixels (default 13). The cell is 0.6 × N wide and 1.16 × N tall with DejaVu Sans Mono, so 1024×768 at 16 px gives 106 × 41 cells. |
 | `--line-height F` | Multiplies the cell height (default 1). |
 | `--fb /dev/fbN` | The framebuffer device (default `/dev/fb0`). |
 | `--no-blink` | A steady cursor. |

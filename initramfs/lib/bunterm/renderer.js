@@ -58,7 +58,7 @@ const isSingleCodePoint = (text) => {
 };
 
 export class Renderer {
-  constructor({ CanvasKit, screen, fonts, fontSize = 16, lineHeight = 1, theme = defaultTheme }) {
+  constructor({ CanvasKit, screen, fonts, fontSize = 13, lineHeight = 1, theme = defaultTheme }) {
     this.CanvasKit = CanvasKit;
     this.screen = screen;
     this.canvas = screen.canvas;

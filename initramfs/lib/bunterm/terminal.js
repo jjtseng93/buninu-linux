@@ -49,7 +49,7 @@ export const createSession = ({
   fonts,
   command = "/bin/sh",
   argv = [],
-  fontSize = 16,
+  fontSize = 13,
   lineHeight = 1,
   theme = defaultTheme,
   scrollback = 1000,
