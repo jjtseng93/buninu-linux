@@ -26,9 +26,6 @@ const glibc = !android && !!process.report?.getReport?.().header?.glibcVersionRu
 export const libcFamily = android ? "bionic" : glibc ? "glibc" : "musl";
 const errnoSymbol = android ? "__errno" : "__errno_location";
 const definitions = {
-  setsid: { args: [], returns: FFIType.i32 },
-  getsid: { args: [FFIType.i32], returns: FFIType.i32 },
-  getpgrp: { args: [], returns: FFIType.i32 },
   mount: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,

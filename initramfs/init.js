@@ -104,17 +104,6 @@ const mountFilesystems = () => {
 mountFilesystems();
 console.log("init.js: mounted /proc, /sys, /dev, /tmp, /dev/pts");
 
-// /dev/console is opened by the kernel without a controlling session.
-// Configure it before readline or any local command inherits the terminal.
-try {
-  const { configureConsole } = await import("/lib/console.js");
-  const consoleState = configureConsole();
-  if (consoleState.configured) console.log(`init.js: console foreground process group ${consoleState.pgrp}`);
-} catch (error) {
-  console.error(`init.js: console setup failed: ${error.message}`);
-}
-
-
 // Num Lock. The keypad's lock state lives per virtual console in the
 // kernel's keyboard table, and the kernel starts every console with it off,
 // so the keypad types arrows instead of digits. KDSKBLED carries the current
@@ -398,8 +387,6 @@ try {
   console.error("network setup failed:", error);
 }
 
-const { handoffConsole } = await import("/lib/console.js");
-
 const launchBunmsh = () => {
   const runtimeDirectory = "/tmp/bunmsh-runtime";
   const homeDirectory = "/tmp/home";
@@ -418,34 +405,29 @@ const launchBunmsh = () => {
     dependencies: { bunmsh: "0.3.6" },
   }));
 
-  const restoreConsole = handoffConsole({ repl: replServer });
-  try {
-    console.log("bunmsh: installing bunmsh@0.3.6 into /tmp/bunmsh-runtime");
-    const install = Bun.spawnSync([
-      "/bin/bun", "install", "--cwd", runtimeDirectory, "--production", "--no-progress",
-    ], {
-      cwd: runtimeDirectory,
-      env: environment,
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (install.exitCode !== 0) throw new Error(`bun install exited with ${install.exitCode}`);
+  console.log("bunmsh: installing bunmsh@0.3.6 into /tmp/bunmsh-runtime");
+  const install = Bun.spawnSync([
+    "/bin/bun", "install", "--cwd", runtimeDirectory, "--production", "--no-progress",
+  ], {
+    cwd: runtimeDirectory,
+    env: environment,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (install.exitCode !== 0) throw new Error(`bun install exited with ${install.exitCode}`);
 
-    const entry = `${runtimeDirectory}/node_modules/bunmsh/src/main.js`;
-    console.log(`bunmsh: starting ${entry}`);
-    const shell = Bun.spawnSync(["/bin/bun", entry], {
-      cwd: "/",
-      env: environment,
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    console.log(`bunmsh exited with status ${shell.exitCode}; returning to Bun REPL.`);
-    return shell.exitCode;
-  } finally {
-    restoreConsole();
-  }
+  const entry = `${runtimeDirectory}/node_modules/bunmsh/src/main.js`;
+  console.log(`bunmsh: starting ${entry}`);
+  const shell = Bun.spawnSync(["/bin/bun", entry], {
+    cwd: "/",
+    env: environment,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  console.log(`bunmsh exited with status ${shell.exitCode}; returning to Bun REPL.`);
+  return shell.exitCode;
 };
 
 
@@ -471,7 +453,7 @@ Type bunterm in bunmsh: Graphical Terminal
 
   const entry = `/buninu/bin/init.js`;
   console.log(`buninu: Starting ${entry} --local`);
-  const restoreConsole = handoffConsole({ repl: replServer });
+  replServer?.pause();
   try {
     const shell = Bun.spawn([
       "/bin/bun", entry, "--local"
@@ -493,7 +475,7 @@ Type bunterm in bunmsh: Graphical Terminal
     // The child inherits the console directly. Keep the REPL from consuming
     // the same input while it runs, but leave PID 1's event loop alive so its
     // SIGCHLD handler can reap orphaned grandchildren such as Chromium.
-    restoreConsole();
+    replServer?.resume();
   }
   
 }
