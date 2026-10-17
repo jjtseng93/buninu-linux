@@ -227,17 +227,7 @@ It supports Chinese text, emoji and the browser's terminal graphics. Use
 `Ctrl+Alt+F1` to return to the original console and `Ctrl+Alt+F2` to return
 to this terminal.
 
-`cfg.net` starts DHCP in the background for every detected non-loopback interface.
-It returns immediately; failures and acquisition timeouts are logged without
-interrupting init. Each client exits after configuring its lease; no renewal process stays running.
-Repeated `cfg.net` calls do not launch duplicate active clients. Route metrics
-start at 100; only the first interface updates DNS, leaving the init fallback
-resolver available if it cannot acquire a lease.
-
-Use `dhclient INTERFACE` to acquire and configure a DHCPv4 lease on a detected
-wired interface, or configure it with `ip` as described under
-[Basic configuration](#basic-configuration). `dhclient` exits after configuration;
-`-timeout 20` limits acquisition to 20 seconds. Leases do not renew automatically. Run `poweroff` for a synced
+Run `poweroff` for a synced
 shutdown. After editing the initramfs, `bun ./index.js -b --real --export` rebuilds the
 image; `-h` lists all flags.
 
@@ -1589,6 +1579,18 @@ On a `--real` boot, init starts `/etc/resolv.conf` with `1.1.1.1` and
 with DNS appropriate for the local network. Hardware networking remains down
 until `cfg.net` loads the packaged drivers and the user assigns an address and
 route.
+
+`cfg.net` starts DHCP in the background for every detected non-loopback interface.
+It returns immediately; failures and acquisition timeouts are logged without
+interrupting init. Each client exits after configuring its lease; no renewal process stays running.
+Repeated `cfg.net` calls do not launch duplicate active clients. Route metrics
+start at 100; only the first interface updates DNS, leaving the init fallback
+resolver available if it cannot acquire a lease.
+
+Use `dhclient INTERFACE` to acquire and configure a DHCPv4 lease on a detected
+wired interface, or configure it with `ip` as described under
+[Basic configuration](#basic-configuration). `dhclient` exits after configuration;
+`-timeout 20` limits acquisition to 20 seconds. Leases do not renew automatically.
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
 `cfg.net`, `cfg.disk`, `cfg.power`, `cfg.sound` and `cfg.all` run as soon as the property is read, without
