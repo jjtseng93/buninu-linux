@@ -11,7 +11,7 @@ ping --help
 
 | Option | Meaning |
 |---|---|
-| `-c COUNT` | Stop after COUNT requests and their replies/timeouts. Without it, continue until Ctrl-C or the deadline. |
+| `-c COUNT` | Stop after COUNT requests and their replies/timeouts. Default: 4 requests, then exit. |
 | `-i SECONDS` | Send interval, default 1 second; fractional values supported, minimum 0.002 seconds. |
 | `-W SECONDS` | Per-request reply timeout, default 2 seconds; fractional values supported. |
 | `-w SECONDS` | Overall probing deadline, including outstanding requests. DNS resolution happens first. |

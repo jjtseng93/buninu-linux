@@ -2,7 +2,7 @@ import { isIP } from 'node:net';
 import { randomBytes } from 'node:crypto';
 
 export function parsePing(args) {
-  const o={count:Infinity,interval:1,timeout:2,deadline:Infinity,size:56,ttl:64,family:0,quiet:false,timestamp:false};
+  const o={count:4,interval:1,timeout:2,deadline:Infinity,size:56,ttl:64,family:0,quiet:false,timestamp:false};
   const values={c:'count',i:'interval',W:'timeout',w:'deadline',s:'size',t:'ttl',I:'source'};
   let positional=false;
   for(let i=0;i<args.length;i++){

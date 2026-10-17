@@ -18,6 +18,7 @@ const available=probe?.status===0;
 
 test('ping parses common flags and rejects malformed arguments',()=>{
  expect(parsePing(['-4nqD','-c3','-i','.2','-W','1','-w','5','-s','17','-t64','-I','lo','localhost'])).toMatchObject({family:4,count:3,interval:.2,timeout:1,deadline:5,size:17,ttl:64,source:'lo',host:'localhost',quiet:true,timestamp:true});
+ expect(parsePing(['localhost']).count).toBe(4);
  expect(parsePing(['-6','--','::1']).family).toBe(6);
  for(const args of [[],['-c'],['-c','0','localhost'],['-c','Infinity','localhost'],['-W','NaN','localhost'],['-s','65508','localhost'],['-s','-1','localhost'],['-t','256','localhost'],['-i','0','localhost'],['-w','0','localhost'],['-Z','localhost'],['a','b']])expect(()=>parsePing(args)).toThrow();
  expect(parsePing(['--help']).help).toBe(true);
