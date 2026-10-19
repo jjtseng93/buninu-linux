@@ -147,3 +147,16 @@ neither set nor read the clipboard through the terminal.
 - `/lib/fbdev.js` — the framebuffer itself (`fbdev.md`)
 - `/buninu/apps/jsgotty/gotty.js` — the PTY backend and kitty packet parser
   that are reused
+
+## Terminal switch menu
+
+Left-click the top-left **2×2 physical pixels** to open a text menu of live
+bunterm VTs and the initial tty (normally tty1). Click an entry to switch, or use
+Up/Down and Enter. The wheel scrolls the selection; Escape, right-click, or a click
+outside the entries closes the menu. Menu input is consumed locally, including
+when a terminal application has enabled mouse reporting. Requires mouse support.
+The menu switches existing sessions; it does not create a new bunterm.
+
+中文：左鍵點擊螢幕最左上角 2×2 像素，會列出正在運行的 bunterm 和初始 tty。
+可以點選或用上下鍵、Enter 切換；Esc、右鍵或點擊選項外關閉。不會把選單操作
+送進底下的 shell／應用程式，也不會關閉原本的 bunterm。

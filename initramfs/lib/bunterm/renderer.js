@@ -395,7 +395,7 @@ export class Renderer {
   // screen pixels, from images.js, drawn over the text; `pointer` is the
   // mouse position in pixels, drawn last. Returns true when anything was
   // painted.
-  render(term, { cursor, images = [], pointer = null } = {}) {
+  render(term, { cursor, images = [], pointer = null, overlay = null } = {}) {
     const buffer = term.buffer.active;
     const top = buffer.viewportY;
     const dirty = [];
@@ -433,6 +433,7 @@ export class Renderer {
     }
     this.lastCursor = { x: cursor?.x ?? -1, y: cursor?.y ?? -1, visible: Boolean(cursor?.visible) };
     if (images.length) this.drawImages(images, dirty);
+    if (overlay) overlay();
     if (pointer) this.drawPointer(pointer);
     this.lastPointer = pointer ? { x: pointer.x, y: pointer.y } : null;
     this.screen.flush();

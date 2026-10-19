@@ -6,7 +6,7 @@
 // hold the console device open.  Both facts live under /proc/<pid> and disappear
 // with the process; there is no persistent pid or lock file to become stale.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { libc, cString, check } from "../dlopen.js";
 
 const PR_SET_NAME = 15;
@@ -88,4 +88,23 @@ Switch between TTYs by Ctrl+Alt+F1-12
   return () => {
     try { setTaskName(previousName); } catch {}
   };
+};
+
+// Discover live owners using the same task-name + device-fd contract as claim.
+export const listVirtualTerminals = () => {
+  let initial = 1;
+  try {
+    initial = virtualConsoleNumber(readlinkSync("/proc/1/fd/0")) ?? 1;
+  } catch {}
+  const entries = new Map([[initial, { number: initial, label: `tty${initial} — initial console` }]]);
+  for (const pid of readdirSync("/proc").filter(name => /^\d+$/.test(name))) {
+    try {
+      const match = /^bunterm:tty([1-9][0-9]*)$/.exec(readFileSync(`/proc/${pid}/comm`, "utf8").trim());
+      if (!match) continue;
+      const number = Number(match[1]);
+      if (number > 63 || !processHoldsDevice(pid, statSync(`/dev/tty${number}`).rdev)) continue;
+      entries.set(number, { number, label: `tty${number} — bunterm${number === initial ? " / initial console" : ""}` });
+    } catch {} // processes can exit during the scan
+  }
+  return [...entries.values()].sort((a, b) => a.number - b.number);
 };

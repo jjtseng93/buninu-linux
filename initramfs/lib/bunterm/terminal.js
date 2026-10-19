@@ -20,7 +20,8 @@ import { UnicodeGraphemesAddon } from "../xterm/addon-unicode-graphemes.mjs";
 import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
-import { claimVirtualConsole } from "./vt.js";
+import { claimVirtualConsole, listVirtualTerminals } from "./vt.js";
+import { createVtMenu } from "./vt-menu.js";
 import { attachGeometry } from "./geometry.js";
 import { terminalMouseEvent } from "./pointer-report.js";
 import { attachClipboard } from "./clipboard.js";
@@ -57,6 +58,7 @@ export const createSession = ({
   mouse = true,
   clipboard = true,
   env = {},
+  vtMenu = null,
   onError = (error) => console.error(`bunterm: ${error?.stack ?? error}`),
 }) => {
   const { BunPtyBackend, KittyGraphicsParser } = loadJsgotty();
@@ -92,6 +94,7 @@ export const createSession = ({
   // Only set when a pointer is attached; without one the renderer is called
   // exactly as before.
   let pointer = null;
+  let menu = null;
   const paint = () => {
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
@@ -100,6 +103,7 @@ export const createSession = ({
     // cursorY counts from the buffer's base, so a scrolled-back viewport
     // moves the cursor down the screen and eventually off it.
     const row = buffer.baseY + buffer.cursorY - buffer.viewportY;
+    if (menu?.visible) renderer.invalidate();
     return renderer.render(term, {
       cursor: {
         x: buffer.cursorX,
@@ -108,14 +112,20 @@ export const createSession = ({
       },
       images: images.visible(),
       pointer,
+      overlay: menu?.visible ? () => menu.draw(renderer) : null,
     });
   };
   const requestFrame = () => {
     if (!active) return;
     frameTimer ??= setTimeout(paint, 16);
   };
+  if (vtMenu) menu = createVtMenu({
+    ...vtMenu, width: screen.width, height: screen.height, rowHeight: renderer.cellHeight,
+    changed: () => { renderer.invalidate(); requestFrame(); },
+  });
   const suspend = () => {
     active = false;
+    menu?.close();
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
   };
@@ -169,6 +179,7 @@ export const createSession = ({
 
   // Keyboard bytes from the console, rewritten for the program's key mode.
   const input = (bytes) => {
+    if (menu?.input(bytes)) return;
     const applicationCursorKeys = Boolean(term._core?.coreService?.decPrivateModes?.applicationCursorKeys);
     const text = translateKeys(bytes.toString("latin1"), { applicationCursorKeys });
     backend.write(Buffer.from(text, "latin1"));
@@ -221,6 +232,7 @@ export const createSession = ({
     if (!active) return;
     pointer = { x: report.x, y: report.y };
     requestFrame();
+    if (menu?.pointer(report)) return;
     const service = term._core?.coreMouseService;
     if (!service?.areMouseEventsActive) {
       if (report.wheel) wheelScroll(report.wheel);
@@ -308,7 +320,22 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
 
   return runGraphics(async (display, { onRestore, onRelease, onAcquire }) => {
     const screen = openCanvas(CanvasKit, display);
-    const session = createSession({ CanvasKit, screen, fonts, ...options });
+    let switching = false;
+    const session = createSession({ CanvasKit, screen, fonts, ...options, vtMenu: {
+      list: listVirtualTerminals,
+      select: async number => {
+        if (switching) return;
+        switching = true;
+        try {
+          // Waiting in this process would block its VT_PROCESS signal handlers.
+          const child = Bun.spawn([process.execPath, `${import.meta.dir}/../../bin/chvt`, String(number)],
+            { stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+          const [status, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+          if (status !== 0) console.error(`bunterm: ${error.trim() || "VT switch failed"}`);
+        } catch (error) { console.error(`bunterm: VT switch: ${error.message}`); }
+        finally { switching = false; }
+      },
+    } });
     onRelease(session.suspend);
     // Coming back from another console (Ctrl-Alt-Fn): fbcon or another
     // bunterm has drawn over the framebuffer, so repaint everything.
