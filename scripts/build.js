@@ -94,11 +94,22 @@ export const uki = async (cfg = config()) => {
   console.log(`Built ${cfg.arch} UKI with Alpine linux-${cfg.flavor} at vda/EFI/BOOT/${cfg.efiBootName}`);
 };
 
-/** build-image.sh: vda.img, 128 MiB, GPT with the ESP from sector 2048 to the last usable one. */
+// Keep small images at 128 MiB. Reserve 1/16 payload size plus 4 MiB for
+// FAT metadata, directories, GPT/alignment and free space, rounded to 64 MiB.
+// Keep this calculation aligned with build-image.sh.
+export const imageBytes = (payloadBytes) => {
+  if (!Number.isSafeInteger(payloadBytes) || payloadBytes < 0 || payloadBytes > 0xffffffff)
+    throw new Error("EFI payload exceeds the FAT32 single-file limit or has an invalid size");
+  const unit = 64 * 1024 * 1024;
+  return Math.max(128 * 1024 * 1024,
+    Math.ceil((payloadBytes + Math.ceil(payloadBytes / 16) + 4 * 1024 * 1024) / unit) * unit);
+};
+
+/** build-image.sh: dynamically sized GPT disk with one FAT32 ESP. */
 export const image = (cfg = config()) => {
   const efi = join(rootDir, "vda/EFI/BOOT", cfg.efiBootName);
   if (!nonEmpty(efi)) throw new Error(`no ${cfg.arch} EFI payload ${efi} yet; build the UKI first`);
-  const diskSectors = (128 * 1024 * 1024) / 512;
+  const diskSectors = imageBytes(statSync(efi).size) / 512;
   const espStart = 2048;
   const espEnd = diskSectors - 34;
   const path = join(rootDir, "vda.img");
@@ -134,7 +145,7 @@ export const image = (cfg = config()) => {
   } finally {
     volume.close();
   }
-  console.log(`Packed vda/EFI/BOOT/${cfg.efiBootName} into vda.img`);
+  console.log(`Packed vda/EFI/BOOT/${cfg.efiBootName} into vda.img (${diskSectors * 512 / 1024 / 1024} MiB)`);
 };
 
 export const buildAll = async (cfg = config()) => {

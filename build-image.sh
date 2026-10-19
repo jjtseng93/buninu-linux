@@ -25,7 +25,16 @@ done
 temporary_esp="$(mktemp --tmpdir=. .esp.XXXXXX.img)"
 trap 'rm -f "$temporary_esp"' EXIT
 
-disk_sectors=$((128 * 1024 * 1024 / 512))
+# Match scripts/build.js: payload + 1/16 + 4 MiB, rounded to 64 MiB.
+payload_bytes=$(stat -c %s "vda/EFI/BOOT/$efi_boot_name")
+if ((payload_bytes > 4294967295)); then
+    echo "error: EFI payload exceeds the FAT32 single-file limit" >&2
+    exit 1
+fi
+unit=$((64 * 1024 * 1024))
+disk_bytes=$(((payload_bytes + (payload_bytes + 15) / 16 + 4 * 1024 * 1024 + unit - 1) / unit * unit))
+((disk_bytes >= 128 * 1024 * 1024)) || disk_bytes=$((128 * 1024 * 1024))
+disk_sectors=$((disk_bytes / 512))
 esp_start=2048
 esp_end=$((disk_sectors - 34))
 esp_sectors=$((esp_end - esp_start + 1))

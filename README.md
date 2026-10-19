@@ -1346,7 +1346,9 @@ LBA 2048..262110   ESP, FAT32 "EFIBOOT", type GUID C12A7328-F81F-11D2-BA4B-00A0C
 LBA 262111..       backup GPT
 ```
 
-128 MiB sparse, 1 MiB-aligned, with 34 sectors reserved at the end for the
+At least 128 MiB sparse, growing automatically with the EFI payload (64 MiB
+increments, with room for FAT metadata and free space), 1 MiB-aligned, with
+34 sectors reserved at the end for the
 backup GPT. `EFI/BOOT/BOOTX64.EFI` and `EFI/BOOT/BOOTAA64.EFI` are the
 architecture-specific removable-media fallback paths, so matching firmware
 runs the one present in the image without any NVRAM boot entry.
