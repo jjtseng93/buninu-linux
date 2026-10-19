@@ -73,7 +73,9 @@ export const download = async (cfg, url, name, sha256) => {
 export const readTar = (path) => {
   const data = gunzipSync(readFileSync(path));
   const files = new Map();
+  const links = new Map();
   let longName = null;
+  let longLink = null;
   for (let offset = 0; offset + 512 <= data.length;) {
     const header = data.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) { offset += 512; continue; }
@@ -87,19 +89,25 @@ export const readTar = (path) => {
       for (const record of body.toString("utf8").split("\n")) {
         const match = /^\d+ path=(.*)$/.exec(record);
         if (match) longName = match[1];
+        const link = /^\d+ linkpath=(.*)$/.exec(record);
+        if (link) longLink = link[1];
       }
       continue;
     }
     if (type === "L") { longName = body.toString("utf8").replace(/\0.*$/s, ""); continue; }
+    if (type === "K") { longLink = body.toString("utf8").replace(/\0.*$/s, ""); continue; }
     if (type === "g") continue;
     const prefix = field(345, 155);
     const name = longName ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
     longName = null;
     if (type === "0" || type === "\0") files.set(name.replace(/^\.\//, ""), body);
+    if (type === "1" || type === "2") links.set(name.replace(/^\.\//, ""), { target: longLink ?? field(157, 100), hard: type === "1" });
+    longLink = null;
   }
   return {
     // Enumerate regular files without exposing the Map's mutation methods.
     entries() { return files.entries(); },
+    links() { return links.entries(); },
     get(name) {
       const bytes = files.get(name);
       if (!bytes) throw new Error(`${path}: no ${name}`);
@@ -141,6 +149,8 @@ export const fetchAlpine = (cfg = config()) => withUmask022(async () => {
   }
   writeTo(join(cfg.modulesRoot, "modules.dep"), trimDependencies(dep, selected));
   writeTo(join(cfg.modulesRoot, "modules.alias"), filterAliases(linux.get(`${release}/modules.alias`).toString(), selected));
+
+  await (await import("./fetch-gpu.js")).fetchGpuFirmware(cfg);
 
   chmodSync(join(cfg.nativeDir, "lib", cfg.muslLoader), 0o755);
   console.log(`Fetched Alpine ${cfg.arch} linux-${cfg.flavor} kernel, ${selected.length} modules, musl, and the ${cfg.efiStub} UKI stub.`);

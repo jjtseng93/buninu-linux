@@ -18,6 +18,23 @@ Alpine's CDN serves only the current pkgrel of each branch, so the package
 URLs below stop working once a build is superseded. The pinned aports commits
 are permanent and are the Corresponding Source for each exact build.
 
+## Optional GPU firmware
+
+Images whose kernel packages PC GPU modules also bundle the unmodified firmware
+files from Alpine v3.24 `linux-firmware-{amdgpu,i915,nvidia,radeon,xe}`
+`20260519-r0` (x86_64 APKs). URLs use
+`https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/`; exact archive filenames
+and SHA-256 values are in `scripts/gpu-firmware.json`.
+The Alpine recipe is aports commit `0d703a66341886130fe4e46c51cd4f161d8b96b8`,
+`main/linux-firmware/APKBUILD`; upstream is
+<https://gitlab.com/kernel-firmware/linux-firmware/-/tree/20260519>.
+Redistribution terms differ by firmware. The upstream `WHENCE` inventory and
+`LICENSE.amdgpu`, `LICENSE.radeon`, `LICENSE.i915`, `LICENSE.xe`,
+`LICENCE.nvidia`, and `LICENSE.amdisp` are preserved in `LICENSES/linux-firmware/`
+and copied into the image's license directory. This includes GPU firmware, not
+NVIDIA's proprietary host kernel/userspace driver. Loading remains opt-in via
+`cfg.gpu`; firmware does not change the project source license.
+
 ## Bootstrap source archives
 
 `initramfs/usr/lib/bootstrap/sources/` additionally carries uncompiled source:

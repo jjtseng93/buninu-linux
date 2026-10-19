@@ -17,6 +17,9 @@ const required = (names) => names.map((name) => ({ name }));
 const optional = (names) => names.map((name) => ({ name, optional: true }));
 
 export const requests = ({ arch, flavor, real }) => [
+  // Pack, but never coldplug at boot or through cfg.all. cfg.gpu matches hardware.
+  ...optional(["virtio-gpu", "vmwgfx"]),
+  ...(arch === "x86_64" ? optional(["i915", "xe", "amdgpu", "radeon", "nouveau"]) : []),
   ...required([
     "failover",
     "net_failover",

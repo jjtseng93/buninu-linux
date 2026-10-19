@@ -33,6 +33,9 @@ depfile="$(mktemp)"
 selected="$(mktemp)"
 trap 'rm -f "$depfile" "$selected" "$selected.names"' EXIT
 extract "$linux_package" "lib/modules/$kernel_release/modules.dep" > "$depfile"
+# Recreate the generated module tree so removed selections cannot linger.
+rm -rf "$modules_root"
+mkdir -p "$modules_root"
 extract "$linux_package" "lib/modules/$kernel_release/modules.builtin" > "$modules_root/modules.builtin"
 
 select_module() {
@@ -65,6 +68,11 @@ select_optional_module() {
 # it in, linux-lts has it as a module that nothing in modules.dep pulls in.
 for module in failover net_failover virtio_net af_packet; do select_module "$module"; done
 select_optional_module virtio_pci
+# GPU modules are packaged only; init and cfg.all leave them unloaded.
+for module in virtio-gpu vmwgfx; do select_optional_module "$module"; done
+if [ "$arch" = x86_64 ]; then
+    for module in i915 xe amdgpu radeon nouveau; do select_optional_module "$module"; done
+fi
 # Storage: what /bin/mount loads on demand. ext4 brings jbd2, mbcache and
 # crc16; FAT, exFAT and NTFS ask the kernel for the NLS tables at mount
 # time, which has no /sbin/modprobe to answer, so mount preloads them.
@@ -144,5 +152,9 @@ extract "$linux_package" "lib/modules/$kernel_release/modules.alias" \
     ' > "$modules_root/modules.alias"
 
 chmod 0755 "$native_dir/lib/$musl_loader"
+
+# Share the verified firmware extraction and cache marker with the JS build.
+js=$(command -v bun || command -v node)
+"$js" scripts/fetch-gpu.js
 
 echo "Fetched Alpine $arch linux-$linux_flavor kernel, $(wc -l < "$selected") modules, musl, and the $efi_stub UKI stub."

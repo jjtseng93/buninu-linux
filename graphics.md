@@ -222,6 +222,15 @@ at once and draws on VT 2; and keys sent with the monitor's `sendkey` reach
 it: `showimg /buninu/icon.png` places the kitty image, and the prompt's
 colour emoji and the pointer render, all checked with `screendump`.
 
+## Optional client GPU acceleration
+
+Client GPU rendering can be enabled separately with the PID 1 REPL's `cfg.gpu`,
+before opening framebuffer clients. It loads matched GPU drivers and exposes
+render nodes, while this CanvasKit/bunterm stack remains software-rendered.
+Boot and `cfg.all` do not load those GPU drivers. See the README's
+[optional client GPU acceleration](README.md#optional-client-gpu-acceleration-cfggpu)
+for firmware, device permissions and framebuffer handoff constraints.
+
 ## Not done yet
 
 - Selection and scrollback viewing in `bunterm` (the pointer itself works,

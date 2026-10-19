@@ -28,6 +28,7 @@ import { format, openVolume } from "../initramfs/lib/fat.js";
 import { TYPES, randomGuid, writeGpt } from "../initramfs/lib/gpt.js";
 import { config, jsRuntime, rootDir, runIfMain } from "./arch.js";
 import { fetchAlpine } from "./fetch.js";
+import { gpuReady } from "./fetch-gpu.js";
 import { pack } from "./pack.js";
 
 const nonEmpty = (path) => existsSync(path) && statSync(path).size > 0;
@@ -64,6 +65,7 @@ export const uki = async (cfg = config()) => {
   const missing = !nonEmpty(cfg.kernelImage)
     || !nonEmpty(join(cfg.kernelDir, cfg.efiStub))
     || !nonEmpty(join(cfg.modulesRoot, "modules.dep"))
+    || !gpuReady(cfg)
     || (cfg.real && (
       !nonEmpty(join(cfg.modulesRoot, "kernel/drivers/hid/usbhid/usbhid.ko"))
       || !nonEmpty(join(cfg.modulesRoot, "kernel/drivers/acpi/battery.ko"))

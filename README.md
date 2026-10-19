@@ -197,7 +197,7 @@ display and USB keyboard with a welcome ending like this:
 Welcome to Buninu Linux!
 Bun 1.4.2 is now PID 1
 Type start() to run buninu --local
-Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power, cfg.sound
+Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power, cfg.sound, cfg.gpu
 
 bun-repl>
 ```
@@ -1599,20 +1599,21 @@ seconds. Leases do not renew automatically. For manual static configuration,
 see [Basic configuration](#basic-configuration).
 
 On a `--real` image the REPL also offers the getter-based `cfg` namespace:
-`cfg.net`, `cfg.disk`, `cfg.power`, `cfg.sound` and `cfg.all` run as soon as the property is read, without
+`cfg.net`, `cfg.disk`, `cfg.power`, `cfg.sound`, `cfg.gpu` and `cfg.all` run as soon as the property is read, without
 parentheses. `cfg.net` loads every packaged network module (including PHY and bus support),
 then reads the `modalias` of every PCI and USB network device, matches it
 against the `pci:`/`usb:` lines
 `fetch-alpine.sh` kept in `modules.alias` and lists the interfaces. `cfg.disk`
 loads the packaged SATA/PATA/SCSI, NVMe/VMD and USB storage stacks so
 their disks and partitions appear in `/dev`, then lists `/sys/class/block`. `cfg.all`
-unconditionally attempts every packaged module and recursively loads its
+attempts every packaged module **except GPU modules** and recursively loads its
 declared dependencies. `--real` ships Intel `e1000`/`e1000e`/`igb`/`igc`,
 Realtek `r8169`, Atheros `alx`, Broadcom `tg3`, common USB dongles, and
 `rndis_host`/`cdc_ether`/`cdc_ncm`/`cdc_eem`/`cdc_subset`/`zaurus` for Android
 USB tethering. `cfg.net` unconditionally attempts all of these packaged
 network modules. `cfg.sound` likewise unconditionally attempts every packaged
 module below `kernel/sound/`, then lists `/dev/snd`; it does no hardware probe.
+
 The packaged sound set covers QEMU ES1371/HDA and common PC HDA/HDMI and USB
 audio where the selected kernel flavor provides them. `cfg.power` loads the ACPI
 `battery`, `ac`, `button` and `thermal` modules through `/lib/modprobe.js`
@@ -1625,6 +1626,58 @@ reports nothing registered). Nothing loads them at boot. PID 1 also installs
 `start()` launches the bundled Buninu userspace and its bunmsh (Bun Modern Shell) with
 the current process environment preserved, while overriding `PATH` and `HOME`
 for the userspace session.
+
+### Optional client GPU acceleration (`cfg.gpu`)
+
+GPU drivers are packaged but are **not loaded by boot, `start()`, `cfg.all`, or
+`cfgMod`**. The existing simpledrm/framebuffer and software-rendered bunterm path
+stays the default. At the PID 1 REPL, before opening bunterm/fbdev, explicitly read:
+
+```js
+cfg.gpu
+```
+
+This is a one-shot PCI/virtio hardware probe, not a daemon. It matches available
+drivers, loads their module dependencies, and lists `/dev/dri/renderD*` and
+`/dev/fb*`. Individual driver failures are reported without stopping init. A
+missing render node is not reported as successful acceleration: inspect kernel
+firmware/driver messages; if probing is asynchronous, read `cfg.gpu` again later.
+If a process already holds an fd or mmap of `/dev/fb*`, it refuses to load GPU
+drivers. Exit that framebuffer client first; after GPU handoff, reopen it to
+discover the new framebuffer, resolution and pixel format. `fb0` is not guaranteed.
+
+The x86_64 LTS module set includes Intel `i915`/`xe`, AMD `amdgpu`/legacy `radeon`,
+NVIDIA **Nouveau**, and VMware `vmwgfx`; both architectures request `virtio_gpu`.
+Modules absent from a selected Alpine kernel are skipped with a build-time note.
+The five pinned Alpine `linux-firmware-{i915,xe,amdgpu,radeon,nvidia}` packages are
+included when PC GPU modules are present (about 151 MB of downloads). Firmware
+symlinks and directory aliases are preserved, and the kernel reads their `.zst`
+files directly. Firmware pins live in `scripts/gpu-firmware.json`; licenses and
+WHENCE are under `LICENSES/linux-firmware/`. Rebuild existing images to include
+the new modules and firmware; the build detects older fetch caches.
+
+Render nodes are set to `root:0`, mode `0660`, for this system's root clients.
+For non-root clients, set a numeric supplementary group before reading the getter:
+
+```js
+process.env.BUNINU_RENDER_GID = "107" // use the actual client render group ID
+cfg.gpu
+```
+
+The client must run with that numeric group and, inside a chroot/proot, see the
+real `/dev/dri` nodes and relevant `/sys`. Mesa, Vulkan loader/ICD and their
+dependencies belong in the **client's** environment; this change does not install
+them or accelerate CanvasKit/Land itself. A render node alone does not prove
+hardware rendering: verify `vulkaninfo`/the browser's renderer and visible output.
+QEMU additionally needs an accelerated host GPU backend (VirGL/Venus); a plain
+2D virtio GPU is not 3D acceleration. This does not include NVIDIA's proprietary
+driver, Android KGSL, or board-specific ARM GPU/DT/firmware enablement.
+
+中文：GPU 模組與韌體只打包、不自動載入；必須在 PID 1 REPL 讀取 `cfg.gpu`。
+原本開機、`start()`、`cfg.all` 都保留軟體 framebuffer 路徑。請在啟動 bunterm
+之前操作；若已有程式開啟或映射 framebuffer，會拒絕接管。載入後重新開啟
+bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須另行提供，
+本功能不代表 Land 本身改用 GPU。實際支援範圍取決於 kernel、firmware 與硬體型號。
 
 ## Contents
 

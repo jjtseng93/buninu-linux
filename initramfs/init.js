@@ -540,11 +540,12 @@ const configureEthernet = () => {
 };
 
 // Explicit full coldplug for this deliberately tiny system: load every .ko
-// represented in modules.dep, recursively including each module's declared
+// represented in modules.dep except GPU modules (cfg.gpu only), including declared
 // dependencies. Failures are reported individually without stopping the rest.
 const configureModules = () => {
   const { modprobeAll } = require("/lib/modprobe.js");
-  const report = modprobeAll();
+  const { isGpuPath } = require("/lib/gpu.js");
+  const report = modprobeAll({ accept: (module, path) => !isGpuPath(module, path) });
   console.log(`modules: ${report.inserted.length} newly loaded, ${report.errors.length} failed`);
   for (const { module, error } of report.errors) console.log(`modules: ${module}: ${error}`);
   return report;
@@ -579,12 +580,24 @@ const configureSound = () => {
   return devices;
 };
 
+const configureGraphics = () => {
+  try {
+    const { configureGpu } = require("/lib/gpu.js");
+    const { autoload, tryModprobe } = require("/lib/modprobe.js");
+    return configureGpu({ autoload, tryModprobe });
+  } catch (error) {
+    console.log(`[gpu] failed: ${error?.message ?? error}; init continues`);
+    return { errors: [String(error?.message ?? error)] };
+  }
+};
+
 globalThis.cfg = Object.freeze(Object.defineProperties({}, {
   all: { enumerable: true, get: configureModules },
   disk: { enumerable: true, get: configureDisks },
   net: { enumerable: true, get: configureEthernet },
   power: { enumerable: true, get: configureBattery },
   sound: { enumerable: true, get: configureSound },
+  gpu: { enumerable: true, get: configureGraphics },
 }));
 
 // Compatibility aliases for images and notes that used the original API.

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "linux-firmware-amdgpu-20260519-r0.apk",
+    "sha256": "70bc5c972a2da62b84b53e06b6d4c5aec0a8e9d6d280802755c3c8643f3bb8c6"
+  },
+  {
+    "name": "linux-firmware-i915-20260519-r0.apk",
+    "sha256": "3946f8b0a8f0dd187bd71d9aa9b3085a10cb1e8cf4700aa876799e6368309fa4"
+  },
+  {
+    "name": "linux-firmware-nvidia-20260519-r0.apk",
+    "sha256": "9fd3fa7eff65792ef8558c01a27246862e2701a99ef97dba5111b9f6db2c80ee"
+  },
+  {
+    "name": "linux-firmware-radeon-20260519-r0.apk",
+    "sha256": "3b0d6d3982563d17df0c33c2d695a5a547487cb56f2fd9a004ed729fac8f0684"
+  },
+  {
+    "name": "linux-firmware-xe-20260519-r0.apk",
+    "sha256": "6ebc37da64ecb48973c1814d1499c2c2f8f38593e8cf7227811d840c8b17172f"
+  }
+]

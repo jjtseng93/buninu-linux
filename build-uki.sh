@@ -5,7 +5,9 @@ cd "$(dirname "$0")"
 
 . ./scripts/arch.sh
 
-if [ ! -s "$kernel_image" ] || [ ! -s "$kernel_dir/$efi_stub" ] || [ ! -s "$modules_root/modules.dep" ] || \
+gpu_js=$(command -v bun || command -v node)
+
+if [ ! -s "$kernel_image" ] || [ ! -s "$kernel_dir/$efi_stub" ] || [ ! -s "$modules_root/modules.dep" ] || ! "$gpu_js" scripts/fetch-gpu.js --check || \
     { [ "${REAL_MACHINE:-}" = 1 ] && \
     { [ ! -s "$modules_root/kernel/drivers/hid/usbhid/usbhid.ko" ] || \
       [ ! -s "$modules_root/kernel/drivers/acpi/battery.ko" ]; }; }; then
