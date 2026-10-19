@@ -79,7 +79,7 @@ function usage() {
 
 Usage:
   ${pkg.name} [-f] [-b] [-r] [--arch ARCH] [--docker] [--export] [--linux-lts]
-               [--real] [-- qemu arguments]
+               [--real] [--no-gpu] [-- qemu arguments]
   ${pkg.name} --check [FILE...]
 
 Stages (always run in this order, whichever you pick):
@@ -106,6 +106,8 @@ Stages (always run in this order, whichever you pick):
   --real        build for a physical machine: use linux-lts, make tty0 the
                 primary console, and include USB xHCI/HID keyboard modules
                 (x86_64 only)
+
+  --no-gpu      omit the added GPU modules/firmware; retain the original framebuffer path
 
   --check [FILE...]
                 print content checksums of the build outputs that ignore
@@ -139,6 +141,7 @@ function parse(argv) {
   const passthrough = [];
   let linuxLts = false;
   let real = false;
+  let noGpu = false;
   let exportImage = false;
   let docker = false;
   // BUNINU_ARCH is what scripts/arch.sh reads; --arch overrides it.
@@ -171,6 +174,8 @@ function parse(argv) {
       runCheck(argv.slice(index + 1));
     } else if (argument === "--linux-lts") {
       linuxLts = true;
+    } else if (argument === "--no-gpu") {
+      noGpu = true;
     } else if (argument === "--real") {
       real = true;
     } else if (argument === "--export") {
@@ -197,8 +202,8 @@ function parse(argv) {
   if (passthrough.length > 0 && !selected.has(stages[2])) {
     fail("arguments after -- only make sense with -r/--run");
   }
-  if ((linuxLts || real) && !selected.has(stages[0]) && !selected.has(stages[1])) {
-    fail("--linux-lts/--real only make sense with -f/--fetch or -b/--build");
+  if ((linuxLts || real || noGpu) && !selected.has(stages[0]) && !selected.has(stages[1])) {
+    fail("--linux-lts/--real/--no-gpu only make sense with -f/--fetch or -b/--build");
   }
   if (exportImage && !selected.has(stages[1])) {
     fail("--export requires -b/--build (use -fb --export for a clean build)");
@@ -206,7 +211,7 @@ function parse(argv) {
   if (real && arch === "aarch64") {
     fail("--real builds an x86_64 PC image; it cannot be combined with --arch aarch64");
   }
-  return { selected, passthrough, linuxLts, real, exportImage, docker, arch };
+  return { selected, passthrough, linuxLts, real, noGpu, exportImage, docker, arch };
 }
 
 // Same shape as Buninu's --version. The runtime line tells you whether this
@@ -316,7 +321,7 @@ function dockerImage() {
 // into the bind-mounted checkout stays owned by that user; fakeroot provides
 // the root ownership the initramfs records.
 function dockerRun(script, env) {
-  const passEnv = ["BUNINU_ARCH", "LINUX_FLAVOR", "REAL_MACHINE", "ALPINE_MIRROR", "BUNINU_JS_UKI", "BUNINU_JS_CPIO"]
+  const passEnv = ["BUNINU_ARCH", "LINUX_FLAVOR", "REAL_MACHINE", "BUNINU_NO_GPU", "ALPINE_MIRROR", "BUNINU_JS_UKI", "BUNINU_JS_CPIO"]
     .filter((name) => env[name] !== undefined)
     .flatMap((name) => ["--env", `${name}=${env[name]}`]);
   const user = typeof process.getuid === "function"
@@ -344,7 +349,7 @@ function runScript(stage, script, args = [], env = process.env) {
   }
 }
 
-const { selected, passthrough, linuxLts, real, exportImage, docker, arch } = parse(process.argv.slice(2));
+const { selected, passthrough, linuxLts, real, noGpu, exportImage, docker, arch } = parse(process.argv.slice(2));
 const ordered = stages.filter((stage) => selected.has(stage));
 const useDocker = docker || process.platform === "darwin";
 const buildArch = arch ?? "x86_64";
@@ -357,6 +362,7 @@ const stageEnv = {
   ...(arch && { BUNINU_ARCH: arch }),
   ...((linuxLts || real) && { LINUX_FLAVOR: "lts" }),
   ...(real && { REAL_MACHINE: "1" }),
+  ...(noGpu && { BUNINU_NO_GPU: "1" }),
 };
 
 // The arch.js config for the JS stages, from the same settings as stageEnv.
@@ -364,6 +370,7 @@ const jsConfig = async (env) => (await import("./scripts/arch.js")).config({
   arch: env.BUNINU_ARCH,
   flavor: env.LINUX_FLAVOR,
   real: env.REAL_MACHINE === "1",
+  noGpu: env.BUNINU_NO_GPU === "1",
   mirror: env.ALPINE_MIRROR,
 });
 

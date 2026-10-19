@@ -140,7 +140,7 @@ export const fetchAlpine = (cfg = config()) => withUmask022(async () => {
   const release = `lib/modules/${cfg.kernelRelease}`;
   const dep = linux.get(`${release}/modules.dep`).toString();
   const builtin = linux.get(`${release}/modules.builtin`);
-  const { selected, notes } = select({ dep, builtin: builtin.toString(), packageName: cfg.linuxPackage, arch: cfg.arch, flavor: cfg.flavor, real: cfg.real });
+  const { selected, notes } = select({ dep, builtin: builtin.toString(), packageName: cfg.linuxPackage, arch: cfg.arch, flavor: cfg.flavor, real: cfg.real, noGpu: cfg.noGpu });
   for (const note of notes) console.error(note);
   rmSync(cfg.modulesRoot, { recursive: true, force: true });
   writeTo(join(cfg.modulesRoot, "modules.builtin"), builtin);

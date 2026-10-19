@@ -58,6 +58,7 @@ export const config = ({
   arch = process.env.BUNINU_ARCH || "x86_64",
   flavor = process.env.LINUX_FLAVOR || "virt",
   real = process.env.REAL_MACHINE === "1",
+  noGpu = process.env.BUNINU_NO_GPU === "1",
   mirror = process.env.ALPINE_MIRROR || "https://dl-cdn.alpinelinux.org/alpine",
 } = {}) => {
   arch = normalizeArch(arch);
@@ -77,6 +78,7 @@ export const config = ({
     arch,
     flavor,
     real,
+    noGpu,
     rootDir,
     alpineBase,
     kernelVersion,

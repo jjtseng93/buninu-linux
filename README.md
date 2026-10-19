@@ -1629,6 +1629,25 @@ for the userspace session.
 
 ### Optional client GPU acceleration (`cfg.gpu`)
 
+To omit only the added GPU module requests and firmware when building:
+
+```sh
+bun index.js -b --real --no-gpu
+```
+
+The original simpledrm/fbcon/bunterm path, sound/network/storage modules, and
+any dependencies they require are retained. The setting applies to fetch/build
+and is forwarded into Docker. For direct shell scripts use
+`env BUNINU_NO_GPU=1 REAL_MACHINE=1 LINUX_FLAVOR=lts ./build-uki.sh`.
+Switching this option invalidates the module/firmware cache; omit the option
+(and unset `BUNINU_NO_GPU`) to restore the default GPU packaging. Cached APK
+downloads are retained but excluded from the image. This does not disable GPU
+support already compiled into the selected kernel.
+
+中文：`--no-gpu` 只排除這次新增打包的 GPU 模組與韌體；原本的 framebuffer、
+bunterm、音效與其他模組所需依賴保留。切換選項會重新準備快取，避免殘留打包。
+
+
 GPU drivers are packaged but are **not loaded by boot, `start()`, `cfg.all`, or
 `cfgMod`**. The existing simpledrm/framebuffer and software-rendered bunterm path
 stays the default. At the PID 1 REPL, before opening bunterm/fbdev, explicitly read:

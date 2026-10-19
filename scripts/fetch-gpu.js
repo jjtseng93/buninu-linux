@@ -1,17 +1,18 @@
 // Firmware is image data, not a running service. Only cfg.gpu loads GPU drivers.
 import { createHash } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync, rmSync, symlinkSync, statSync, mkdtempSync, renameSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync, symlinkSync, statSync, mkdtempSync, renameSync } from "node:fs";
 import { join, dirname, posix } from "node:path";
 import pins from "./gpu-firmware.json" with { type: "json" };
 import { config, runIfMain, withUmask022 } from "./arch.js";
 import { download, readTar } from "./fetch.js";
 
-const fingerprint = (cfg) => createHash("sha256").update(JSON.stringify({ revision: 1, arch: cfg.arch, release: cfg.kernelRelease, pins })).digest("hex");
+const fingerprint = (cfg) => createHash("sha256").update(JSON.stringify({ revision: 2, arch: cfg.arch, release: cfg.kernelRelease, real: !!cfg.real, noGpu: !!cfg.noGpu, pins })).digest("hex");
 const marker = (cfg) => join(cfg.modulesRoot, "gpu-support.json");
 
 export const gpuReady = (cfg) => {
   try {
     const state = JSON.parse(readFileSync(marker(cfg), "utf8"));
+    if (cfg.noGpu && existsSync(join(cfg.nativeDir, "lib/firmware"))) return false;
     return state.fingerprint === fingerprint(cfg) && state.files.every(path => statSync(join(cfg.nativeDir, path)).size > 0);
   } catch { return false; }
 };
@@ -80,7 +81,7 @@ export const extractFirmware = (archives, staging) => {
 export const fetchGpuFirmware = (cfg = config()) => withUmask022(async () => {
   const dep = readFileSync(join(cfg.modulesRoot, "modules.dep"), "utf8");
   const builtin = readFileSync(join(cfg.modulesRoot, "modules.builtin"), "utf8");
-  const pc = cfg.arch === "x86_64" && /\/(?:i915|xe|amdgpu|radeon|nouveau)\.ko(?:[:\n]|$)/.test(dep + "\n" + builtin);
+  const pc = !cfg.noGpu && cfg.arch === "x86_64" && /\/(?:i915|xe|amdgpu|radeon|nouveau)\.ko(?:[:\n]|$)/.test(dep + "\n" + builtin);
   // Firmware bytes are architecture-independent; these pins refer to the x86_64 APKs.
   const packages = pc ? pins : [];
   const archives = [];

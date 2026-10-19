@@ -69,9 +69,11 @@ select_optional_module() {
 for module in failover net_failover virtio_net af_packet; do select_module "$module"; done
 select_optional_module virtio_pci
 # GPU modules are packaged only; init and cfg.all leave them unloaded.
-for module in virtio-gpu vmwgfx; do select_optional_module "$module"; done
-if [ "$arch" = x86_64 ]; then
-    for module in i915 xe amdgpu radeon nouveau; do select_optional_module "$module"; done
+if [ "${BUNINU_NO_GPU:-}" != 1 ]; then
+    for module in virtio-gpu vmwgfx; do select_optional_module "$module"; done
+    if [ "$arch" = x86_64 ]; then
+        for module in i915 xe amdgpu radeon nouveau; do select_optional_module "$module"; done
+    fi
 fi
 # Storage: what /bin/mount loads on demand. ext4 brings jbd2, mbcache and
 # crc16; FAT, exFAT and NTFS ask the kernel for the NLS tables at mount
