@@ -646,23 +646,37 @@ chroot shell on tty2. `bun x` needs network access; see
    bunterm 3
    ```
 
-3. **Set the volume, then test the speakers.** Setting a volume also unmutes
-   the output, so the 3-second test tone is guaranteed to be audible. Adjust
-   the percentage afterwards if it is too quiet or too loud:
+3. **Identify the sound card, set its volume, then test playback.** First
+   list the ALSA cards and their mixer controls:
 
    ```sh
-   jspulse --volume 50
-   jspulse --play
+   jspulse --audio-info
    ```
 
-4. **Start the sound server.** It keeps running in the foreground, so leave
-   this terminal as it is; `Ctrl+C` stops it:
+   Choose the card connected to your speakers or headphones. For example,
+   card 0 might be **HDA Intel HDMI**, card 1 **HDA Intel PCH** (onboard
+   audio), and card 2 **HDA NVIDIA**. Card numbers depend on your machine;
+   replace `1` in every command below with the card you want to use.
 
    ```sh
-   jspulse --alsa
-   
+   jspulse --card 1 --volume 50
+   jspulse --card 1 --play
+   ```
+
+   Setting a supported playback volume also unmutes its corresponding switch.
+   HDMI cards may have no hardware playback volume control; in that case skip
+   `--volume` and adjust the connected monitor/TV volume. This does not by
+   itself mean HDMI playback is unavailable. The test tone checks the selected
+   output; adjust the volume as needed.
+
+4. **Start the sound server on the same card.** It keeps running in the
+   foreground, so leave this terminal as it is; `Ctrl+C` stops it:
+
+   ```sh
+   jspulse --alsa --card 1
+
    # or start in the background
-   jspulse --alsa &
+   jspulse --alsa --card 1 &
    ```
 
 5. **Start casty with sound.** Press `Ctrl+Alt+F2` to return to the chroot
