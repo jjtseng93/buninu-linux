@@ -705,6 +705,7 @@ If there is no sound, check step 4's terminal for errors, and make sure
 | `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |
+| `chvt` | Switch Linux VTs (`chvt 1` / `chvt 2`), including switching away from and back to bunterm | `chvt --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |

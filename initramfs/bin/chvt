@@ -1,0 +1,11 @@
+#!/bin/bun
+import { parseChvt, switchVt } from "../lib/chvt.js";
+import { showDocument } from "../lib/document.js";
+try {
+  const options = parseChvt(process.argv.slice(2));
+  if (options.help) await showDocument("chvt");
+  else await switchVt(options.number);
+} catch (error) {
+  console.error(`chvt: ${error.message}`);
+  process.exitCode = 1;
+}

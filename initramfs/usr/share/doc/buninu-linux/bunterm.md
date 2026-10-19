@@ -16,6 +16,10 @@ bunterm --no-clipboard      # ignore OSC 52 copy and paste
 bunterm -h
 ```
 
+Use `chvt 1` inside bunterm to return to tty1 without stopping it, and
+`chvt 2` from a shell to return to a bunterm started on tty2. See `chvt --help`
+for use from the init REPL.
+
 The program's `TERM` is `xterm-256color`, `COLORTERM=truecolor`,
 `TERM_PROGRAM=bunterm` and `JSMDCUI_KITTY_MODE=extended` (so `jsmdcui` shows
 Markdown images without `--kitty`). When it exits, the console returns to
