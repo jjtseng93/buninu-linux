@@ -160,3 +160,9 @@ The menu switches existing sessions; it does not create a new bunterm.
 中文：左鍵點擊螢幕最左上角 2×2 像素，會列出正在運行的 bunterm 和初始 tty。
 可以點選或用上下鍵、Enter 切換；Esc、右鍵或點擊選項外關閉。不會把選單操作
 送進底下的 shell／應用程式，也不會關閉原本的 bunterm。
+
+On GPU-provided fbdev devices, a shared framebuffer mapping may not support
+`msync`. bunterm probes it once: `EINVAL`/`EOPNOTSUPP` disables further msync
+calls for that mapping while pixel writes continue normally. Drivers that
+support msync retain it; other errors still propagate. This is not a vsync or
+GPU-acceleration mechanism.

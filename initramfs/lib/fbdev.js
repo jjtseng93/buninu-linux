@@ -261,6 +261,26 @@ export const clear = (display, color = { r: 0, g: 0, b: 0, a: 255 }) => {
   }
 };
 
+// msync is a file writeback operation, not a universal fbdev present API.
+// DRM mappings may have no backing fsync operation (vfs_fsync_range then
+// returns EINVAL). Keep working drivers' deferred-I/O sync, but probe unsupported
+// mappings only once. The address is the original mmap base, and flags are fixed.
+export const syncFramebuffer = (display, native = {
+  msync: (...args) => libc.symbols.msync(...args), errno, strerror,
+}) => {
+  if (display.msyncUnsupported) return;
+  for (;;) {
+    if (native.msync(display.address, display.memoryLength, MS_SYNC) !== -1) return;
+    const code = native.errno();
+    if (code === 4) continue; // EINTR
+    if (code === 22 || code === 95) { // EINVAL / EOPNOTSUPP on this device mapping
+      display.msyncUnsupported = true;
+      return;
+    }
+    throw new Error(`msync(${display.path}): ${native.strerror(code)}`);
+  }
+};
+
 export const flush = (display) => {
   const visibleBytes = display.width * display.bytesPerPixel;
   for (let y = 0; y < display.height; y++) {
@@ -269,9 +289,7 @@ export const flush = (display) => {
       + display.xOffset * display.bytesPerPixel;
     display.memory.set(row, position);
   }
-  if (libc.symbols.msync(display.address, display.memoryLength, MS_SYNC) === -1) {
-    fail(`msync(${display.path})`);
-  }
+  syncFramebuffer(display);
 };
 
 // Copies an RGBA ImageData (HTML canvas layout, 4 bytes per pixel, rows of
