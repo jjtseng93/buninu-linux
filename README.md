@@ -709,10 +709,23 @@ chroot shell on tty2. `bun x` needs network access; see
    jspulse --audio-info
    ```
 
-   Choose the card connected to your speakers or headphones. For example,
-   card 0 might be **HDA Intel HDMI**, card 1 **HDA Intel PCH** (onboard
-   audio), and card 2 **HDA NVIDIA**. Card numbers depend on your machine;
-   replace `1` in every command below with the card you want to use.
+   For built-in speakers or headphones plugged into the computer's audio
+   jack, choose the **onboard analog audio** card. In the example with
+   card 0 **HDA Intel HDMI**, card 1 **HDA Intel PCH**, and card 2
+   **HDA NVIDIA**, try **card 1 (HDA Intel PCH)** first. Controls named
+   `Speaker Playback`, `Headphone Playback`, `PCM Playback`, or
+   `Master Playback` are useful clues for this output.
+
+   Choose an **HDMI/DisplayPort** card instead when you want sound from a
+   monitor or TV connected through that GPU. Intel HDMI and NVIDIA audio
+   do not normally feed the computer's analog headphone jack. A USB headset
+   or USB sound card should use its own USB audio card.
+
+   Card numbers vary by machine; replace `1` below with the card connected
+   to your intended output, then use the test tone to check it.
+
+   中文：內建喇叭或電腦耳機孔，以上例先選 **card 1：HDA Intel PCH**；
+   螢幕／電視喇叭才選對應的 HDMI／DP 音效卡，USB 耳機則選 USB 卡。
 
    ```sh
    jspulse --card 1 --volume 50
