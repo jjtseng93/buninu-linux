@@ -13,7 +13,7 @@
 // keyboard are Buninu's own.
 
 import { createRequire } from "node:module";
-import { runGraphics } from "../fbdev.js";
+import { runGraphics, activeConsole } from "../fbdev.js";
 import { loadCanvasKit, openCanvas, loadFontSet } from "../canvas.js";
 import { Terminal } from "../xterm/xterm-headless.mjs";
 import { UnicodeGraphemesAddon } from "../xterm/addon-unicode-graphemes.mjs";
@@ -24,7 +24,10 @@ import { claimVirtualConsole, listVirtualTerminals } from "./vt.js";
 import { createVtMenu } from "./vt-menu.js";
 import { attachGeometry } from "./geometry.js";
 import { terminalMouseEvent } from "./pointer-report.js";
-import { attachClipboard } from "./clipboard.js";
+import { attachClipboard, readClipboard, writeClipboard, pasteText } from "./clipboard.js";
+import { createSelection } from "./selection.js";
+import { createCommands } from "./commands.js";
+import { attachKeyboard as createKeyboard } from "./keyboard.js";
 
 const require = createRequire(import.meta.url);
 
@@ -95,6 +98,8 @@ export const createSession = ({
   // exactly as before.
   let pointer = null;
   let menu = null;
+  let keyboardProtocol = null;
+  let consoleKeyboard = null;
   const paint = () => {
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
@@ -103,7 +108,7 @@ export const createSession = ({
     // cursorY counts from the buffer's base, so a scrolled-back viewport
     // moves the cursor down the screen and eventually off it.
     const row = buffer.baseY + buffer.cursorY - buffer.viewportY;
-    if (menu?.visible) renderer.invalidate();
+    if (menu?.visible || selection.active) renderer.invalidate();
     return renderer.render(term, {
       cursor: {
         x: buffer.cursorX,
@@ -112,18 +117,46 @@ export const createSession = ({
       },
       images: images.visible(),
       pointer,
-      overlay: menu?.visible ? () => menu.draw(renderer) : null,
+      overlay: () => { selection.draw(); if (menu?.visible) menu.draw(renderer); },
     });
   };
   const requestFrame = () => {
     if (!active) return;
     frameTimer ??= setTimeout(paint, 16);
   };
+  const changed = () => { renderer.invalidate(); requestFrame(); };
+  const selection = createSelection(term, renderer, changed);
+  const setFontSize = size => {
+    renderer.setFontSize(size);
+    selection.clear();
+    term.resize(renderer.columns, renderer.rows);
+    backend.resize(renderer.columns, renderer.rows);
+    changed();
+  };
+  const copy = async () => {
+    if (!clipboard) throw new Error("Clipboard disabled (--no-clipboard)");
+    if (!selection.active) throw new Error("Drag to select text first (application mouse reporting must be off)");
+    await writeClipboard(selection.text());
+  };
+  const paste = async () => {
+    if (!clipboard) throw new Error("Clipboard disabled (--no-clipboard)");
+    const text = await readClipboard();
+    if (closed) return;
+    pasteText(term, text, value => backend.write(Buffer.from(value, "utf8")));
+    menu?.close();
+    term.scrollToBottom();
+    changed();
+  };
+  const commands = createCommands({fontSize:()=>renderer.fontSize,setFontSize,copy,paste,
+    switchVT: number => vtMenu?.select(number)});
   if (vtMenu) menu = createVtMenu({
     ...vtMenu, width: screen.width, height: screen.height, rowHeight: renderer.cellHeight,
-    changed: () => { renderer.invalidate(); requestFrame(); },
+    changed,
+    controls: {fontSize:()=>renderer.fontSize,cellHeight:()=>renderer.cellHeight,execute:line=>commands.execute(line)},
   });
   const suspend = () => {
+    keyboardProtocol?.blur();
+    selection.stop();
     active = false;
     menu?.close();
     if (frameTimer) clearTimeout(frameTimer);
@@ -132,6 +165,7 @@ export const createSession = ({
   const resume = () => {
     if (active) return;
     active = true;
+    consoleKeyboard?.clearHeld();
     renderer.invalidate();
     paint();
   };
@@ -151,6 +185,9 @@ export const createSession = ({
       const { events } = kitty.consume(chunk);
       for (const event of events) {
         if (event.kind === "plain") {
+          // A selection is a snapshot of the displayed cells. Drop it before
+          // output scrolls/replaces those cells, rather than copying stale rows.
+          selection.clear();
           await writeTerminal(term, event.data);
           continue;
         }
@@ -179,6 +216,7 @@ export const createSession = ({
 
   // Keyboard bytes from the console, rewritten for the program's key mode.
   const input = (bytes) => {
+    if (!active) return;
     if (menu?.input(bytes)) return;
     const applicationCursorKeys = Boolean(term._core?.coreService?.decPrivateModes?.applicationCursorKeys);
     const text = translateKeys(bytes.toString("latin1"), { applicationCursorKeys });
@@ -191,6 +229,31 @@ export const createSession = ({
     resetBlink();
     requestFrame();
   };
+  const attachKeyboard = device => {
+    consoleKeyboard = device;
+    keyboardProtocol = createKeyboard({
+      term,
+      setEnhanced: value => device.setEnhanced(value),
+      write: text => {
+        backend.write(Buffer.from(text,"utf8"));
+        term.scrollToBottom(); resetBlink(); changed();
+      },
+      localInput: (event, text) => {
+        if (!menu?.visible) return false;
+        if (text) menu.input(Buffer.from(text,"utf8"));
+        return true;
+      },
+      switchVT: number => { Promise.resolve(vtMenu?.select(number)).catch(onError); },
+      switchRelative: delta => {
+        try {
+          const number = Math.max(1,Math.min(63,activeConsole({fd:device.fd})+delta));
+          Promise.resolve(vtMenu?.select(number)).catch(onError);
+        } catch (error) { onError(error); }
+      },
+      onError,
+    });
+  };
+  const keyEvent = event => { if (active) keyboardProtocol?.event(event); };
 
   // Turns a pointer report from mouse.js into the mouse sequences the
   // program asked for. xterm.js's CoreMouseService owns the protocol: it
@@ -232,12 +295,18 @@ export const createSession = ({
     if (!active) return;
     pointer = { x: report.x, y: report.y };
     requestFrame();
-    if (menu?.pointer(report)) return;
+    if (menu?.pointer(report)) {
+      selection.stop();
+      keyboardProtocol?.blur();
+      return;
+    }
     const service = term._core?.coreMouseService;
     if (!service?.areMouseEventsActive) {
       if (report.wheel) wheelScroll(report.wheel);
+      selection.pointer(report);
       return;
     }
+    selection.clear();
     const send = (button, action) => {
       try {
         service.triggerMouseEvent(terminalMouseEvent(report, renderer, button, action));
@@ -290,10 +359,13 @@ export const createSession = ({
   const close = () => {
     if (closed) return;
     closed = true;
+    active = false;
     if (blinkTimer) clearInterval(blinkTimer);
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
     backend.close();
+    try { keyboardProtocol?.dispose(); } catch (error) { onError(error); }
+    keyboardProtocol = null;
     pointerDevice?.close();
     pointerDevice = null;
     images.delete();
@@ -305,6 +377,7 @@ export const createSession = ({
   return {
     term, backend, renderer, images, kitty,
     paint, requestFrame, suspend, resume, settle, input, exited, close, attachPointer, reportMouse, wheelScroll,
+    attachKeyboard, keyEvent, selection, setFontSize, commands,
   };
 };
 
@@ -321,8 +394,12 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
   return runGraphics(async (display, { onRestore, onRelease, onAcquire }) => {
     const screen = openCanvas(CanvasKit, display);
     let switching = false;
+    let keyboard = null;
     const session = createSession({ CanvasKit, screen, fonts, ...options, vtMenu: {
-      list: listVirtualTerminals,
+      list: () => {
+        const current = keyboard ? activeConsole(keyboard) : null;
+        return listVirtualTerminals().map(entry => ({...entry,current:entry.number===current}));
+      },
       select: async number => {
         if (switching) return;
         switching = true;
@@ -340,16 +417,17 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
     // Coming back from another console (Ctrl-Alt-Fn): fbcon or another
     // bunterm has drawn over the framebuffer, so repaint everything.
     onAcquire(session.resume);
-    let keyboard = null;
     try {
       keyboard = openKeyboard({
         device: consoleDevice,
         onData: session.input,
+        onKey: session.keyEvent,
         onError: (error) => {
           console.error(`bunterm: keyboard: ${error.message}`);
           session.backend.close();
         },
       });
+      session.attachKeyboard(keyboard);
       onRestore(() => keyboard.close());
       if (options.mouse !== false) {
         // A pointer that cannot be opened is reported and the session
@@ -365,9 +443,10 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
       }
       return await session.exited;
     } finally {
-      keyboard?.close();
-      session.close();
-      screen.close();
+      try { session.close(); }
+      finally {
+        try { keyboard?.close(); } finally { screen.close(); }
+      }
     }
   }, { device, console: consolePaths, prepareConsole: claimVirtualConsole });
 };

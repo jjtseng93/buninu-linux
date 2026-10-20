@@ -24,6 +24,20 @@ const runXclip = async (args, input) => {
   return output;
 };
 
+export const readClipboard = async () => Buffer.from(await runXclip(["-o"])).toString("utf8");
+export const writeClipboard = (text) => runXclip([], Buffer.from(text, "utf8"));
+
+// Match xterm's paste behavior: normalize newlines and prevent embedded closing
+// delimiters from escaping bracketed paste. Legacy programs have not negotiated
+// DECSET 2004 and must receive plain text.
+export function pasteText(term, text, write) {
+  text = text.replace(/\r\n|\n/g, "\r");
+  if (term._core?.coreService?.decPrivateModes?.bracketedPasteMode) {
+    text = `\x1b[200~${text.replace(/\x1b/g, "")}\x1b[201~`;
+  }
+  write(text);
+}
+
 // Registers the OSC 52 handler on an xterm.js terminal. `reply` sends bytes
 // back to the program, as the terminal's other replies do. A read the xclip
 // call cannot answer is still answered, with empty contents, so the program

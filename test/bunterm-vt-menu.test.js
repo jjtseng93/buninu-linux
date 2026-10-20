@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { createVtMenu } from "../initramfs/lib/bunterm/vt-menu.js";
+import { createCommands } from "../initramfs/lib/bunterm/commands.js";
 const report = (x, y, pressed = [], released = []) => ({ x, y, pressed, released, buttons: {left: pressed.includes("left")}, wheel: 0, moved: false });
 function fixture(extra = {}) {
   const selected = [];
@@ -64,4 +65,54 @@ test("Escape after releasing the opener does not eat the next application click"
   menu.pointer(report(0,0,[],["left"]));
   menu.input(Buffer.from("\x1b"));
   expect(menu.pointer(report(100,100,["left"]))).toBe(false);
+});
+
+test("font and clipboard buttons dispatch local commands; UTF-8 command editing survives split reads", async () => {
+  const calls=[];
+  const {menu}=fixture({controls:{fontSize:()=>13,execute:async line=>{calls.push(line);return "OK";}}});
+  menu.pointer(report(0,0,["left"]));
+  menu.pointer(report(0,0,[],["left"]));
+  for (const [x,y] of [[10,30],[400,30],[10,55],[300,55],[10,80]]) {
+    menu.pointer(report(x,y,["left"]));
+    menu.pointer(report(x,y,[],["left"]));
+  }
+  const bytes=Buffer.from("font 16中文");
+  menu.input(bytes.subarray(0,9)); menu.input(bytes.subarray(9));
+  menu.input(Buffer.from("\x7f\x7f\r")); // remove the two full code points
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(calls).toEqual(["font -","font +","copy","paste","font 16"]);
+  expect(menu.visible).toBe(true);
+  menu.input(Buffer.from("\x1b"));
+});
+
+test("command registry validates font/VT arguments and is extensible", async () => {
+  let size=13; const calls=[];
+  const c=createCommands({fontSize:()=>size,setFontSize:n=>{if(!Number.isInteger(n)||n<6||n>96)throw Error("size");size=n;},
+    copy:()=>calls.push("copy"),paste:()=>calls.push("paste"),switchVT:n=>calls.push(n)});
+  expect(await c.execute("font +")).toBe("Font: 14");
+  await c.execute("font 18"); expect(size).toBe(18);
+  await expect(c.execute("font nope")).rejects.toThrow();
+  await expect(c.execute("vt 64")).rejects.toThrow();
+  await expect(c.execute("copy extra")).rejects.toThrow();
+  await expect(c.execute("unknown")).rejects.toThrow("try help");
+  await c.execute("copy"); await c.execute("paste"); await c.execute("vt 3");
+  expect(calls).toEqual(["copy","paste",3]);
+  c.commands.set("example", args=>args.join(" "));
+  expect(await c.execute("example hello world")).toBe("hello world");
+});
+
+test("menu labels current VT and renders a real left-aligned command field with centered font value", () => {
+  const {menu}=fixture({list:()=>[{number:1,label:"tty1 — initial console",current:true}],
+    controls:{fontSize:()=>13,execute:()=>""}});
+  menu.pointer(report(0,0,["left"]));
+  const labels=[];
+  menu.draw({cellWidth:8,cellHeight:16,CanvasKit:{XYWHRect:(...r)=>r,ClipOp:{Intersect:0}},
+    paintFor:c=>c,drawText:(text,x,y,cells,color,options)=>labels.push({text,align:options.align}),
+    canvas:{save(){},restore(){},clipRect(){},drawRect(){}}});
+  expect(labels).toContainEqual({text:"tty1 — initial console (current)",align:"left"});
+  expect(labels).toContainEqual({text:"Click to type a command…",align:"left"});
+  expect(labels).toContainEqual({text:"🔤 字體 Font 13",align:"center"});
+  expect(labels).toContainEqual({text:"📋 複製 Copy",align:"left"});
+  expect(labels).toContainEqual({text:"📥 貼上 Paste",align:"left"});
+  expect(labels.some(x=>x.text===">")).toBe(false);
 });

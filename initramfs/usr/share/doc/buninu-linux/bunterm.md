@@ -44,7 +44,7 @@ identified from the process task name and its open console descriptor under
 | `--fb /dev/fbN` | The framebuffer device (default `/dev/fb0`). |
 | `--no-blink` | A steady cursor. |
 | `--no-mouse` | Do not attach a pointing device; nothing then reads `/dev/input`. |
-| `--no-clipboard` | Ignore OSC 52: programs can neither copy to nor read from the clipboard, and `xclip` is never run. |
+| `--no-clipboard` | Disable both OSC 52 and menu copy/paste; `xclip` is never run. |
 
 ## What is drawn
 
@@ -70,7 +70,7 @@ identified from the process task name and its open console descriptor under
 
 ## Keyboard
 
-The console stays in the kernel's translated keyboard mode, so
+Without Kitty keyboard negotiation, the console stays in the kernel's translated keyboard mode, so
 `Ctrl-Alt-F2` and friends still switch consoles; coming back repaints the
 screen. While its VT is inactive, bunterm continues consuming PTY output and
 updating its scrollback and kitty images, but neither writes the framebuffer
@@ -79,6 +79,28 @@ processes on `/dev/tty1`, `/dev/tty2`, and so on to hand the display back and
 forth through the normal Linux VT switch. A few console-specific
 sequences are rewritten to xterm's (`F1`–`F5`, `Home`, `End`), and arrow keys
 follow the program's application cursor mode.
+
+### Kitty keyboard
+
+The Kitty keyboard protocol uses the same encoder as jsgotty 1.2.0:
+flags **1** (disambiguation), **2** (press/repeat/release), and **8** (all keys).
+Applications enable it with `CSI > flags u`, query with `CSI ? u`, and restore
+with `CSI < u`; normal and alternate buffers have separate stacks. Flags 4
+(alternate keys) and 16 (associated text) are not advertised.
+
+Only while an application enables Kitty, the active console uses Linux
+`K_MEDIUMRAW` to distinguish Ctrl, Alt, Shift, Super, keypad and key releases.
+Bunterm restores the original mode on pop/reset or exit. Ctrl+Alt+F1–F12 and
+Alt+Left/Right remain reserved for VT switching. The kernel keymap supplies
+printable characters, including Shift/Caps Lock/AltGr. Kernel dead-key/Compose
+sequences are not implemented in this Kitty path; the ordinary translated
+console path retains its existing behavior. No global evdev keyboard grab is
+needed. A mode transition discards pending console typeahead so raw keycodes
+cannot leak into the child as text.
+
+中文：Kitty 模式與 jsgotty 支援相同的 flags 1、2、8，可區分 Super、
+Ctrl/Alt/Shift 組合及按下／重複／放開。程式退出模式後恢復原有 console
+輸入；Ctrl+Alt+Fn、Alt+左右保留為切換 VT。Kitty 模式尚不處理 dead key／Compose。
 
 ## Mouse
 
@@ -97,6 +119,13 @@ through the scrollback on the normal screen, three lines per notch, and as
 arrow keys on the alternate screen, which has no scrollback and is what a
 pager expects. Typing returns to the live screen, and the text cursor is
 hidden while it is scrolled out of view.
+
+When mouse reporting is off, left-drag selects terminal text. Wide characters
+and graphemes are selected whole; wrapped lines copy without extra newlines.
+Use **Copy** in the top-left menu to send the selection to xclip. Selection is
+cleared when new PTY text arrives or the font size changes, so it cannot refer
+to replaced cells. Applications requesting mouse reporting receive the drag
+instead; selection never overrides their mouse mode.
 
 `--no-mouse` turns all of this off: the terminal then never looks at
 `/dev/input` and never loads the mouse module.
@@ -118,7 +147,12 @@ bunterm keeps no clipboard of its own: `ESC ] 52 ; c ; <base64>` is passed to
 with the output of `xclip -selection clipboard -o`, so every bunterm session
 shares the same clipboard as `xclip`. A query xclip cannot answer is replied
 to with empty contents. `--no-clipboard` turns this off, so a program can
-neither set nor read the clipboard through the terminal.
+neither set nor read the clipboard through the terminal; menu copy/paste is
+also disabled. The menu's **Paste** reads xclip and sends one paste to the PTY,
+wrapped in `CSI 200~` / `CSI 201~` when the application enabled bracketed paste
+(`DECSET 2004`). Programs that have not requested it receive plain text.
+Newlines are normalized to CR; embedded ESC bytes are stripped in bracketed
+mode so clipboard text cannot close the paste early.
 
 ## Limits
 
@@ -127,10 +161,8 @@ neither set nor read the clipboard through the terminal.
   `--linux-lts` or `--real` (efifb/simpledrm from UEFI).
 - The aarch64 image has no framebuffer yet: `run-qemu.sh` gives QEMU's
   `virt` machine no display device, so there is no `/dev/fb0` to draw on.
-- No selection, and no keyboard way to scroll back: the wheel is it. The
-  buffer keeps 1000 lines. A program that does not enable mouse reporting
-  sees no clicks — the arrow still moves, so the pointer is visibly alive.
-  `--no-mouse` removes the pointer entirely.
+- Scrollback uses the wheel; the buffer keeps 1000 lines.
+  `--no-mouse` removes the pointer and local selection.
 - A program that prints a terminal reply while the tty echoes (that is, one
   not in raw mode) will see the reply echoed, as on any terminal.
 - Kitty images are drawn above text; `z` ordering below text and animation
@@ -148,18 +180,36 @@ neither set nor read the clipboard through the terminal.
 - `/buninu/apps/jsgotty/gotty.js` — the PTY backend and kitty packet parser
   that are reused
 
-## Terminal switch menu
+## Local menu and commands
 
 Left-click the top-left **2×2 physical pixels** to open a text menu of live
 bunterm VTs and the initial tty (normally tty1). Click an entry to switch, or use
-Up/Down and Enter. The wheel scrolls the selection; Escape, right-click, or a click
+Up/Down and Enter. The active VT is marked `(current)`.
+The wheel scrolls the selection; Escape, right-click, or a click
 outside the entries closes the menu. Menu input is consumed locally, including
 when a terminal application has enabled mouse reporting. Requires mouse support.
 The menu switches existing sessions; it does not create a new bunterm.
 
+- **Font − / +** changes the current session's font size and resizes the PTY.
+- **Copy / Paste** uses the same xclip clipboard as OSC 52.
+- Click the light **command input field**, or press Tab, to type a local command.
+  Enter executes it, Tab returns to menu navigation, Esc closes the menu.
+  Backspace/Delete, Left/Right, Home/End and Ctrl+U edit the field.
+
+Commands: `font 16`, `font +`, `font -`, `copy`, `paste`, `vt 2`, `help`.
+Font commands accept integer sizes 6–96; changes last for this session.
+The command registry is `/lib/bunterm/commands.js`; new commands can be added
+there without changing the input widget. These are bunterm commands, not shell
+commands. Clipboard failures and command errors appear in the menu footer.
+
 中文：左鍵點擊螢幕最左上角 2×2 像素，會列出正在運行的 bunterm 和初始 tty。
+目前顯示的 VT 會標示 `(current)`。
 可以點選或用上下鍵、Enter 切換；Esc、右鍵或點擊選項外關閉。不會把選單操作
 送進底下的 shell／應用程式，也不會關閉原本的 bunterm。
+選單還有字體大小減／加、複製／貼上，以及自由輸入的命令框（點選或按 Tab）。
+可輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`；Enter 執行。
+複製前用左鍵拖曳選字，僅在程式未開啟滑鼠回報時生效。貼上沿用 xclip，
+程式啟用 bracketed paste 時會加上貼上邊界。
 
 On GPU-provided fbdev devices, a shared framebuffer mapping may not support
 `msync`. bunterm probes it once: `EINVAL`/`EOPNOTSUPP` disables further msync

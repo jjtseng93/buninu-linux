@@ -6,8 +6,9 @@
 // "linux" console sequences for a few keys are rewritten into the xterm
 // forms that programs seeing TERM=xterm-256color expect.
 
-import { closeSync, openSync, read } from "node:fs";
+import { closeSync, openSync, readSync, constants } from "node:fs";
 import { libc, ptr, errno, strerror } from "../dlopen.js";
+import { ConsoleKeys, MediumRawDecoder } from "./keycodes.js";
 
 const TCGETS = 0x5401;
 const TCSETS = 0x5402;
@@ -108,33 +109,75 @@ export const translateKeys = (text, { applicationCursorKeys = false } = {}) => {
 // Opens the keyboard: `device` names a console such as /dev/tty1; without
 // it the process's own stdin is used (it must be a terminal). `onData`
 // receives Buffers. close() restores the previous terminal settings.
-export const openKeyboard = ({ device = null, onData, onError = () => {} }) => {
-  const fd = device ? openSync(device, "r+") : 0;
-  const saved = getTermios(fd);
-  setTermios(fd, rawTermios(saved));
+export const openKeyboard = ({ device = null, onData, onKey = () => {}, onError = () => {} }) => {
+  // Own a nonblocking file description: no outstanding async read can deliver
+  // bytes from the previous keyboard mode after a protocol transition.
+  const fd = openSync(device || "/proc/self/fd/0", constants.O_RDWR | constants.O_NONBLOCK);
+  let saved;
+  try {
+    saved = getTermios(fd);
+    setTermios(fd, rawTermios(saved));
+  } catch (error) {
+    closeSync(fd);
+    throw error;
+  }
+  const originalMode = new Int32Array(1);
+  const canReadMode = libc.symbols.ioctl(fd, 0x4b44, ptr(originalMode)) === 0;
+  let enhanced = false, decoder, keys;
+  const setEnhanced = (enabled) => {
+    if (enabled === enhanced) return;
+    if (!canReadMode) throw new Error("Kitty keyboard needs a Linux virtual console (KDGKBMODE)");
+    const maps = [];
+    if (enabled) {
+      // Unicode keysyms can only be queried while the console is still in
+      // K_UNICODE, before switching to K_MEDIUMRAW.
+      for (let table = 0; table < 4; table++) {
+        maps[table] = [];
+        for (let number = 0; number < 256; number++) {
+          const entry = new Uint8Array([table,number,0,0]);
+          maps[table][number] = libc.symbols.ioctl(fd,0x4b46,ptr(entry)) === 0
+            ? new DataView(entry.buffer).getUint16(2,true) : null;
+        }
+      }
+    }
+    // Discard only console typeahead at the mode boundary, never PTY input.
+    if (libc.symbols.ioctl(fd, 0x540b, 0) === -1) fail("TCFLSH");
+    if (libc.symbols.ioctl(fd, 0x4b45, enabled ? 2 : originalMode[0]) === -1) fail("KDSKBMODE");
+    enhanced = enabled;
+    decoder = new MediumRawDecoder();
+    const leds = new Uint8Array(1);
+    libc.symbols.ioctl(fd, 0x4b64, ptr(leds));
+    keys = new ConsoleKeys({ leds: leds[0], lookup: (table, number) => maps[table]?.[number] });
+  };
   let open = true;
+  let timer;
   const chunk = Buffer.alloc(4096);
   const pump = () => {
     if (!open) return;
-    read(fd, chunk, 0, chunk.length, null, (error, count) => {
-      if (!open) return;
-      if (error) {
-        if (error.code === "EAGAIN") { setTimeout(pump, 10); return; }
-        onError(error);
-        return;
+    try {
+      for (let batch = 0; batch < 16; batch++) {
+        const count = readSync(fd, chunk, 0, chunk.length, null);
+        if (!count) break;
+          if (enhanced) decoder.feed(chunk.subarray(0, count), (code, down) => onKey(keys.event(code, down)));
+          else onData(Buffer.from(chunk.subarray(0, count)));
       }
-      if (count > 0) onData(Buffer.from(chunk.subarray(0, count)));
-      pump();
-    });
+    } catch (error) {
+      if (error.code !== "EAGAIN" && error.code !== "EWOULDBLOCK") { onError(error); return; }
+    }
+    timer = setTimeout(pump, 4);
   };
   pump();
   return {
     fd,
+    setEnhanced,
+    clearHeld() { keys?.held.clear(); },
     close() {
       if (!open) return;
       open = false;
+      clearTimeout(timer);
+      try { setEnhanced(false); } catch (error) { onError(error); }
       try { setTermios(fd, saved); } catch {}
-      if (device) closeSync(fd);
+      closeSync(fd);
     },
   };
 };

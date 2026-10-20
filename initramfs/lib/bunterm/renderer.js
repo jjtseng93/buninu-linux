@@ -64,6 +64,7 @@ export class Renderer {
     this.canvas = screen.canvas;
     this.fonts = fonts;
     this.fontSize = fontSize;
+    this.lineHeight = lineHeight;
     this.theme = theme;
     this.palette = buildPalette(theme);
     this.foreground = parseColor(theme.foreground);
@@ -125,6 +126,29 @@ export class Renderer {
       this.fontCache.set(key, font);
     }
     return font;
+  }
+
+  setFontSize(size) {
+    if (!Number.isInteger(size) || size < 6 || size > 96) throw new Error("font size must be an integer from 6 to 96");
+    if (size === this.fontSize) return;
+    for (const font of this.fontCache.values()) font.delete();
+    for (const paragraph of this.paragraphCache.values()) paragraph.delete();
+    this.fontCache.clear();
+    this.metricsCache.clear();
+    this.paragraphCache.clear();
+    this.fontSize = size;
+    const font = this.fontFor(this.fonts.regular, size), metrics = font.getMetrics();
+    this.cellWidth = Math.max(1, Math.round(font.getGlyphWidths(this.fonts.regular.getGlyphIDs("M"))[0]));
+    this.cellHeight = Math.max(1, Math.round((metrics.descent-metrics.ascent+(metrics.leading||0))*this.lineHeight));
+    this.columns = Math.max(1, Math.floor(this.screen.width/this.cellWidth));
+    this.rows = Math.max(1, Math.floor(this.screen.height/this.cellHeight));
+    this.offsetX = Math.floor((this.screen.width-this.columns*this.cellWidth)/2);
+    this.offsetY = Math.floor((this.screen.height-this.rows*this.cellHeight)/2);
+    this.rowHashes = new Int32Array(this.rows);
+    this.forcedRows.clear();
+    this.lastCursor = {x:-1,y:-1,visible:false};
+    this.lastPointer = null;
+    this.invalidate();
   }
 
   metricsFor(font) {
@@ -214,7 +238,7 @@ export class Renderer {
       width * this.cellWidth, height * this.cellHeight);
   }
 
-  drawText(text, x, y, cells, color, { bold, italic, emoji }) {
+  drawText(text, x, y, cells, color, { bold, italic, emoji, align = "center" }) {
     const { CanvasKit, canvas } = this;
     const available = cells * this.cellWidth;
     const paint = this.paintFor(color);
@@ -235,7 +259,7 @@ export class Renderer {
       }
       const metrics = this.metricsFor(font);
       const baseline = y + (this.cellHeight - (metrics.descent - metrics.ascent)) / 2 - metrics.ascent;
-      canvas.drawGlyphs([glyph], [x + (available - advance) / 2, baseline], 0, 0, font, paint);
+      canvas.drawGlyphs([glyph], [align === "left" ? x : x + (available - advance) / 2, baseline], 0, 0, font, paint);
       return;
     }
     // Grapheme clusters are shaped by the Paragraph API and cached.
@@ -272,13 +296,13 @@ export class Renderer {
     const height = paragraph.getHeight();
     canvas.save();
     canvas.clipRect(CanvasKit.XYWHRect(x, y, available, this.cellHeight), CanvasKit.ClipOp.Intersect, false);
-    if (width > available) {
+    if (width > available && align !== "left") {
       const scale = available / width;
       canvas.translate(x, y + (this.cellHeight - height * scale) / 2);
       canvas.scale(scale, scale);
       canvas.drawParagraph(paragraph, 0, 0);
     } else {
-      canvas.drawParagraph(paragraph, x + (available - width) / 2, y + (this.cellHeight - height) / 2);
+      canvas.drawParagraph(paragraph, align === "left" ? x : x + (available - width) / 2, y + (this.cellHeight - height) / 2);
     }
     canvas.restore();
   }
