@@ -79,7 +79,7 @@ const main = async () => {
   } finally {
     probe.close();
   }
-  if (!options.console) options.console = `/dev/tty${activeConsoleNumber}`;
+  if (!options.console) options.console = "/dev/tty2";
 
   // Every live bunterm converges on one unambiguous /proc/<pid>/cmdline:
   //   /bin/bunterm /bin/bunterm /dev/ttyN [options...]
@@ -94,7 +94,7 @@ const main = async () => {
       Object.entries(process.env).filter((entry) => typeof entry[1] === "string"),
     );
     const targetConsoleNumber = virtualConsoleNumber(options.console);
-    if (consoleArgumentIndex !== -1 && targetConsoleNumber !== activeConsoleNumber) {
+    if (targetConsoleNumber !== activeConsoleNumber) {
       const consoleFd = openSync(options.console, "r+");
       try {
         const child = Bun.spawn(

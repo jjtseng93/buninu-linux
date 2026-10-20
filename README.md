@@ -326,9 +326,8 @@ toolchain (including `binutils-aarch64-linux-gnu` for aarch64), or set
 
   `start()` in the serial REPL, then `bunterm 2` opens bunterm on VT 2 in the
   QEMU window and returns to the serial shell; type into the window. The
-  serial console is not a VT, so a bare `bunterm` there takes the active VT 1
-  and holds the serial shell until it exits; naming another VT starts it
-  detached (see [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)). The
+  bare `bunterm` also defaults to VT 2, leaving VT 1 available for hardware
+  setup. Using a VT other than the active one starts it detached (see [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)). The
   firmware sets up ramfb at 800×600, and `init.js` loads `simpledrm` so it
   becomes `/dev/fb0` (see [graphics.md](graphics.md#trying-it)).
 * `--export` writes `buninu-linux-<version>-aarch64.img`.
@@ -422,7 +421,7 @@ real-hardware image, enter the shell with `start()` at the `bun-repl>` prompt,
 then run:
 
 ```sh
-bunterm 2                   # open a shell on VT 2; keep tty1 for initial setup
+bunterm                     # default to VT 2; keep tty1 for hardware setup
 bunterm 3 -s 16             # another session, with a 16 px font (default: 13)
 # Alternatively, start a specific application on an unused VT:
 bunterm 4 -e jsmdcui --allow-url README.md
@@ -457,7 +456,7 @@ when the application disables Kitty or bunterm exits. VT-switching shortcuts sta
 reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
 Use `bunterm --help` for full options and keyboard details.
 
-中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm 2` 開啟圖形終端機；
+中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm` 預設在 tty2 開啟圖形終端機，保留 tty1 設定硬體；
 預設字體為 13，可用 `bunterm 3 -s 16` 另開一個較大字體的工作階段。
 點擊最左上角 2×2 像素可調字體、複製／貼上、切換 tty，或在淺色輸入框
 輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`。目前 tty 標記為 `(current)`。
@@ -508,7 +507,7 @@ If `Enter` is not recognized in a particular terminal, try `Ctrl-J` or
 
 Run a separate `bunterm` on each Linux virtual console. A numeric positional
 argument is a short form of the corresponding device, so `bunterm 2` means
-`bunterm /dev/tty2`:
+`bunterm /dev/tty2`. Omitting the argument also uses tty2:
 
 ```sh
 bunterm 2
