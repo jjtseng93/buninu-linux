@@ -302,7 +302,7 @@ async function interactive(state) {
     const timer = setTimeout(() => {
       if (pendingCursorQuery?.resolve === resolve) pendingCursorQuery = null;
       resolve(null);
-    }, 60);
+    }, 400);
     pendingCursorQuery = {
       resolve(position) {
         clearTimeout(timer);
