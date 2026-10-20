@@ -123,9 +123,13 @@ export function createVtMenu({ list, select, changed, width, height, rowHeight, 
         const y = (i + 1) * row;
         rect(y, i + offset === selected ? [45, 80, 125] : [25, 29, 35]);
         if (entry.kind === "font") {
-          text("[-]",y,8,48);
-          text(`🔤 字體 Font ${controls.fontSize()}`,y,64,Math.max(1,panelWidth-128),"center");
-          text("[+]",y,Math.max(8,panelWidth-40),32);
+          // Use equal, cell-aligned button widths. Centered text scales to
+          // fit at large font sizes instead of clipping the closing bracket.
+          const buttonWidth = Math.max(1,Math.floor(48/renderer.cellWidth))*renderer.cellWidth;
+          const labelStart = buttonWidth+16;
+          text("[-]",y,8,buttonWidth,"center");
+          text(`🔤 字體 Font ${controls.fontSize()}`,y,labelStart,Math.max(1,panelWidth-labelStart*2),"center");
+          text("[+]",y,Math.max(8,panelWidth-8-buttonWidth),buttonWidth,"center");
           return;
         }
         if (entry.kind === "clipboard") {

@@ -116,3 +116,19 @@ test("menu labels current VT and renders a real left-aligned command field with 
   expect(labels).toContainEqual({text:"📥 貼上 Paste",align:"left"});
   expect(labels.some(x=>x.text===">")).toBe(false);
 });
+
+test("font buttons fit equally and preserve the right margin as fonts grow", () => {
+  const {menu}=fixture({controls:{fontSize:()=>20,execute:()=>""}});
+  menu.pointer(report(0,0,["left"]));
+  for(const cellWidth of [8,12,19,58]) {
+    const labels=[];
+    menu.draw({cellWidth,cellHeight:24,CanvasKit:{XYWHRect:(...r)=>r,ClipOp:{Intersect:0}},
+      paintFor:c=>c,drawText:(text,x,y,cells,color,options)=>labels.push({text,x,cells,align:options.align}),
+      canvas:{save(){},restore(){},clipRect(){},drawRect(){}}});
+    const plus=labels.find(x=>x.text==="[+]"),minus=labels.find(x=>x.text==="[-]");
+    expect(plus.align).toBe("center");expect(minus.align).toBe("center");
+    expect(plus.cells).toBe(minus.cells);
+    expect(plus.x+plus.cells*cellWidth).toBe(412);
+    expect(minus.x).toBe(8);
+  }
+});
