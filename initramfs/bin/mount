@@ -325,6 +325,10 @@ const doMount = (source, target, type, flags, data, { verbose, fake }) => {
     console.log(`mount(${source}, ${target}, ${type ?? "(none)"}, [${words.join(",")}], "${data}")`);
   }
   if (fake) return;
+  // A bind over /lib can hide libc before the read-only remount pass fails.
+  void libc.symbols.mount;
+  errno();
+  void libc.symbols.strerror;
   const dataBytes = data ? cString(data) : null;
   const typeBytes = type ? cString(type) : null;
   const result = libc.symbols.mount(

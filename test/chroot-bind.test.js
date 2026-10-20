@@ -39,8 +39,21 @@ async function invoke(argumentsFor,env={}) {
  const mock=join(dir,'libc.js');
  writeFileSync(mock,`import {appendFileSync} from 'node:fs';
  const record=(name,...args)=>appendFileSync(${JSON.stringify(log)},JSON.stringify([name,...args.map(a=>typeof a==='bigint'?String(a):a)])+'\\n');
- export const ptr=x=>x,cString=x=>x,errno=()=>1,strerror=()=> 'mock mount denied',Errno={EINVAL:22,EPERM:1};
- export const libc={symbols:{mount:(...a)=>{record('mount',...a);return a[0]?.endsWith('/fail')?-1:0;},umount2:(...a)=>{record('umount',...a);return 0;},chroot:(...a)=>{record('chroot',...a);return 0;}}};`);
+ let entered=false;
+ const bound=new Map();
+ const functions={mount:(...a)=>{record('mount',...a);return a[0]?.endsWith('/fail')?-1:0;},
+ umount2:(...a)=>{record('umount',...a);return process.env.MOCK_UNMOUNT_FAIL?-1:0;},
+ chroot:(...a)=>{record('chroot',...a);entered=true;return 0;},
+ strerror:()=> 'mock mount denied',errno:()=>process.env.MOCK_UNMOUNT_FAIL?5:1};
+ export const libc={symbols:new Proxy({}, {get(_target,name){
+   if(!bound.has(name)){
+     record('resolve',name);
+     if(entered||process.env.MOCK_MISSING_SYMBOL===name)throw Error('Cannot load libc symbol '+name);
+     bound.set(name,functions[name]);
+   }
+   return bound.get(name);
+ }})};
+ export const ptr=x=>x,cString=x=>x,errno=()=>libc.symbols.errno(),strerror=code=>libc.symbols.strerror(code),Errno={EINVAL:22,EPERM:1};`);
  const source=readFileSync(new URL('../initramfs/bin/chroot',import.meta.url),'utf8')
   .replace('"../lib/dlopen.js"',JSON.stringify(mock))
   .replace('"../lib/chroot-options.js"',JSON.stringify(new URL('../initramfs/lib/chroot-options.js',import.meta.url).pathname))
@@ -67,4 +80,29 @@ test('shared tmp replaces default tmpfs and bind failure cleans up even with -k'
  expect(failure.status).toBe(125);expect(failure.stderr).toContain('mock mount denied');
  expect(failure.calls.some(c=>c[0]==='chroot')).toBe(false);
  expect(failure.calls.filter(c=>c[0]==='umount').map(c=>c[1])).toEqual([failure.root+'/first']);
+});
+
+test('cleanup symbols are resolved before mounting and remain usable after chroot',async()=>{
+ const r=await invoke(({host})=>['-n','-b',`${host}:/work`],{MOCK_UNMOUNT_FAIL:'1'});
+ expect(r.status).toBe(0);
+ expect(r.stderr).toContain('chroot: unmount /work: mock mount denied');
+ expect(r.stderr).not.toContain('Cannot load libc symbol');
+ const firstMount=r.calls.findIndex(c=>c[0]==='mount');
+ for(const name of ['umount2','strerror','errno']){
+   const index=r.calls.findIndex(c=>c[0]==='resolve'&&c[1]===name);
+   expect(index).toBeGreaterThanOrEqual(0);expect(index).toBeLessThan(firstMount);
+ }
+ expect(r.calls.filter(c=>c[0]==='umount').map(c=>c[2])).toEqual([0,2]);
+});
+
+test('missing cleanup symbol fails before any mount, including keep-mounts',async()=>{
+ const r=await invoke(({host})=>['-n','-k','-b',`${host}:/work`],{MOCK_MISSING_SYMBOL:'umount2'});
+ expect(r.status).toBe(125);expect(r.stderr).toContain('Cannot load libc symbol umount2');
+ expect(r.calls.some(c=>['mount','chroot','umount'].includes(c[0]))).toBe(false);
+});
+
+test('no-mount chroot without binds does not require umount2',async()=>{
+ const r=await invoke(()=>['-n'],{MOCK_MISSING_SYMBOL:'umount2'});
+ expect(r.status).toBe(0);
+ expect(r.calls.some(c=>c[0]==='resolve'&&c[1]==='umount2')).toBe(false);
 });

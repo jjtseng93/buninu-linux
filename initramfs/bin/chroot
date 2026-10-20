@@ -53,6 +53,19 @@ try { bindings = resolveBindings(options.binds); }
 catch (error) { fail(`invalid bind: ${error.message}`); }
 
 
+// dlopen.js resolves each symbol lazily. Bind everything needed after mounts
+// or chroot before the host libc path can disappear from this process's root.
+// Even --keep-mounts needs umount2 when setup fails and must be rolled back.
+try {
+  void libc.symbols.chroot;
+  if (options.mount || bindings.length) {
+    void libc.symbols.mount;
+    void libc.symbols.umount2;
+  }
+  errno();
+  void libc.symbols.strerror;
+} catch (error) { fail(error.message); }
+
 const report = (message) => { if (options.verbose) console.error(`chroot: ${message}`); };
 
 // ---------------------------------------------------------------- mounts --

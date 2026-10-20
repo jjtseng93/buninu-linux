@@ -58,6 +58,12 @@ const unmount = (target) => {
   return false;
 };
 
+// A previous target may contain libc; later failures still need strerror.
+if (targets.length) {
+  try { void libc.symbols.umount2; errno(); void libc.symbols.strerror; }
+  catch (error) { console.error(`umount: ${error.message}`); process.exit(1); }
+}
+
 let status = 0;
 for (const target of targets) {
   const path = target.length > 1 ? target.replace(/\/+$/, "") : target;
