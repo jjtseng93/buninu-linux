@@ -2,6 +2,10 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.4.1] - 2026-10-13
+
+- Fixed awk bypassing linker protection
+
 ## [0.4.0] - 2026-10-13
 
 ### Added and fixed

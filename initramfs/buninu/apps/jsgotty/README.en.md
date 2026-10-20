@@ -3,6 +3,11 @@
 [中文 README](README.md)
 
 ## News
+
+### 2026/10/21
+
+- Added [Kitty keyboard](#kitty-keyboard) support for distinct modifier combinations, including Super, and press/repeat/release events.
+
 ### 2026/08/16
 - Fixed the disconnected-screen `Reconnect` button not being clickable in WebGL mode.
 - The `Reconnect` UI now stays above the WebGL canvas and receives mouse and touch events correctly; Kitty image handling no longer intercepts right-click / long-press for entering a reconnect token or PID.
@@ -237,6 +242,41 @@ The `jsgotty` server has two connection modes:
 - When `reconnect-time < 0`, the frontend retries once per minute.
 - On disconnect, the overlay provides a `Reconnect` button for immediate manual retry.
 - Right-click / long-press on that button lets you enter a custom reconnect token or PID.
+
+## Kitty keyboard
+
+The web terminal supports the shortcut-related parts of the [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/), separately from Kitty graphics. Legacy keyboard encoding remains the default. A terminal application can opt in:
+
+```sh
+printf '\033[>11u'  # 1: disambiguation + 2: repeat/release + 8: all keys
+printf '\033[<u'    # restore the previous mode when the application exits
+```
+
+The receiving application must decode these sequences and restore the mode in its exit/finally handler; do not leave an ordinary shell in this mode. Negotiation supports `CSI ? u`, `CSI = flags ; mode u`, push and pop. Normal and alternate screens have independent stacks, limited to 32 entries. Reconnection, full reset and soft reset clear the state. Use flag `1` for unambiguous shortcuts, or `11` for modifier keys and press/repeat/release reporting.
+
+DOM Meta maps to Kitty **Super (bit 8)**, not the separate Meta bit (32). Super+X is `CSI 120;9u`; Ctrl+Shift+Super+X is `CSI 120;14u`. Release events add `:3` when enabled.
+
+Supported flags are **1, 2 and 8**; alternate keys (4) and associated text (16) are not implemented or reflected in the negotiated flags. IME composition/text commits and paste retain their existing paths; physical keys and releases cannot be inferred from committed text. Letters, digits, punctuation, navigation, Tab/Enter, function keys, keypad keys and standard Kitty media keys retain distinct modifiers. OS/browser-reserved shortcuts may never reach the page. Keys without standard Kitty codes, such as brightness and microphone mute, are not assigned private encodings.
+
+This implements **jsgotty → PTY** encoding. Controlling Hyprland/Omarchy still requires Casty or another receiver to enable/decode Kitty keyboard and forward Super and release events. It does not complete the remote desktop input chain or change the mouse protocol.
+
+Reload the jsgotty page after updating. Run the manual tester inside its terminal:
+
+```sh
+bun tests/manual/kitty-keyboard.js
+```
+
+It prints negotiated flags, raw sequences, modifiers and event types, exits after 60 seconds or unmodified Escape/q/Ctrl-C, and restores the previous keyboard/raw modes. An optional real bundled-xterm test uses an already installed browser:
+
+```sh
+CHROMIUM_HEADLESS=/path/to/chromium-headless-shell node --test tests/kitty-keyboard-browser.test.js
+```
+
+## Android Keyboards
+
+For Android WebViews that deliver Meta down/up but lose `metaKey`, jsgotty tracks both Meta keys inside its own input handler. Blur or page hiding clears held state and sends releases for reported keys when event reporting is enabled.
+
+In the Android terminal, Alt with letters, digits, punctuation, or space sends terminal Alt sequences based on physical key positions (US layout, including Shift), bypassing accent dead-key handling. Alt-E/I/N/U therefore no longer compose characters such as é, ê, ñ, and ü; input methods and paste remain available. When WebView omits `code`, recognized legacy `keyCode` values provide a fallback. Dead keys delivered only as `keyup` send the shortcut on release, without duplicating a previously handled `keydown`. Active composition, Ctrl, Meta, AltGr, and unidentified keys retain their existing handling. This applies only inside the jsgotty terminal and does not modify Android system keyboard settings.
 
 ## Tested platforms
 - Windows x64: Windows 11

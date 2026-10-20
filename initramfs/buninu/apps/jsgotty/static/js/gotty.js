@@ -12543,6 +12543,12 @@
 	                toTerminal: (e) => this.term.write(e),
 	                toServer: (e) => this.sendInput(e),
 	              })),
+              (this.kittyKeyboard = new globalThis.GoTTYKittyKeyboard.KittyKeyboard(this.term, {
+                android: /Android/i.test(navigator.userAgent),
+              })),
+              this.term.attachCustomKeyEventHandler((event) =>
+                this.kittyKeyboard.handle(event) && this.handleAndroidAltKey(event),
+              ),
 	              this.setPreferences(t),
 	              (() => {
 	                try {
@@ -12594,11 +12600,72 @@
                     ));
               }),
               this.term.open(e),
+              this.kittyKeyboard.attach(this.term.textarea),
+              this.term.textarea?.addEventListener("blur", () => {
+                this.androidAltDownKeys?.clear();
+              }),
               this.term.focus(),
               this.resizeListener(),
               window.addEventListener("resize", () => {
                 this.resizeListener();
               }));
+          }
+          // Android can translate physical Alt shortcuts into accent dead keys.
+          // Resolve printable physical keys before xterm's composition handling.
+          handleAndroidAltKey(event) {
+            if (!/Android/i.test(navigator.userAgent)) return true;
+            let code = event.code;
+            // Some Android IMEs omit code and swallow the dead-key keydown,
+            // but still deliver keyup with a usable legacy keyCode.
+            if (!code) {
+              if (event.keyCode >= 65 && event.keyCode <= 90)
+                code = "Key" + String.fromCharCode(event.keyCode);
+              else if (event.keyCode >= 48 && event.keyCode <= 57)
+                code = "Digit" + String.fromCharCode(event.keyCode);
+              else code = {
+                32: "Space", 186: "Semicolon", 187: "Equal", 188: "Comma",
+                189: "Minus", 190: "Period", 191: "Slash", 192: "Backquote",
+                219: "BracketLeft", 220: "Backslash", 221: "BracketRight", 222: "Quote",
+              }[event.keyCode];
+            }
+            this.androidAltDownKeys ??= new Set();
+            const alreadySent = event.type === "keyup" && this.androidAltDownKeys.delete(code);
+            if (
+              !["keydown", "keypress", "keyup"].includes(event.type) ||
+              !event.altKey || event.ctrlKey || event.metaKey ||
+              event.isComposing || event.getModifierState?.("AltGraph") ||
+              (event.type === "keyup" && event.key !== "Dead")
+            ) return true;
+
+            let character;
+            if (/^Key[A-Z]$/.test(code)) {
+              const letter = code.slice(3);
+              character = event.shiftKey ? letter : letter.toLowerCase();
+            } else if (/^Digit[0-9]$/.test(code)) {
+              const digit = code.slice(5);
+              character = event.shiftKey ? ")!@#$%^&*("[Number(digit)] : digit;
+            } else {
+              const punctuation = {
+                Backquote: ["`", "~"], Minus: ["-", "_"], Equal: ["=", "+"],
+                BracketLeft: ["[", "{"], BracketRight: ["]", "}"],
+                Backslash: ["\\", "|"], Semicolon: [";", ":"], Quote: ["'", '"'],
+                Comma: [",", "<"], Period: [".", ">"], Slash: ["/", "?"],
+                Space: [" ", " "],
+              };
+              character = Object.hasOwn(punctuation, code)
+                ? punctuation[code][event.shiftKey ? 1 : 0]
+                : undefined;
+            }
+            if (character === undefined) return true;
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.type === "keydown") {
+              this.androidAltDownKeys.add(code);
+              this.term.input("\x1b" + character, true);
+            } else if (event.type === "keyup" && !alreadySent) {
+              this.term.input("\x1b" + character, true);
+            }
+            return false;
           }
           info() {
             return { columns: this.term.cols, rows: this.term.rows };
@@ -12610,6 +12677,7 @@
             return this.message;
           }
           setDisconnected(e) {
+            if (e) this.kittyKeyboard.reset();
             this.disconnected = !!e;
           }
           setReconnectAction(e) {
@@ -12721,9 +12789,11 @@
             this.term.blur();
           }
           reset() {
+            this.kittyKeyboard.reset();
             (this.removeMessage(), this.term.clear());
           }
           close() {
+            this.kittyKeyboard.dispose();
             (window.removeEventListener("resize", this.resizeListener),
               this.term.dispose());
           }
@@ -26746,39 +26816,32 @@
                         case 37:
                           if (e.metaKey) break;
                           a
-                            ? ((o.key = r.C0.ESC + "[1;" + (a + 1) + "D"),
-                              o.key === r.C0.ESC + "[1;3D" &&
-                                (o.key = r.C0.ESC + (i ? "b" : "[1;5D")))
+                            ? (o.key = r.C0.ESC + "[1;" + (a + 1) + "D")
                             : (o.key = t ? r.C0.ESC + "OD" : r.C0.ESC + "[D");
                           break;
                         case 39:
                           if (e.metaKey) break;
                           a
-                            ? ((o.key = r.C0.ESC + "[1;" + (a + 1) + "C"),
-                              o.key === r.C0.ESC + "[1;3C" &&
-                                (o.key = r.C0.ESC + (i ? "f" : "[1;5C")))
+                            ? (o.key = r.C0.ESC + "[1;" + (a + 1) + "C")
                             : (o.key = t ? r.C0.ESC + "OC" : r.C0.ESC + "[C");
                           break;
                         case 38:
                           if (e.metaKey) break;
                           a
-                            ? ((o.key = r.C0.ESC + "[1;" + (a + 1) + "A"),
-                              i ||
-                                o.key !== r.C0.ESC + "[1;3A" ||
-                                (o.key = r.C0.ESC + "[1;5A"))
+                            ? (o.key = r.C0.ESC + "[1;" + (a + 1) + "A")
                             : (o.key = t ? r.C0.ESC + "OA" : r.C0.ESC + "[A");
                           break;
                         case 40:
                           if (e.metaKey) break;
                           a
-                            ? ((o.key = r.C0.ESC + "[1;" + (a + 1) + "B"),
-                              i ||
-                                o.key !== r.C0.ESC + "[1;3B" ||
-                                (o.key = r.C0.ESC + "[1;5B"))
+                            ? (o.key = r.C0.ESC + "[1;" + (a + 1) + "B")
                             : (o.key = t ? r.C0.ESC + "OB" : r.C0.ESC + "[B");
                           break;
                         case 45:
-                          e.shiftKey || e.ctrlKey || (o.key = r.C0.ESC + "[2~");
+                          e.shiftKey || e.ctrlKey ||
+                            (o.key = e.altKey
+                              ? r.C0.ESC + "[2;" + (a + 1) + "~"
+                              : r.C0.ESC + "[2~");
                           break;
                         case 46:
                           o.key = a
@@ -26802,14 +26865,14 @@
                         case 33:
                           e.shiftKey
                             ? (o.type = 2)
-                            : e.ctrlKey
+                            : e.ctrlKey || e.altKey
                               ? (o.key = r.C0.ESC + "[5;" + (a + 1) + "~")
                               : (o.key = r.C0.ESC + "[5~");
                           break;
                         case 34:
                           e.shiftKey
                             ? (o.type = 3)
-                            : e.ctrlKey
+                            : e.ctrlKey || e.altKey
                               ? (o.key = r.C0.ESC + "[6;" + (a + 1) + "~")
                               : (o.key = r.C0.ESC + "[6~");
                           break;
@@ -26927,6 +26990,8 @@
                                     ))
                                   : 56 === e.keyCode
                                     ? (o.key = r.C0.DEL)
+                                    : "/" === e.key
+                                      ? (o.key = r.C0.US)
                                     : 219 === e.keyCode
                                       ? (o.key = r.C0.ESC)
                                       : 220 === e.keyCode

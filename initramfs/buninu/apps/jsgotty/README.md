@@ -3,6 +3,11 @@
 [English README](README.en.md)
 
 ## News
+
+### 2026/10/21
+
+- 新增 [Kitty keyboard](#kitty-keyboard) 支援，可區分 Super 等修飾鍵組合，並回報按下、重複與放開事件。
+
 ### 2026/08/16
 - 修正 WebGL 模式下斷線畫面的 `Reconnect` 按鈕無法點擊。
 - `Reconnect` 介面現在會正確位於 WebGL canvas 上方並接收滑鼠與觸控事件；右鍵／長按輸入 reconnect token 或 PID 也不會被 Kitty 圖片事件攔截。
@@ -237,6 +242,41 @@ bun gotty.js --client -k <token|pid> [target]
 - `reconnect-time < 0` 時，會每 1 分鐘自動重試一次。
 - 斷線時會提供 `Reconnect` 按鈕，可手動立即重試。
 - 該按鈕右鍵/長按可輸入自訂 reconnect token 或 PID。
+
+## Kitty keyboard
+
+網頁終端現在支援 [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) 的快捷鍵相關功能，與 Kitty 圖片協定分開。預設仍是原本的鍵盤編碼；由終端內的程式選擇開啟：
+
+```sh
+printf '\033[>11u'  # 1：消除歧義 + 2：重複／放開事件 + 8：回報所有按鍵
+printf '\033[<u'    # 程式退出時還原上一層模式
+```
+
+程式必須能解析新編碼，並在 finally／退出處理中還原模式，不建議直接在一般 shell 長期開啟。支援 `CSI ? u` 查詢、`CSI = flags ; mode u` 設定／加上／移除旗標、`CSI > flags u` push 與 `CSI < count u` pop。主畫面與 alternate screen 各有獨立堆疊（上限 32 層）；重連、完整重設或 soft reset 會清除狀態。只需要無歧義快捷鍵時可用旗標 `1`；需要獨立修飾鍵及所有按鍵的 down/repeat/up 時使用 `11`。
+
+網頁的 Meta 對應 Kitty 的 **Super（bit 8）**，不是協定中的另一個 Meta（bit 32）。例如 Super+X 是 `CSI 120;9u`，Ctrl+Shift+Super+X 是 `CSI 120;14u`；啟用事件回報後，放開會帶 `:3`。
+
+目前支援旗標 **1、2、8**；尚未實作替代鍵位（4）與附帶文字（16），查詢只回報實際啟用的旗標。IME 組字／文字提交與貼上保留既有路徑，不保證能回報實體按鍵或放開事件。字母、數字、標點、方向鍵、Tab、Enter、功能鍵、數字鍵盤與有標準 Kitty 編碼的媒體鍵可區分修飾組合；系統／瀏覽器先攔截的快捷鍵不會到達網頁，亮度、麥克風靜音等沒有標準 Kitty 鍵碼的鍵也不會擅自編成私有序列。
+
+這完成的是 **jsgotty → PTY** 的鍵盤編碼。要操作 Hyprland／Omarchy，Casty 或其他接收程式仍須啟用、解析 Kitty keyboard 並轉送 Super 與放開事件；此項改動不代表整條遠端桌面輸入鏈已完成，也不改變滑鼠協定。
+
+在 jsgotty 終端內手動確認（60 秒後自動退出，或按未修飾的 Esc／q／Ctrl+C）：
+
+```sh
+bun tests/manual/kitty-keyboard.js
+```
+
+測試會印出協商結果、原始序列、修飾鍵及 press/repeat/release；結束時還原鍵盤模式與 raw mode。更新後請重新載入 jsgotty 網頁。可用既有 Chromium 執行真正 xterm 前端測試，不會自動安裝瀏覽器：
+
+```sh
+CHROMIUM_HEADLESS=/path/to/chromium-headless-shell node --test tests/kitty-keyboard-browser.test.js
+```
+
+## Android 鍵盤
+
+Android WebView 若有 `Meta` down/up 卻漏掉 `metaKey`，jsgotty 會在自己的輸入處理中追蹤左右 Meta 並還原 Super。失焦或頁面隱藏時清除按住狀態；已送出的按鍵在事件回報模式下會補送放開。
+
+Android 終端的 Alt＋字母、數字、標點及空白會依實體按鍵位置（美式配置，支援 Shift）送出終端 Alt 序列，不進入重音死鍵流程。因此 Alt-E/I/N/U 等組合不再用來輸入 é、ê、ñ、ü；仍可使用輸入法或貼上。若 WebView 省略 `code`，會回退使用可辨識的 `keyCode`；若死鍵只送出 `keyup`，則在放開時補送一次，避免與已處理的 `keydown` 重複。正在組字、Ctrl、Meta、AltGr，以及無法辨識按鍵的事件維持原本處理。此規則只作用於 jsgotty 終端，不修改 Android 的系統鍵盤配置。
 
 ## Tested platforms 已測試作業系統
 - Windows x64: Windows 11

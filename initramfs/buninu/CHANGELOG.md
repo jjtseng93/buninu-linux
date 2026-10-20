@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0 - 2026-10-21
+
+- Sync jsgotty to 1.2.0:
+  * Add opt-in Kitty keyboard support for disambiguated shortcuts, including
+    Super, and press/repeat/release events. Support flags 1, 2 and 8, mode
+    queries, and independent mode stacks for normal and alternate screens;
+    legacy keyboard encoding remains the default.
+  * Recover Super state on Android WebViews that deliver Meta key events but
+    omit the modifier state. Handle Android Alt shortcuts without accent
+    dead-key conversion, including recognizable keyup-only events.
+  * Preserve Alt on arrow, Insert, PageUp and PageDown shortcuts, and encode
+    Ctrl+/ as the conventional US control character.
+  * Add a manual keyboard tester with readable, colored shortcut names and
+    raw sequences; restore keyboard and raw modes when it exits.
+  * Allow local Kitty graphics consumers to request binary image data,
+    avoiding a base64 conversion; browser clients retain base64 by default.
+- Sync bunmsh to 0.4.1: use the existing linker-aware shell launcher for the
+  awk fallback's subprocess commands instead of bypassing linker handling.
+
 ## 0.4.21 - 2026-10-15
 
 - Sync jsgotty to 1.1.16: Turn on pixel report
