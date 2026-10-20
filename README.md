@@ -414,6 +414,57 @@ mount -fv /dev/sda1 /mnt
 
 Run `poweroff` for a synced shutdown.
 
+### Using bunterm
+
+`bunterm` is the graphical terminal on the Linux framebuffer. It displays CJK
+text, colour emoji and Kitty graphics without starting X11 or Wayland. On the
+real-hardware image, enter the shell with `start()` at the `bun-repl>` prompt,
+then run:
+
+```sh
+bunterm 2                   # open a shell on VT 2; keep tty1 for initial setup
+bunterm 3 -s 16             # another session, with a 16 px font (default: 13)
+# Alternatively, start a specific application on an unused VT:
+bunterm 4 -e jsmdcui --allow-url README.md
+```
+
+Use `Ctrl+Alt+F1` to return to the initial console, `Ctrl+Alt+F2` to return to
+VT 2, or `Alt+Left` / `Alt+Right` to switch VTs. From a shell, `chvt 1` and
+`chvt 2` do the same. Switching preserves the running sessions; exiting a
+session's shell or application ends that bunterm.
+
+Click the screen's top-left **2×2 pixels** to open its menu:
+
+| Control | Usage |
+| --- | --- |
+| 🔤 字體 Font − / + | Resize the current session's text and terminal grid. The size is centred between the buttons. |
+| 📋 複製 Copy | Left-drag to select terminal text, then copy it to the shared xclip clipboard. Selection is available only when the application has not enabled mouse reporting. |
+| 📥 貼上 Paste | Paste from xclip. Applications that enable bracketed paste receive its delimiters; other applications receive plain text. |
+| Command input | Click the light input field or press Tab. Type `font 16`, `font +`, `font -`, `copy`, `paste`, `vt 2` or `help`, then press Enter. These are local bunterm commands. |
+| VT list | Switch to an existing bunterm or the initial tty. The active VT is marked `(current)`; this menu does not create sessions. |
+
+Press Esc to close the menu. Font changes last for the current session.
+The mouse wheel scrolls terminal history when the application does not request
+mouse events. `--no-mouse` disables mouse input and the menu;
+`--no-clipboard` disables both menu clipboard actions and OSC 52.
+See [Clipboard](#clipboard) for sharing text between applications.
+
+**Kitty keyboard:** applications can negotiate flags **1, 2 and 8**, using the
+same encoder as jsgotty, to distinguish Ctrl/Alt/Shift/Super combinations and
+request press, repeat and release events. No launch flag is needed. Ordinary
+applications retain the console's translated input; the original keyboard mode is restored
+when the application disables Kitty or bunterm exits. VT-switching shortcuts stay
+reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
+Use `bunterm --help` for full options and keyboard details.
+
+中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm 2` 開啟圖形終端機；
+預設字體為 13，可用 `bunterm 3 -s 16` 另開一個較大字體的工作階段。
+點擊最左上角 2×2 像素可調字體、複製／貼上、切換 tty，或在淺色輸入框
+輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`。目前 tty 標記為 `(current)`。
+程式未要求滑鼠回報時才可拖曳選字；剪貼簿沿用 xclip，貼上依程式要求使用
+bracketed paste。Kitty keyboard 由應用程式協商開啟，可區分 Super 等組合與
+按下／重複／放開事件；該模式目前不處理 dead key／Compose。
+
 ### Editor quick start
 
 The bundled `jmi` terminal editor works without a network connection:
@@ -597,7 +648,13 @@ aarch64 guest also needs a QEMU display; see
 passes every copy and paste to Buninu's `xclip -selection clipboard`. For
 now that clipboard is a file, `$HOME/.xclip.clipboard`, read and written in
 the ramdisk, so all bunterm sessions share it and it is gone after a reboot.
-`bunterm --no-clipboard` turns OSC 52 off.
+Left-drag selects text only when the application has not enabled mouse reporting.
+Click the top-left **2×2 pixels** for **Copy / Paste**, **font − / +**, the VT
+list and a local command field (`font 16`, `copy`, `paste`, `vt 2`, `help`).
+Paste uses bracketed paste when the application requests it.
+`bunterm --no-clipboard` disables both OSC 52 and menu clipboard actions.
+
+See [Using bunterm](#using-bunterm) for the menu and Kitty keyboard support.
 
 For Chinese input, run the pinyin input method
 [jspinyin](https://www.npmjs.com/package/@drxiaozhi/jspinyin) in a bunterm
@@ -1728,6 +1785,7 @@ bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須�
     + [Testing on a Linux host in Docker](#testing-on-a-linux-host-in-docker)
 - [Using Buninu Linux](#using-buninu-linux)
   * [Basic configuration](#basic-configuration)
+  * [Using bunterm](#using-bunterm)
   * [Editor quick start](#editor-quick-start)
     + [jsmdcui](#jsmdcui)
   * [Multitasking modes](#multitasking-modes)
