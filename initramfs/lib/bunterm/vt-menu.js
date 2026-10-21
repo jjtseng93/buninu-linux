@@ -1,13 +1,14 @@
 // Local overlay; none of its input is sent to the PTY.
 import { StringDecoder } from "node:string_decoder";
 
-export function createVtMenu({ list, select, changed, width, height, rowHeight, controls = null }) {
+export function createVtMenu({ list, select, create = null, changed, width, height, rowHeight, controls = null }) {
   let row = Math.max(24, Math.ceil(rowHeight + 8));
   let capacity = Math.max(1, Math.floor(height / row) - 2);
   const panelWidth = Math.min(width, 420);
   let entries = null, selected = 0, offset = 0, swallow = false;
   let command = [], caret = 0, editing = false, status = "", escape = "";
   let decoder = new StringDecoder("utf8");
+  let creating = false;
   const layout = () => {
     row = Math.max(24, Math.ceil((controls?.cellHeight?.() ?? rowHeight) + 8));
     capacity = Math.max(1, Math.floor(height / row) - 2);
@@ -28,6 +29,15 @@ export function createVtMenu({ list, select, changed, width, height, rowHeight, 
   };
   const choose = (right = false) => {
     const target = entries[selected];
+    if (target?.kind === "create") {
+      if (creating) return;
+      creating = true;
+      status = "啟動中 / Starting…"; changed();
+      Promise.resolve().then(() => create(controls.fontSize())).then(() => close())
+        .catch(error => { status = error.message; changed(); })
+        .finally(() => { creating = false; });
+      return;
+    }
     if (target?.kind === "font") { run(`font ${right ? "+" : "-"}`); return; }
     if (target?.kind === "clipboard") {
       run(right ? "paste" : "copy");
@@ -47,7 +57,8 @@ export function createVtMenu({ list, select, changed, width, height, rowHeight, 
       }
       if (!entries) {
         if (report.x < 0 || report.y < 0 || report.x >= 2 || report.y >= 2 || !report.pressed.includes("left")) return false;
-        entries = [...(controls ? [{kind:"font"}, {kind:"clipboard"}, {kind:"command"}] : []), ...list()];
+        entries = [...(controls ? [{kind:"font"}, {kind:"clipboard"}, {kind:"command"}] : []), ...list(),
+          ...(create && controls ? [{kind:"create",label:"+ 新增 bunterm / New bunterm"}] : [])];
         selected = 0; offset = 0; swallow = true; status = ""; escape = "";
         decoder = new StringDecoder("utf8"); changed(); return true;
       }

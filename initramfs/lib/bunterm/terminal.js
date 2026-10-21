@@ -401,6 +401,18 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
         const current = keyboard ? activeConsole(keyboard) : null;
         return listVirtualTerminals().map(entry => ({...entry,current:entry.number===current}));
       },
+      create: async fontSize => {
+        // Re-scan at activation, since another session may have opened while
+        // the menu was visible. The launcher detaches onto the new console;
+        // its normal VT ownership checks still apply.
+        const number = Math.max(1, ...listVirtualTerminals().map(entry => entry.number)) + 1;
+        if (number > 63) throw new Error("沒有可用 tty / No next tty available");
+        const child = Bun.spawn([process.execPath, `${import.meta.dir}/../../bin/bunterm`,
+          String(number), "-s", String(fontSize), "--fb", device],
+          { stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+        const [status, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+        if (status !== 0) throw new Error(error.trim() || "無法啟動 / Failed to start bunterm");
+      },
       select: async number => {
         if (switching) return;
         switching = true;

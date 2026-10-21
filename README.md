@@ -444,7 +444,8 @@ Click the screen's top-left **2×2 pixels** to open its menu:
 | 📋 複製 Copy | Left-drag to select terminal text, then copy it to the shared xclip clipboard. Selection is available only when the application has not enabled mouse reporting. |
 | 📥 貼上 Paste | Paste from xclip. Applications that enable bracketed paste receive its delimiters; other applications receive plain text. |
 | Command input | Click the light input field or press Tab. Type `font 16`, `font +`, `font -`, `copy`, `paste`, `vt 2` or `help`, then press Enter. These are local bunterm commands. |
-| VT list | Switch to an existing bunterm or the initial tty. The active VT is marked `(current)`; this menu does not create sessions. |
+| VT list | Switch to an existing bunterm or the initial tty. The active VT is marked `(current)`. |
+| + 新增 bunterm / New bunterm | Start bunterm on the tty after the highest listed number, using the current font size. |
 
 Press Esc to close the menu. Font changes last for the current session.
 The mouse wheel scrolls terminal history when the application does not request
@@ -464,6 +465,8 @@ Use `bunterm --help` for full options and keyboard details.
 預設字體為 13，可用 `bunterm 3 -s 16` 另開一個較大字體的工作階段。
 點擊最左上角 2×2 像素可調字體、複製／貼上、切換 tty，或在淺色輸入框
 輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`。目前 tty 標記為 `(current)`。
+列表底部的「+ 新增 bunterm / New bunterm」會在列表最大 tty 編號的下一個
+tty 啟動新終端機，沿用當前字體大小。
 程式未要求滑鼠回報時才可拖曳選字；剪貼簿沿用 xclip，貼上依程式要求使用
 bracketed paste。Kitty keyboard 由應用程式協商開啟，可區分 Super 等組合與
 按下／重複／放開事件；該模式目前不處理 dead key／Compose。

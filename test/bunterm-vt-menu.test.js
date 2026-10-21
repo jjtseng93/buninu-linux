@@ -9,6 +9,35 @@ function fixture(extra = {}) {
     select: n => selected.push(n), changed() {}, ...extra });
   return {menu, selected};
 }
+test("new bunterm is below the tty list, inherits live font size, and prevents double launch", async () => {
+  let size=13, finish; const calls=[];
+  const {menu,selected}=fixture({controls:{fontSize:()=>size,execute:()=>""},
+    create:n=>{calls.push(n);return new Promise(resolve=>{finish=resolve;});}});
+  menu.pointer(report(0,0,["left"]));
+  const labels=[];
+  menu.draw({cellWidth:8,cellHeight:16,CanvasKit:{XYWHRect:(...r)=>r,ClipOp:{Intersect:0}},
+    paintFor:c=>c,drawText:text=>labels.push(text),
+    canvas:{save(){},restore(){},clipRect(){},drawRect(){}}});
+  expect(labels.indexOf("+ 新增 bunterm / New bunterm")).toBe(labels.indexOf("bunterm",2)+1);
+  size=20;
+  menu.input(Buffer.from("\x1b[B".repeat(5)+"\r\r"));
+  await Bun.sleep(0);
+  expect(calls).toEqual([20]);expect(selected).toEqual([]);
+  finish();await Bun.sleep(0);expect(menu.visible).toBe(false);
+});
+
+test("failed new bunterm launch keeps the menu usable", async () => {
+  const {menu}=fixture({controls:{fontSize:()=>13,execute:()=>""},create:()=>{throw Error("No next tty available");}});
+  menu.pointer(report(0,0,["left"]));
+  menu.input(Buffer.from("\x1b[B".repeat(5)+"\r"));
+  await Bun.sleep(0);expect(menu.visible).toBe(true);
+  const labels=[];
+  menu.draw({cellWidth:8,cellHeight:16,CanvasKit:{XYWHRect:(...r)=>r,ClipOp:{Intersect:0}},
+    paintFor:c=>c,drawText:text=>labels.push(text),
+    canvas:{save(){},restore(){},clipRect(){},drawRect(){}}});
+  expect(labels).toContain("No next tty available");
+  menu.input(Buffer.from("\x1b"));expect(menu.visible).toBe(false);
+});
 test("only the top-left four pixels open the menu; open and selection clicks never leak", () => {
   const {menu,selected} = fixture();
   expect(menu.pointer(report(2,1,["left"]))).toBe(false);
