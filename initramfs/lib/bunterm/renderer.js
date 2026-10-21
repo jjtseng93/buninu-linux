@@ -432,12 +432,17 @@ export class Renderer {
       }
     }
     this.forcedRows.clear();
+    const localPointer = Boolean(this.screen.saveRegion && this.screen.restoreRegion);
+    const pointerChanged = this.lastPointer?.x !== pointer?.x || this.lastPointer?.y !== pointer?.y;
+    const cursorChanged = this.lastCursor.x !== (cursor?.x ?? -1)
+      || this.lastCursor.y !== (cursor?.y ?? -1)
+      || this.lastCursor.visible !== Boolean(cursor?.visible);
     const cursorRows = new Set();
-    if (this.lastCursor.visible) cursorRows.add(this.lastCursor.y);
-    if (cursor?.visible) cursorRows.add(cursor.y);
+    if ((!localPointer || cursorChanged) && this.lastCursor.visible) cursorRows.add(this.lastCursor.y);
+    if ((!localPointer || cursorChanged) && cursor?.visible) cursorRows.add(cursor.y);
     // Wherever the pointer was and is has to be repainted: the text under it
     // has not changed, so no row hash would say so.
-    for (const position of [this.lastPointer, pointer]) {
+    for (const position of localPointer ? [] : [this.lastPointer, pointer]) {
       if (!position) continue;
       const [first, last] = this.pointerRows(position);
       for (let row = Math.max(0, first); row < Math.min(this.rows, last); row++) cursorRows.add(row);
@@ -445,20 +450,33 @@ export class Renderer {
     for (const row of cursorRows) {
       if (row >= 0 && row < this.rows && !dirty.includes(row)) dirty.push(row);
     }
+    if (!dirty.length && !this.dirtyAll && (!localPointer || !pointerChanged)) return false;
+    if (this.pointerBackground) {
+      this.screen.restoreRegion(this.pointerBackground);
+      this.pointerBackground = null;
+    }
     if (this.dirtyAll) {
       this.canvas.clear(this.CanvasKit.Color(this.background[0], this.background[1], this.background[2]));
     }
     this.dirtyAll = false;
-    if (!dirty.length) return false;
     dirty.sort((a, b) => a - b);
     for (const row of dirty) this.drawRow(buffer.getLine(top + row), row);
-    if (cursor?.visible && cursor.y >= 0 && cursor.y < this.rows) {
+    if (cursor?.visible && dirty.includes(cursor.y)) {
       this.drawCursor(buffer.getLine(top + cursor.y), cursor.x, cursor.y);
     }
     this.lastCursor = { x: cursor?.x ?? -1, y: cursor?.y ?? -1, visible: Boolean(cursor?.visible) };
-    if (images.length) this.drawImages(images, dirty);
-    if (overlay) overlay();
-    if (pointer) this.drawPointer(pointer);
+    if (images.length && dirty.length) this.drawImages(images, dirty);
+    if (overlay && dirty.length) overlay();
+    if (pointer) {
+      if (localPointer) {
+        const size = Math.max(10, Math.round(this.fontSize * 0.9));
+        // Include the mitered outline and anti-aliasing outside the arrow path.
+        const padding = Math.ceil(Math.max(1, size / 8) * 2) + 2;
+        this.pointerBackground = this.screen.saveRegion(pointer.x - padding, pointer.y - padding,
+          pointer.x + size * 0.72 + padding, pointer.y + size * 1.08 + padding);
+      }
+      this.drawPointer(pointer);
+    }
     this.lastPointer = pointer ? { x: pointer.x, y: pointer.y } : null;
     this.screen.flush();
     return true;
@@ -467,12 +485,20 @@ export class Renderer {
   // Redraws the parts of image placements that intersect the repainted rows.
   drawImages(images, dirtyRows) {
     const { CanvasKit, canvas } = this;
+    const bands = [];
+    for (const row of dirtyRows) {
+      const top = this.offsetY + row * this.cellHeight, bottom = top + this.cellHeight;
+      const last = bands.at(-1);
+      if (last && last[1] === top) last[1] = bottom;
+      else bands.push([top, bottom]);
+    }
     for (const { image, rect, source } of images) {
       const [left, top, right, bottom] = rect;
-      const sourceRect = source ? CanvasKit.LTRBRect(...source) : CanvasKit.LTRBRect(0, 0, image.width(), image.height());
-      for (const row of dirtyRows) {
-        const rowTop = this.offsetY + row * this.cellHeight;
-        const rowBottom = rowTop + this.cellHeight;
+      if (!bands.some(([y0, y1]) => bottom > y0 && top < y1)) continue;
+      const bounds = source || [0, 0, image.width(), image.height()];
+      if (this.screen.drawOpaqueImage?.(image, rect, bounds, bands)) continue;
+      const sourceRect = CanvasKit.LTRBRect(...bounds);
+      for (const [rowTop, rowBottom] of bands) {
         if (bottom <= rowTop || top >= rowBottom) continue;
         canvas.save();
         canvas.clipRect(CanvasKit.LTRBRect(0, rowTop, this.screen.width, rowBottom), CanvasKit.ClipOp.Intersect, false);
