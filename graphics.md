@@ -158,6 +158,28 @@ screen and xterm.js's `CoreMouseService` → PTY. Terminal
 replies (cursor position, device attributes, kitty acks) go from the
 emulator straight to the PTY.
 
+## Raw image fast path
+
+Native bunterm can negotiate BGRA (`f=1111970369`, a private Buninu format) or
+standard RGBA (`f=32`) with Casty. `images.js` retains the received raw bytes;
+`raw-image.js` creates a Skia image only when a fallback operation needs one.
+For an opaque, integer-aligned 1:1 placement matching the framebuffer channel
+order, `canvas.js` copies these bytes into the existing raster back buffer.
+This avoids `MakeImage` followed by `readPixels`, but still performs the raster
+copy and the final framebuffer flush. Opacity is checked from the actual alpha
+bytes once per image, not assumed from its format or filename.
+
+Rows completely covered by such an image skip text hashing and painting.
+Partially covered rows keep normal rendering, and uncovering a row forces its
+current text to repaint. Pointer and menu overlays are still drawn afterwards.
+Scaling, transparency, other channel orders and 16-bit framebuffers retain
+CanvasKit rendering. Encoded PNG/JPEG handling is unchanged.
+
+原始像素只有在通道排列一致、1:1 整數座標且經檢查確定不透明時，才直接複製到
+繪圖緩衝區，省去先建立 Skia Image 再讀回像素的步驟。完全被圖片覆蓋的文字列
+略過雜湊與重畫；圖片移開後會重畫當下的文字。縮放、透明、格式不符時仍使用
+CanvasKit，最後寫入 framebuffer 的複製也仍然存在。
+
 ## Sizes
 
 | Component | Raw | In the gzip initramfs |

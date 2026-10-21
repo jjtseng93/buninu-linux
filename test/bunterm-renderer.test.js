@@ -110,3 +110,49 @@ test('opaque image readback reuses WASM destination and falls back when native B
   expect(destinations.every(d=>d===destinations[0])).toBe(true);
  }finally{images.forEach(i=>i.delete());screen.close();}
 },20000);
+
+test('raw images bypass Skia allocation/readback; covered text, removal, crops and fallback match full repaint', async()=>{
+ const {openCanvas}=await import('../initramfs/lib/canvas.js');
+ const {decodeImage}=await import('../initramfs/lib/bunterm/images.js');
+ const {skiaImage,rawImageData}=await import('../initramfs/lib/raw-image.js');
+ const CK=await loadCanvasKit(),fonts=loadFontSet(CK,'terminal');
+ const make=()=>{const s=openCanvas(CK,{width:320,height:200,stride:1296,bitsPerPixel:32,
+  fields:{red:{offset:16,length:8},green:{offset:8,length:8},blue:{offset:0,length:8}},pixels:new Uint8Array(1296*200)});s.flush=()=>s.surface.flush();return s;};
+ const screen=make(),reference=make();reference.drawOpaqueImage=undefined;reference.canDrawRawImage=undefined;
+ const r=new Renderer({CanvasKit:CK,screen,fonts}),ref=new Renderer({CanvasKit:CK,screen:reference,fonts});
+ const term=new Terminal({cols:r.columns,rows:r.rows,allowProposedApi:true});
+ const handles=[];let allocations=0,draws=0;
+ const makeImage=CK.MakeImage.bind(CK),drawRow=r.drawRow.bind(r);
+ const proxy=Object.create(CK);proxy.MakeImage=(...args)=>{allocations++;return makeImage(...args);};
+ r.drawRow=(...args)=>{draws++;return drawRow(...args);};
+ const create=async(format=0x42475241,alpha=255)=>{
+  const bytes=new Uint8Array(320*200*4);
+  for(let i=0;i<bytes.length;i+=4)bytes.set([i%251,83,211,alpha],i);
+  const handle=await decodeImage(proxy,{format,width:320,height:200,data:bytes},{deferRaw:true});handles.push(handle);
+  return handle;
+ };
+ const check=(image,rect=[0,0,320,200],source=[0,0,320,200],pointer=null,invalidate=true)=>{
+  const images=image?[{image,rect,source}]:[];
+  if(invalidate)r.invalidate();r.render(term,{images,pointer,cursor:{x:1,y:1,visible:true}});
+  const before=allocations;
+  ref.invalidate();ref.render(term,{images:images.map(p=>({...p,image:skiaImage(p.image)})),pointer,cursor:{x:1,y:1,visible:true}});
+  expect(screen.saveRegion(0,0,320,200).pixels).toEqual(reference.saveRegion(0,0,320,200).pixels);
+  return before;
+ };
+ try{
+  await new Promise(resolve=>term.write('Hello 中文\r\nHidden text',resolve));
+  const raw=await create();
+  expect(allocations).toBe(0);expect(check(raw)).toBe(0);expect(draws).toBe(0);
+  // Editing covered text must be visible once the image disappears.
+  await new Promise(resolve=>term.write('\rChanged underlying text',resolve));
+  check(raw,[0,0,320,200],[0,0,320,200],{x:100,y:100});
+  check(null,undefined,undefined,null,false);expect(draws).toBeGreaterThan(0);
+  check(raw,[-5,11,310,171],[5,20,320,180]);
+  check(raw,[0,0,160,100]); // scaling materializes lazily
+  check(await create(32)); // channel mismatch falls back
+  check(await create(0x42475241,100)); // transparency must paint underlying text
+  check(raw,[0.5,0,320.5,200]);
+  r.setFontSize(20);ref.setFontSize(20);term.resize(r.columns,r.rows);check(raw);check(null);
+  raw.delete();expect(rawImageData(raw)).toBeUndefined();raw.delete();
+ }finally{handles.forEach(i=>i.delete());term.dispose();r.delete();ref.delete();screen.close();reference.close();fonts.delete();}
+},20000);

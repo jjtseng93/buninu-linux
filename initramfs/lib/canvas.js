@@ -1,3 +1,4 @@
+import {rawImageData, rawImageOpaque, skiaImage} from './raw-image.js';
 // /lib/canvas.js — CanvasKit (Skia in WebAssembly) on the Linux framebuffer.
 //
 // Skia draws into a buffer inside the wasm heap that already has the
@@ -82,6 +83,15 @@ export const openCanvas = (CanvasKit, display) => {
   let open = true;
   let cachedImage = null, cachedOpaque = false;
   let imageMemory = null, imageCapacity = 0;
+  const directRaw = (image, rect, source) => {
+    const raw = rawImageData(image);
+    if (!raw || display.bitsPerPixel !== 32 || raw.colorType !== colorType) return null;
+    const [left, top, right, bottom] = rect, [sx, sy, ex, ey] = source;
+    if (![...rect, ...source].every(Number.isInteger)
+        || right - left !== ex - sx || bottom - top !== ey - sy
+        || sx < 0 || sy < 0 || ex > raw.width || ey > raw.height || ex <= sx || ey <= sy) return null;
+    return rawImageOpaque(raw) ? raw : null;
+  };
   return {
     CanvasKit,
     display,
@@ -92,6 +102,7 @@ export const openCanvas = (CanvasKit, display) => {
     height: display.height,
     // Only exact, opaque 32-bit copies bypass Skia. Keep at most one decoded
     // image (32 MiB); scaled, translucent and 16-bit images use normal drawing.
+    canDrawRawImage(image, rect, source) { return Boolean(directRaw(image, rect, source)); },
     drawOpaqueImage(image, rect, source, bands) {
       if (!open) throw new Error("canvas is closed");
       const [left, top, right, bottom] = rect;
@@ -101,7 +112,9 @@ export const openCanvas = (CanvasKit, display) => {
           || right - left !== ex - sx || bottom - top !== ey - sy
           || sx < 0 || sy < 0 || ex > width || ey > height
           || ex <= sx || ey <= sy || width * height * 4 > 32 * 1024 * 1024) return false;
-      if (cachedImage !== image) {
+      const raw = directRaw(image, rect, source);
+      if (!raw) image = skiaImage(image);
+      if (!raw && cachedImage !== image) {
         cachedImage = image;
         cachedOpaque = false;
         const size = width * height * 4;
@@ -130,10 +143,10 @@ export const openCanvas = (CanvasKit, display) => {
           }
         }
       }
-      if (!cachedOpaque) return false;
+      if (!raw && !cachedOpaque) return false;
       surface.flush();
       // Drawing elsewhere can grow the WASM heap between cache hits.
-      const sourcePixels = imageMemory.toTypedArray();
+      const sourcePixels = raw ? raw.pixels : imageMemory.toTypedArray();
       const target = memory.toTypedArray();
       const x0 = Math.max(0, left), x1 = Math.min(display.width, right);
       if (x1 <= x0) return true;

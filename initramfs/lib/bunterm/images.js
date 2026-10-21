@@ -1,3 +1,4 @@
+import {createRawImage} from '../raw-image.js';
 // /lib/bunterm/images.js — kitty graphics protocol placements on the cell
 // grid.
 //
@@ -15,7 +16,7 @@ const number = (value, fallback = 0) => {
 // Decodes a transferred image into a Skia Image. Format 100 is PNG (or any
 // encoded format Skia knows); 24 and 32 are raw RGB / RGBA. Bun.Image, when
 // present, transcodes encodings Skia cannot read on its own.
-export const decodeImage = async (CanvasKit, image) => {
+export const decodeImage = async (CanvasKit, image, {deferRaw = false} = {}) => {
   // The local parser supplies bytes; retain compatibility with base64 callers.
   const bytes = typeof image.data === "string" ? Buffer.from(image.data, "base64") : image.data;
   if (image.format === 24 || image.format === 32 || image.format === 0x42475241) {
@@ -31,6 +32,8 @@ export const decodeImage = async (CanvasKit, image) => {
         pixels[o + 2] = bytes[i + 2];
       }
     }
+    const colorType = image.format === 0x42475241 ? CanvasKit.ColorType.BGRA_8888 : CanvasKit.ColorType.RGBA_8888;
+    if (deferRaw) return createRawImage(CanvasKit, pixels, width, height, colorType);
     const decoded = CanvasKit.MakeImage({
       width, height,
       colorType: image.format === 0x42475241 ? CanvasKit.ColorType.BGRA_8888 : CanvasKit.ColorType.RGBA_8888,
@@ -76,7 +79,7 @@ export class ImageStore {
     const replacesImage = decoded && this.imageSources.get(image.id) !== image;
     if (!decoded || replacesImage) {
       try {
-        const replacement = await decodeImage(this.CanvasKit, image);
+        const replacement = await decodeImage(this.CanvasKit, image, {deferRaw: true});
         if (replacesImage) {
           // Kitty requires retransmitting a non-zero image id to delete the
           // old image and all its placements.  Screen-streaming clients such

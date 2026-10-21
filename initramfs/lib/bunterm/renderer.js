@@ -1,3 +1,4 @@
+import {skiaImage} from '../raw-image.js';
 // /lib/bunterm/renderer.js — paints an xterm.js headless buffer onto a Skia
 // canvas as a grid of cells.
 //
@@ -145,6 +146,7 @@ export class Renderer {
     this.offsetX = Math.floor((this.screen.width-this.columns*this.cellWidth)/2);
     this.offsetY = Math.floor((this.screen.height-this.rows*this.cellHeight)/2);
     this.rowHashes = new Int32Array(this.rows);
+    this.rawCoveredRows = new Set();
     this.forcedRows.clear();
     this.lastCursor = {x:-1,y:-1,visible:false};
     this.lastPointer = null;
@@ -423,14 +425,28 @@ export class Renderer {
     const buffer = term.buffer.active;
     const top = buffer.viewportY;
     const dirty = [];
+    // Only proven opaque, exact raw copies may hide text work. Partial rows,
+    // scaling, transparency and unsupported framebuffer layouts remain unchanged.
+    const coveredRows = new Set();
+    const previouslyCovered = this.rawCoveredRows ?? new Set();
+    for (const {image, rect, source} of images) {
+      const bounds = source || [0, 0, image.width(), image.height()];
+      if (rect[0] > this.offsetX || rect[2] < this.offsetX + this.columns * this.cellWidth
+          || !this.screen.canDrawRawImage?.(image, rect, bounds)) continue;
+      const first = Math.max(0, Math.ceil((rect[1] - this.offsetY) / this.cellHeight));
+      const end = Math.min(this.rows, Math.floor((rect[3] - this.offsetY) / this.cellHeight));
+      for (let row = first; row < end; row++) coveredRows.add(row);
+    }
     for (let row = 0; row < this.rows; row++) {
       const line = buffer.getLine(top + row);
-      const hash = line ? this.rowHash(line, this.columns) : 0;
-      if (this.dirtyAll || hash !== this.rowHashes[row] || this.forcedRows.has(row)) {
+      const hash = coveredRows.has(row) ? this.rowHashes[row] : line ? this.rowHash(line, this.columns) : 0;
+      if (this.dirtyAll || hash !== this.rowHashes[row] || this.forcedRows.has(row)
+          || coveredRows.has(row) !== previouslyCovered.has(row)) {
         dirty.push(row);
         this.rowHashes[row] = hash;
       }
     }
+    this.rawCoveredRows = coveredRows;
     this.forcedRows.clear();
     const localPointer = Boolean(this.screen.saveRegion && this.screen.restoreRegion);
     const pointerChanged = this.lastPointer?.x !== pointer?.x || this.lastPointer?.y !== pointer?.y;
@@ -460,8 +476,10 @@ export class Renderer {
     }
     this.dirtyAll = false;
     dirty.sort((a, b) => a - b);
-    for (const row of dirty) this.drawRow(buffer.getLine(top + row), row);
-    if (cursor?.visible && dirty.includes(cursor.y)) {
+    for (const row of dirty) {
+      if (!coveredRows.has(row)) this.drawRow(buffer.getLine(top + row), row);
+    }
+    if (cursor?.visible && !coveredRows.has(cursor.y) && dirty.includes(cursor.y)) {
       this.drawCursor(buffer.getLine(top + cursor.y), cursor.x, cursor.y);
     }
     this.lastCursor = { x: cursor?.x ?? -1, y: cursor?.y ?? -1, visible: Boolean(cursor?.visible) };
@@ -502,7 +520,7 @@ export class Renderer {
         if (bottom <= rowTop || top >= rowBottom) continue;
         canvas.save();
         canvas.clipRect(CanvasKit.LTRBRect(0, rowTop, this.screen.width, rowBottom), CanvasKit.ClipOp.Intersect, false);
-        canvas.drawImageRectOptions(image, sourceRect, CanvasKit.LTRBRect(left, top, right, bottom),
+        canvas.drawImageRectOptions(skiaImage(image), sourceRect, CanvasKit.LTRBRect(left, top, right, bottom),
           CanvasKit.FilterMode.Linear, CanvasKit.MipmapMode.Linear, null);
         canvas.restore();
       }
