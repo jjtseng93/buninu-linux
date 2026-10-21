@@ -117,6 +117,25 @@ bun ./index.js -fb --real --export
 This fetches the pinned Alpine/Bun/npm inputs, selects the physical-hardware
 modules, builds `vda.img`, and exports `buninu-linux-<version>.img`.
 
+For a smaller image, add `--no-gpu` to either build command:
+
+```sh
+bun x buninu-linux -fb --real --no-gpu --export
+# From a source checkout:
+bun ./index.js -fb --real --no-gpu --export
+```
+
+The reference x86-64 `--real` builds produce a **128 MiB** image with
+`--no-gpu`, versus **320 MiB** with the default GPU modules and firmware.
+This omits the optional GPU bundle while retaining the framebuffer/bunterm
+software display path. Image size is calculated from the packaged contents
+and may change with later versions.
+
+若想產生較小的映像檔，可在上述任一建置命令加上 `--no-gpu`。
+x86-64 真機建置的參考大小為 **128 MiB**，預設包含 GPU 模組與韌體則為
+**320 MiB**。`--no-gpu` 排除額外的 GPU 套件內容，保留 framebuffer／bunterm
+軟體顯示路徑；映像大小依打包內容計算，未來版本可能改變。
+
 #### Write the image to a USB drive
 
 The recommended method is **Ventoy**: install it on the USB drive once using
