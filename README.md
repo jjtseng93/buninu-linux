@@ -415,6 +415,10 @@ Run `poweroff` for a synced shutdown.
 
 ### Using bunterm
 
+Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
+
+原生 bunterm 依 framebuffer 的色彩欄位回報偏好的 BGRA／RGBA；不符合支援排列時回報 PNG。新版 Casty 與 Land 會在共用檔案傳輸時自動協商，無須新增參數；不改動 jsgotty 的協議。
+
 `bunterm` is the graphical terminal on the Linux framebuffer. It displays CJK
 text, colour emoji and Kitty graphics without starting X11 or Wayland. On the
 real-hardware image, enter the shell with `start()` at the `bun-repl>` prompt,

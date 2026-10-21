@@ -18,9 +18,10 @@ const number = (value, fallback = 0) => {
 export const decodeImage = async (CanvasKit, image) => {
   // The local parser supplies bytes; retain compatibility with base64 callers.
   const bytes = typeof image.data === "string" ? Buffer.from(image.data, "base64") : image.data;
-  if (image.format === 24 || image.format === 32) {
+  if (image.format === 24 || image.format === 32 || image.format === 0x42475241) {
     const { width, height } = image;
-    if (!width || !height) throw new Error("raw image without dimensions");
+    if (!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>16777216
+      ||bytes.byteLength!==width*height*(image.format===24?3:4)) throw new Error("invalid raw image dimensions or byte count");
     let pixels = bytes;
     if (image.format === 24) {
       pixels = Buffer.alloc(width * height * 4, 255);
@@ -32,7 +33,7 @@ export const decodeImage = async (CanvasKit, image) => {
     }
     const decoded = CanvasKit.MakeImage({
       width, height,
-      colorType: CanvasKit.ColorType.RGBA_8888,
+      colorType: image.format === 0x42475241 ? CanvasKit.ColorType.BGRA_8888 : CanvasKit.ColorType.RGBA_8888,
       alphaType: CanvasKit.AlphaType.Unpremul,
       colorSpace: CanvasKit.ColorSpace.SRGB,
     }, pixels, width * 4);

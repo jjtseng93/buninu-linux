@@ -1,3 +1,4 @@
+import {bgraParser} from './raw-protocol.js';
 // /lib/bunterm/terminal.js — a graphical terminal on the Linux framebuffer.
 //
 //   Bun.spawn({ terminal })  ──── PTY output ────▶ KittyGraphicsParser
@@ -75,7 +76,7 @@ export const createSession = ({
   term.loadAddon(new UnicodeGraphemesAddon());
   term.unicode.activeVersion = "15-graphemes";
   const images = new ImageStore({ CanvasKit, term, renderer });
-  const kitty = new KittyGraphicsParser({ binaryData: true });
+  const kitty = new (bgraParser(KittyGraphicsParser,screen.display))({ binaryData: true });
 
   const backend = new BunPtyBackend({
     command,
