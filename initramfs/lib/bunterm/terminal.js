@@ -22,6 +22,7 @@ import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
 import { claimVirtualConsole, listVirtualTerminals } from "./vt.js";
+import { createFpsMeter } from "./fps.js";
 import { createVtMenu } from "./vt-menu.js";
 import { attachGeometry } from "./geometry.js";
 import { terminalMouseEvent } from "./pointer-report.js";
@@ -99,6 +100,8 @@ export const createSession = ({
   // exactly as before.
   let pointer = null;
   let menu = null;
+  const fps = createFpsMeter();
+  let fpsTimer = null;
   let keyboardProtocol = null;
   let consoleKeyboard = null;
   const paint = () => {
@@ -110,16 +113,19 @@ export const createSession = ({
     // moves the cursor down the screen and eventually off it.
     const row = buffer.baseY + buffer.cursorY - buffer.viewportY;
     if (menu?.visible || selection.active) renderer.invalidate();
-    return renderer.render(term, {
+    const visibleImages = images.visible();
+    const rendered = renderer.render(term, {
       cursor: {
         x: buffer.cursorX,
         y: row,
         visible: blinkOn && !cursorHidden() && row >= 0 && row < renderer.rows,
       },
-      images: images.visible(),
+      images: visibleImages,
       pointer,
-      overlay: () => { selection.draw(); if (menu?.visible) menu.draw(renderer); },
+      overlay: () => { selection.draw(); fps.draw(renderer); if (menu?.visible) menu.draw(renderer); },
     });
+    if (rendered && fps.enabled) fps.presented(visibleImages);
+    return rendered;
   };
   const requestFrame = () => {
     if (!active) return;
@@ -148,12 +154,21 @@ export const createSession = ({
     term.scrollToBottom();
     changed();
   };
+  const toggleFps = () => {
+    if (fpsTimer) clearInterval(fpsTimer);
+    fpsTimer = null;
+    if (fps.toggle(images.visible())) fpsTimer = setInterval(() => {
+      fps.sample();
+      if (active) { renderer.invalidateRows(0,1); requestFrame(); }
+    },1000);
+    renderer.invalidateRows(0,1); requestFrame();
+  };
   const commands = createCommands({fontSize:()=>renderer.fontSize,setFontSize,copy,paste,
     switchVT: number => vtMenu?.select(number)});
   if (vtMenu) menu = createVtMenu({
     ...vtMenu, width: screen.width, height: screen.height, rowHeight: renderer.cellHeight,
     changed,
-    controls: {fontSize:()=>renderer.fontSize,cellHeight:()=>renderer.cellHeight,execute:line=>commands.execute(line)},
+    controls: {fpsEnabled:()=>fps.enabled,toggleFps,fontSize:()=>renderer.fontSize,cellHeight:()=>renderer.cellHeight,execute:line=>commands.execute(line)},
   });
   const suspend = () => {
     keyboardProtocol?.blur();
@@ -362,6 +377,8 @@ export const createSession = ({
     closed = true;
     active = false;
     if (blinkTimer) clearInterval(blinkTimer);
+    if (fpsTimer) clearInterval(fpsTimer);
+    fpsTimer = null;
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
     backend.close();

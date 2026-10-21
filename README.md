@@ -415,6 +415,10 @@ Run `poweroff` for a synced shutdown.
 
 ### Using bunterm
 
+Click the FPS button on the right of the bunterm menu title to toggle a cyan counter at the top-right of the terminal. It reports newly presented Kitty image frames per second (such as Casty/Land output), sampled once per second; mouse/menu redraws are excluded. Static images and text-only sessions show 0 FPS. The setting is local to this bunterm session and defaults off.
+
+點擊 bunterm 選單標題右側的 FPS 按鈕，可開啟／關閉終端右上角的青藍色計數器。每秒統計實際呈現的新 Kitty 圖片幀（例如 Casty／Land），不把滑鼠與選單重畫計入；靜態圖片或純文字畫面顯示 0 FPS。只影響目前 bunterm，預設關閉。
+
 Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
 
 原生 bunterm 依 framebuffer 的色彩欄位回報偏好的 BGRA／RGBA；不符合支援排列時回報 PNG。新版 Casty 與 Land 會在共用檔案傳輸時自動協商，無須新增參數；不改動 jsgotty 的協議。

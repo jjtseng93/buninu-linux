@@ -161,3 +161,18 @@ test("font buttons fit equally and preserve the right margin as fonts grow", () 
     expect(minus.x).toBe(8);
   }
 });
+
+test('header FPS control toggles without selecting a tty or leaking the click',()=>{
+ let enabled=false;
+ const {menu,selected}=fixture({controls:{fontSize:()=>13,execute:()=>'',fpsEnabled:()=>enabled,toggleFps:()=>{enabled=!enabled;}}});
+ menu.pointer(report(0,0,['left']));
+ menu.pointer(report(0,0,[],['left']));
+ expect(menu.pointer(report(380,12,['left']))).toBe(true);
+ expect(enabled).toBe(true);expect(menu.visible).toBe(true);expect(selected).toEqual([]);
+ menu.pointer(report(380,12,[],['left']));
+ const labels=[];
+ menu.draw({cellWidth:8,cellHeight:16,CanvasKit:{XYWHRect:(...r)=>r,ClipOp:{Intersect:0}},
+  paintFor:c=>c,drawText:text=>labels.push(text),canvas:{save(){},restore(){},clipRect(){},drawRect(){}}});
+ expect(labels).toContain('[FPS ✓]');
+ menu.pointer(report(380,12,['left']));expect(enabled).toBe(false);
+});

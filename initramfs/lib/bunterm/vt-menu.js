@@ -69,6 +69,10 @@ export function createVtMenu({ list, select, create = null, changed, width, heig
       if (inside && report.moved && !editing) { selected = index; changed(); }
       if (report.pressed.includes("left")) {
         swallow = true;
+        if (controls?.toggleFps && report.y >= 0 && report.y < row &&
+            report.x >= Math.max(0,panelWidth-112) && report.x < panelWidth) {
+          controls.toggleFps(); changed(); return true;
+        }
         if (inside) {
           selected = index; editing = false;
           if (entries[index].kind !== "font" || report.x < 64 || report.x >= panelWidth-64)
@@ -129,7 +133,14 @@ export function createVtMenu({ list, select, create = null, changed, width, heig
         Math.max(1, Math.floor(span / renderer.cellWidth)), [240, 240, 240], {align});
       canvas.save();
       canvas.clipRect(CanvasKit.XYWHRect(0, 0, panelWidth, Math.min(height, (visible.length + 2) * row)), CanvasKit.ClipOp.Intersect, false);
-      rect(0, [35, 40, 48]); text(controls ? "bunterm" : "Switch terminal", 0);
+      rect(0, [35, 40, 48]);
+      const fpsWidth = controls?.toggleFps ? Math.min(panelWidth,112) : 0;
+      text(controls ? "bunterm" : "Switch terminal",0,8,Math.max(1,panelWidth-fpsWidth-16));
+      if (fpsWidth) {
+        canvas.drawRect(CanvasKit.XYWHRect(panelWidth-fpsWidth,2,fpsWidth-2,row-4),
+          renderer.paintFor(controls.fpsEnabled()?[35,100,110]:[55,65,75]));
+        text(controls.fpsEnabled() ? "[FPS ✓]" : "[FPS]",0,panelWidth-fpsWidth+4,fpsWidth-10,"center");
+      }
       visible.forEach((entry, i) => {
         const y = (i + 1) * row;
         rect(y, i + offset === selected ? [45, 80, 125] : [25, 29, 35]);
