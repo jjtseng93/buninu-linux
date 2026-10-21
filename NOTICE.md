@@ -156,83 +156,83 @@ the built image redistributes them.
 - License: GPL-2.0-only WITH Linux-syscall-note
 - See: `LICENSES/GPL-2.0.txt` and `LICENSES/Linux-syscall-note.txt`
 
-Linux 6.18.57 as packaged by Alpine Linux 3.24 from the `linux-lts` aport.
-The default build uses package `linux-virt`, version 6.18.57-r0.
-`--linux-lts` and `--real` use package `linux-lts`, version 6.18.57-r0.
+Linux 6.18.58 as packaged by Alpine Linux 3.24 from the `linux-lts` aport.
+The default build uses package `linux-virt`, version 6.18.58-r0.
+`--linux-lts` and `--real` use package `linux-lts`, version 6.18.58-r0.
 Each comes from the x86_64 or aarch64 repository to match `--arch`. All
 listed modules are the selected package's `.ko.gz` files decompressed without
 modification.
 
-- Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.57.tar.xz
+- Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.58.tar.xz
 - Alpine build recipe, configuration and patches (Corresponding Source),
-  pinned to the commit shipping 6.18.57-r0 (the same for both architectures):
-  https://gitlab.alpinelinux.org/alpine/aports/-/blob/0c40eb4fea009af7de457fa20e186f43a88e0954/main/linux-lts/APKBUILD
+  pinned to the commit shipping 6.18.58-r0 (the same for both architectures):
+  https://gitlab.alpinelinux.org/alpine/aports/-/blob/5fe63f789de75f6a71001cf2de771f922bedd0d2/main/linux-lts/APKBUILD
 - Packages:
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.57-r0.apk
-  SHA-256 `414aa2572ef88164b1af9905fa6dfbe863bf50f6130d895d57282dea3e15f7b9`
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-lts-6.18.57-r0.apk
-  SHA-256 `7614556471859956a436b95813daf409b444aa849ec899178b404e828c5a9d98`
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-virt-6.18.57-r0.apk
-  SHA-256 `b3820fee22e0366a15f7c139e5bc00348e333f3e7f77802271df7ded795aee4f`
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-lts-6.18.57-r0.apk
-  SHA-256 `67b8f61c5cfb6ac9b5a65cb1610b67d467e6c4ffc17e7d29dbea4bd8c447ff32`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-virt-6.18.58-r0.apk
+  SHA-256 `1eec55004cf7167c914c8839f46691d2bc82767e20466bff51eb45d06f8e90cc`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/linux-lts-6.18.58-r0.apk
+  SHA-256 `af399fba75cafb2940fc2853eb73ba2289aa463228f33541cd3010334a30992b`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-virt-6.18.58-r0.apk
+  SHA-256 `b46c51ddf572d85b2ba7b9adfaa64f4c38fc490c93d97a20ffd2418d51284085`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/linux-lts-6.18.58-r0.apk
+  SHA-256 `65ab581dd6773e2b1b6831dac50142518b2f2083668f164f68ebfcd00d1763c4`
 
 SHA-256 of files in the default x86_64 `linux-virt` image:
 
 ```text
-kernel/x86_64/vmlinuz-virt   3725536e1c015345d781430b728849c2f090cf2040af00d7fe825920a106a08e
-failover.ko                  f373917790e5e17b8c0c278efdd6fef7545ee8362510efaa80efb821e553f0b3
-net_failover.ko              78fce63b3625b11bc65d4f0eb8f844796cad472ef14302016458ac60f898ac95
-virtio_net.ko                18addca2d17e0b01b9adc64111b0409c08da6a196215e68bfda067309ff323a8
+kernel/x86_64/vmlinuz-virt   17fbd3efd16f2e7cb1b945f06423b37399ba7d5ac8cdd3665e7f13f363500e85
+failover.ko                  4a9c64a0e9a8e7ea9899fe2a4958fedb71691e904e91a16109f944cae3647745
+net_failover.ko              175984d70fd5bd11de5f184f729fd7aee8d50146b23f0e591670b175837c7010
+virtio_net.ko                72bdeeb075dccbb8c67938d633662e890784f0c388fcdddfe72e9c4b509b987c
 ```
 
 SHA-256 of files in an x86_64 `--linux-lts` image:
 
 ```text
-kernel/x86_64/vmlinuz-lts   674c615f1f0887621e6609becd11a7db40cc71b7616644fcc260b4b226a52103
-failover.ko                 00d409746a8033e5acf0d4d0b8db4589d48168f2965e4de0c05374bc4e3a4025
-net_failover.ko             afbe1a6cd279381ade52943158c62931d79f38dcd293e31ef522878ff82c17ed
-virtio_net.ko               84b658a64416094f3bc793ac43ccd987e087898d0c0510ddf5f9e53e0f9b36ff
-virtio_ring.ko              db497b3c23133f48b5a48800695b9f7068244dfa9d52cd1d10b5d4618e68fb60
-virtio.ko                   c867c11e61db4c9c4a7af54f29ba9d127759706854ba84bf42ca6f2ae8b4f71a
-virtio_pci_legacy_dev.ko    8825df8124c86800b3bf3d3403f6aba47d527d02565f91baddebe40ea0f66f88
-virtio_pci_modern_dev.ko    3ba582ad90247b04fe2afe289d2b51a39e3efc1cc40e58f55e7701062141e061
-virtio_pci.ko               5f6baef35e1536d735628e14fa3172c27228cd26f7c80b7465d2afbed8ee3876
+kernel/x86_64/vmlinuz-lts   14ac8b1b0f92aacb815c46c2e6e9e70e9e80d9fd1391ebf48c0d4ba5059f6652
+failover.ko                 8154cc9a26e1a751fd0e29b35653679a22189dce9a35c1b78c42838d7f10e40c
+net_failover.ko             3b45635fed29500db82ca400bfd4080f6129240f34f7b603e6f4d7612c019c94
+virtio_net.ko               5a81ac1fbf786a33609d3f1f00f0b08f6da4e8ea9509690cd7fe59c30f81b596
+virtio_ring.ko              529b4e5c64787a80af7c1a06e44ce8fc007b4e805d3b2a7b673acbcffad887ed
+virtio.ko                   87b99cefeb119f9a49c589cdd1ae732d34d9416bb92385c7022bc038bc0146e0
+virtio_pci_legacy_dev.ko    10be513db7fdb8b2eec44347fbe74f482be83085aabe3b4abeb193f47fac0615
+virtio_pci_modern_dev.ko    fa2dd36e83a65202b4494765f6ef75634cf5e9fc21906ccaee71a0106427638f
+virtio_pci.ko               acb46043812dfc42fa0bd9d6bbebc7b61d313eb36236ba9bd4ace3cfaa89f902
 ```
 
 `--real` additionally includes the following modules from that same
 x86_64 `linux-lts` package for physical xHCI controllers and USB HID keyboards:
 
 ```text
-usb-common.ko               eb9d7b52b5c8f74b062ea3efbd8112c1460e3d34c0338e538602c648b958a8ef
-usbcore.ko                  30286b4e42c985e56903f41fd35233b3b35700b96ab99b088b1d91735c8e6e94
-xhci-hcd.ko                 f0988c511d5692265f8c5221d77c468c9650151f3d69b5b68988eba9d1fab7f1
-xhci-pci.ko                 a9145f467b6bf9b099e52eb5ac41b0c1164d9400e5b2f5f9d595ff58b4d776fb
-xhci-pci-renesas.ko         2d88a4e72512944b62a4394172702db8dc211ccc7b99a93778f2d42ed8a23caf
-hid.ko                      7994f6b42f1df68a62312cf4de50a22b1a9756c3da91966a634630a62b18ae10
-hid-generic.ko              ea2eb7491e30bef769d2c419a2ccc9d55db030edddfe531c0d4e4723e170a4c3
-usbhid.ko                   899f357db5ba74182cf9161a577b080f8a6a9b0b015f6a322a5c31bf8754188b
+usb-common.ko               fea517ef78b4f39c2de5980bcff506b1b9a55561b35949f1f320bcd923b04b78
+usbcore.ko                  8229fce701d624d6ed9b436406eb35155d78a4f2af12e0ebaeff7c5f78f33d78
+xhci-hcd.ko                 36e62e85b9f312f5fffcf6d1c74bd86ddaf0d0253bb000376163360b04ed75d2
+xhci-pci.ko                 8132c975ee33dc50f213b20e4cb836f5bf9e46d14a93665781b6d171ead764c0
+xhci-pci-renesas.ko         5e4cb38fce1668cb8780a4fadf4ce51bfbc0f586a129c6203f4b7e6e6ce24292
+hid.ko                      bb08c478b6efc032f5e22e461c529e05fe811f28c63646d8a0e3a961020b5e9e
+hid-generic.ko              eb6f98948b7d82d750bf3320bb886e00fd03fa4683a35ec0ee28eff6b20a1ad5
+usbhid.ko                   e479535c61bed7691f72ebd09a35ab3b5b53ed23dda3a07d5899049685b8a3b8
 ```
 
 SHA-256 of files in the default aarch64 `linux-virt` image:
 
 ```text
-kernel/aarch64/vmlinuz-virt  60603568b5589c730e9183e5d6d4f0b8575ddac31e9187222decc92416329b26
-failover.ko                  792943de0975a4111d2040ab35cc214e5b1b4ec8c12dbc9725fd0602a56f1576
-net_failover.ko              ba3ab71ef38aa3a957c5b0fe7ddd908e31635e408f5937bccb50f36bb78761ba
-virtio_net.ko                716e32b4425aa8dd4ebfeb6808e58c125e6b125c71b00ba8288851363f72fa60
+kernel/aarch64/vmlinuz-virt  849394914e6a93cc9bb17e901f445ce21fcd7e4528541d9496a74d6a6ccee319
+failover.ko                  3c806423468d1ca1d2339125a958ef42ee2fc8f56d3ee3547ec5e848f997c4e7
+net_failover.ko              04443fea2bec85ebc3634732c8b4023c66a86c11b7ad07ddcca57adbbd24a56c
+virtio_net.ko                052a058c333d4d59e8b5b4f82822d3ccfb54cda03cc8cff2007cfc7145cf4520
 ```
 
 SHA-256 of files in an aarch64 `--linux-lts` image:
 
 ```text
-kernel/aarch64/vmlinuz-lts  19fc9f974bb3cb666b8a216f18ca9f9df8e1658da4e9e55ed464c3fcaf87a303
-failover.ko                 d243de2d9c2b2c34094c125719fa784b2e476986bfcd5766b96e7f7fbcb658ac
-net_failover.ko             675cdf971cbb2ab15f8db6295afadcfc852172f38d289e9935ed28386e3e38f6
-virtio_net.ko               34ea985ebf0bef82731f398aa3aca9030d6d7882d4bcb1542fd17d8637cad70e
-virtio_pci_legacy_dev.ko    17f1487bf62ac3b2961f5f959fb28a2e1135db565e8a77296372c5101e00aae1
-virtio_pci_modern_dev.ko    e7a76945ae0b9c75af78a77950a4f22c95758fe507db2b77fbc168a4d6f842d8
-virtio_pci.ko               76efc4e0428eb0413727247f41972d72c3f2ed1373f7e94f88052357a097b6a8
+kernel/aarch64/vmlinuz-lts  1a1c64908397369119a016b163b726741ec97a52e5405e5bbe3275e97f6a39cc
+failover.ko                 b8d1e9ea95083cce714b8b045ac28799e08fa388b95062f4ac90335903ec6709
+net_failover.ko             be4271294cd959c86dab7e3498127f5194b67aeab63521755acd78ddfed15ff7
+virtio_net.ko               df090940866c21e0ae2af9c75ca2c8c0c2f4a732e346ddeab734befa801af64a
+virtio_pci_legacy_dev.ko    0528589d3347a19bcfab93c860703f97e5636ccaeb6498a02257026abe9c8c2e
+virtio_pci_modern_dev.ko    facbbeb0324365aa90abd47496059855e0ebe4523c01dd531d0304ad01ccdb84
+virtio_pci.ko               618ba972e7b26f7321a73652c9f1d036f78ea0add7aa58fd71472da3e4bb3248
 ```
 
 ### linuxx64.efi.stub and linuxaa64.efi.stub

@@ -16,8 +16,8 @@ export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const pins = {
   x86_64: {
-    linuxVirtSha256: "414aa2572ef88164b1af9905fa6dfbe863bf50f6130d895d57282dea3e15f7b9",
-    linuxLtsSha256: "7614556471859956a436b95813daf409b444aa849ec899178b404e828c5a9d98",
+    linuxVirtSha256: "1eec55004cf7167c914c8839f46691d2bc82767e20466bff51eb45d06f8e90cc",
+    linuxLtsSha256: "af399fba75cafb2940fc2853eb73ba2289aa463228f33541cd3010334a30992b",
     muslSha256: "573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71",
     stubSha256: "8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9",
     libstdcppSha256: "14c987b556f5385a5db18376e788c75f37d85321b8dc1920d926ea7daac1d6f6",
@@ -32,8 +32,8 @@ const pins = {
     serialMajor: 4,
   },
   aarch64: {
-    linuxVirtSha256: "b3820fee22e0366a15f7c139e5bc00348e333f3e7f77802271df7ded795aee4f",
-    linuxLtsSha256: "67b8f61c5cfb6ac9b5a65cb1610b67d467e6c4ffc17e7d29dbea4bd8c447ff32",
+    linuxVirtSha256: "b46c51ddf572d85b2ba7b9adfaa64f4c38fc490c93d97a20ffd2418d51284085",
+    linuxLtsSha256: "65ab581dd6773e2b1b6831dac50142518b2f2083668f164f68ebfcd00d1763c4",
     muslSha256: "5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e",
     stubSha256: "a1823d2d7082db555d528f82c1809f276c818aeb5b40f198f4565f104e055c38",
     libstdcppSha256: "2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7",
@@ -68,7 +68,7 @@ export const config = ({
   // The Alpine repository keeps only the newest build of a package, so a pin
   // stops downloading when Alpine bumps it; the hashes then fail loudly.
   const alpineBase = `${mirror}/v3.24/main/${arch}`;
-  const kernelVersion = "6.18.57";
+  const kernelVersion = "6.18.58";
   const kernelRelease = `${kernelVersion}-0-${flavor}`;
   const bunVersion = "1.4.2";
   const downloadsDir = join(rootDir, "downloads", arch);
