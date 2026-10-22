@@ -28,7 +28,10 @@
 
 ---
 
+- [繁體中文](README.zh.md)
 - [Table of contents](#contents)
+- Terminal documentation: `bun x buninu-linux --readme` (English),
+  `bun x buninu-linux --readme-zh` or `--docs` (Traditional Chinese).
 - .
 - Still in the early stages
 - [Video here](https://www.reddit.com/r/bun/comments/1wkpraj/buninu_linux_a_distro_with_bun_as_pid_1): Booted successfully on real x86-64 UEFI hardware with `--real`:
@@ -130,11 +133,6 @@ The reference x86-64 `--real` builds produce a **128 MiB** image with
 This omits the optional GPU bundle while retaining the framebuffer/bunterm
 software display path. Image size is calculated from the packaged contents
 and may change with later versions.
-
-若想產生較小的映像檔，可在上述任一建置命令加上 `--no-gpu`。
-x86-64 真機建置的參考大小為 **128 MiB**，預設包含 GPU 模組與韌體則為
-**320 MiB**。`--no-gpu` 排除額外的 GPU 套件內容，保留 framebuffer／bunterm
-軟體顯示路徑；映像大小依打包內容計算，未來版本可能改變。
 
 #### Write the image to a USB drive
 
@@ -436,11 +434,7 @@ Run `poweroff` for a synced shutdown.
 
 Click the FPS button on the right of the bunterm menu title to toggle a cyan counter at the top-right of the terminal. It reports newly presented Kitty image frames per second (such as Casty/Land output), sampled once per second; mouse/menu redraws are excluded. Static images and text-only sessions show 0 FPS. The setting is local to this bunterm session and defaults off.
 
-點擊 bunterm 選單標題右側的 FPS 按鈕，可開啟／關閉終端右上角的青藍色計數器。每秒統計實際呈現的新 Kitty 圖片幀（例如 Casty／Land），不把滑鼠與選單重畫計入；靜態圖片或純文字畫面顯示 0 FPS。只影響目前 bunterm，預設關閉。
-
 Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
-
-原生 bunterm 依 framebuffer 的色彩欄位回報偏好的 BGRA／RGBA；不符合支援排列時回報 PNG。新版 Casty 與 Land 會在共用檔案傳輸時自動協商，無須新增參數；不改動 jsgotty 的協議。
 
 `bunterm` is the graphical terminal on the Linux framebuffer. It displays CJK
 text, colour emoji and Kitty graphics without starting X11 or Wayland. On the
@@ -466,10 +460,6 @@ and `about:` URLs open directly; local paths and `file://` URLs are resolved to 
 files and encoded as absolute file URLs. Directories and other URL schemes
 are not supported. Run `xdg-open --help` for usage.
 
-中文：`xdg-open https://buninu.org`、`xdg-open about:audio` 或 `xdg-open ./page.html` 會透過
-bunterm 在新的 tty 啟動瀏覽器。本地檔案先確認存在並解析實際路徑，轉成
-`file://` URL；空白、中文與特殊字元會正確編碼。目前不支援目錄與其他協定。
-
 Use `Ctrl+Alt+F1` to return to the initial console, `Ctrl+Alt+F2` to return to
 VT 2, or `Alt+Left` / `Alt+Right` to switch VTs. From a shell, `chvt 1` and
 `chvt 2` do the same. Switching preserves the running sessions; exiting a
@@ -479,12 +469,12 @@ Click the screen's top-left **2×2 pixels** to open its menu:
 
 | Control | Usage |
 | --- | --- |
-| 🔤 字體 Font − / + | Resize the current session's text and terminal grid. The size is centred between the buttons. |
-| 📋 複製 Copy | Left-drag to select terminal text, then copy it to the shared xclip clipboard. Selection is available only when the application has not enabled mouse reporting. |
-| 📥 貼上 Paste | Paste from xclip. Applications that enable bracketed paste receive its delimiters; other applications receive plain text. |
+| 🔤 Font − / + | Resize the current session's text and terminal grid. The size is centred between the buttons. |
+| 📋 Copy | Left-drag to select terminal text, then copy it to the shared xclip clipboard. Selection is available only when the application has not enabled mouse reporting. |
+| 📥 Paste | Paste from xclip. Applications that enable bracketed paste receive its delimiters; other applications receive plain text. |
 | Command input | Click the light input field or press Tab. Type `font 16`, `font +`, `font -`, `copy`, `paste`, `vt 2` or `help`, then press Enter. These are local bunterm commands. |
 | VT list | Switch to an existing bunterm or the initial tty. The active VT is marked `(current)`. |
-| + 新增 bunterm / New bunterm | Start bunterm on the tty after the highest listed number, using the current font size. |
+| + New bunterm | Start bunterm on the tty after the highest listed number, using the current font size. |
 
 Press Esc to close the menu. Font changes last for the current session.
 The mouse wheel scrolls terminal history when the application does not request
@@ -499,16 +489,6 @@ applications retain the console's translated input; the original keyboard mode i
 when the application disables Kitty or bunterm exits. VT-switching shortcuts stay
 reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
 Use `bunterm --help` for full options and keyboard details.
-
-中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm` 會在最後一個工作階段之後的新 tty 開啟圖形終端機；第一次使用 tty2，保留 tty1 設定硬體；
-預設字體為 13，可用 `bunterm 3 -s 16` 另開一個較大字體的工作階段。
-點擊最左上角 2×2 像素可調字體、複製／貼上、切換 tty，或在淺色輸入框
-輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`。目前 tty 標記為 `(current)`。
-列表底部的「+ 新增 bunterm / New bunterm」會在列表最大 tty 編號的下一個
-tty 啟動新終端機，沿用當前字體大小。
-程式未要求滑鼠回報時才可拖曳選字；剪貼簿沿用 xclip，貼上依程式要求使用
-bracketed paste。Kitty keyboard 由應用程式協商開啟，可區分 Super 等組合與
-按下／重複／放開事件；該模式目前不處理 dead key／Compose。
 
 ### Editor quick start
 
@@ -770,9 +750,6 @@ chroot shell on tty2. `bun x` needs network access; see
    Card numbers vary by machine; replace `1` below with the card connected
    to your intended output, then use the test tone to check it.
 
-   中文：內建喇叭或電腦耳機孔，以上例先選 **card 1：HDA Intel PCH**；
-   螢幕／電視喇叭才選對應的 HDMI／DP 音效卡，USB 耳機則選 USB 卡。
-
    ```sh
    jspulse --card 1 --volume 50
    jspulse --card 1 --play
@@ -817,6 +794,45 @@ chroot shell on tty2. `bun x` needs network access; see
 
 If there is no sound, check step 4's terminal for errors, and make sure
 `PULSE_SERVER` was exported in the same shell that started casty.
+
+### Data and persistence
+
+Buninu Linux runs from an in-memory initramfs. Changes to the default home
+directory (`/buninu`), system configuration, and packages installed during a
+session disappear after reboot unless saved to a mounted disk. `/tmp` is also
+temporary. The boot image does not automatically save these changes back to
+itself, and creating a directory under `/mnt` alone does not make it persistent.
+
+To keep files, load storage drivers at the initial `bun-repl>` prompt, then
+enter the shell:
+
+```js
+cfg.disk
+start()
+```
+
+Mount an existing data partition (replace `/dev/sda1` with your partition),
+then save or copy files into it:
+
+```sh
+mount /dev/sda1 /mnt/data --mkdir
+mkdir -p /mnt/data/work
+cp /buninu/notes.md /mnt/data/work/notes.md
+cd /mnt/data/work
+```
+
+The copy example assumes you have already created `/buninu/notes.md`. Files
+written under `/mnt/data` while the partition is mounted remain on that disk.
+After reboot, mount the same partition again to access them. This does not
+automatically restore your home directory, installed packages, or system settings.
+
+Before unplugging the disk, close programs using it, leave its directories,
+and unmount it successfully:
+
+```sh
+cd /
+umount /mnt/data
+```
 
 ## Commands inside /bin
 
@@ -1254,7 +1270,7 @@ firmware console and waits; press any key to return to the firmware interface.
 
 `build-image.sh` is shared with [Section 2](#2-buninu-linux-bun-as-pid-1) — see [Disk layout](#disk-layout).
 
-### 2. Buninu Linux – Bun as PID 1
+### 2. Buninu Linux: Bun as PID 1
 
 An unsigned x64 Unified Kernel Image assembled from official Alpine packages,
 with Bun as the init process, replaces the hello-world application:
@@ -1774,9 +1790,6 @@ Switching this option invalidates the module/firmware cache; omit the option
 downloads are retained but excluded from the image. This does not disable GPU
 support already compiled into the selected kernel.
 
-中文：`--no-gpu` 只排除這次新增打包的 GPU 模組與韌體；原本的 framebuffer、
-bunterm、音效與其他模組所需依賴保留。切換選項會重新準備快取，避免殘留打包。
-
 
 GPU drivers are packaged but are **not loaded by boot, `start()`, `cfg.all`, or
 `cfgMod`**. The existing simpledrm/framebuffer and software-rendered bunterm path
@@ -1822,12 +1835,6 @@ QEMU additionally needs an accelerated host GPU backend (VirGL/Venus); a plain
 2D virtio GPU is not 3D acceleration. This does not include NVIDIA's proprietary
 driver, Android KGSL, or board-specific ARM GPU/DT/firmware enablement.
 
-中文：GPU 模組與韌體只打包、不自動載入；必須在 PID 1 REPL 讀取 `cfg.gpu`。
-原本開機、`start()`、`cfg.all` 都保留軟體 framebuffer 路徑。請在啟動 bunterm
-之前操作；若已有程式開啟或映射 framebuffer，會拒絕接管。載入後重新開啟
-bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須另行提供，
-本功能不代表 Land 本身改用 GPU。實際支援範圍取決於 kernel、firmware 與硬體型號。
-
 ## Contents
 
 - [Quick start](#quick-start)
@@ -1854,6 +1861,7 @@ bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須�
   * [Showing images](#showing-images)
   * [Clipboard](#clipboard)
   * [Playing YouTube with sound (experimental)](#playing-youtube-with-sound-experimental)
+  * [Data and persistence](#data-and-persistence)
 - [Commands inside /bin](#commands-inside-bin)
   * [Buninu Browser (early-stage, experimental)](#buninu-browser-early-stage-experimental)
   * [Buninu Land (early-stage, experimental)](#buninu-land-early-stage-experimental)
@@ -1872,7 +1880,7 @@ bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須�
   * [Old build from a source checkout](#old-build-from-a-source-checkout)
 - [Implementation details](#implementation-details)
   * [1. Hello world](#1-hello-world)
-  * [2. Buninu Linux – Bun as PID 1](#2-buninu-linux-bun-as-pid-1)
+  * [2. Buninu Linux: Bun as PID 1](#2-buninu-linux-bun-as-pid-1)
     + [Build flags](#build-flags)
     + [Build pipeline](#build-pipeline)
       - [Pipeline inputs and outputs](#pipeline-inputs-and-outputs)
@@ -1885,13 +1893,14 @@ bunterm，讓它重新取得 framebuffer 資訊。client 的 Mesa/Vulkan 仍須�
     + [Command implementation](#command-implementation)
     + [Reaching JavaScript with nothing mounted](#reaching-javascript-with-nothing-mounted)
     + [What init.js does](#what-initjs-does)
+  * [Optional client GPU acceleration (`cfg.gpu`)](#optional-client-gpu-acceleration-cfggpu)
 - [Authorship](#authorship)
 - [License](#license)
   * [Bundled component licenses](#bundled-component-licenses)
 
 ## Authorship
 
-Buninu Linux is written and maintained by Dr. John (醫者小智), the author of
+Buninu Linux is written and maintained by Dr. John, the author of
 [Buninu](https://github.com/jjtseng93/buninu), whose userspace it runs. The
 kernel, the C library, the GCC runtime, the UEFI stub and Bun itself are the
 work of their respective projects; [NOTICE.md](NOTICE.md) names each one with

@@ -118,6 +118,8 @@ Stages (always run in this order, whichever you pick):
   -h, --help    show this
   -V, --version show name, version, runtime and platform
   --readme      render README.md in the terminal and exit
+  --readme-zh, --docs
+                render README.zh.md in the terminal and exit
 
 Short flags combine: -fbr is the whole pipeline, -br is what an edit to
 initramfs/init.js needs, -r just boots what is already there. Anything after
@@ -136,7 +138,7 @@ reported before anything starts.
 `;
 }
 
-function parse(argv) {
+async function parse(argv) {
   const selected = new Set();
   const passthrough = [];
   let linuxLts = false;
@@ -168,7 +170,10 @@ function parse(argv) {
       printVersion();
       process.exit(0);
     } else if (argument === "--readme") {
-      printReadme();
+      await printReadme();
+      process.exit(0);
+    } else if (argument === "--readme-zh" || argument === "--docs") {
+      await printReadme("README.zh.md");
       process.exit(0);
     } else if (argument === "--check") {
       runCheck(argv.slice(index + 1));
@@ -227,8 +232,8 @@ function printVersion() {
 
 // Same as Buninu's --readme: Bun renders the Markdown to ANSI with clickable
 // links. Under node there is no renderer, so the file is printed as-is.
-function printReadme() {
-  const path = resolve(rootDir, "README.md");
+function printReadme(filename = "README.md") {
+  const path = resolve(rootDir, filename);
   let markdown;
   try {
     markdown = readFileSync(path, "utf8");
@@ -239,7 +244,12 @@ function printReadme() {
     typeof Bun !== "undefined" && typeof Bun.markdown?.ansi === "function"
       ? Bun.markdown.ansi(markdown, { hyperlinks: true })
       : markdown;
-  process.stdout.write(rendered.endsWith("\n") ? rendered : rendered + "\n");
+  // Wait for the whole document to flush before parse() exits. Large README
+  // output can otherwise be truncated when stdout is a pipe.
+  return new Promise((resolve, reject) => {
+    process.stdout.write(rendered.endsWith("\n") ? rendered : rendered + "\n",
+      (error) => error ? reject(error) : resolve());
+  });
 }
 
 // --check hands everything after it to check_build.js, under the same
@@ -349,7 +359,7 @@ function runScript(stage, script, args = [], env = process.env) {
   }
 }
 
-const { selected, passthrough, linuxLts, real, noGpu, exportImage, docker, arch } = parse(process.argv.slice(2));
+const { selected, passthrough, linuxLts, real, noGpu, exportImage, docker, arch } = await parse(process.argv.slice(2));
 const ordered = stages.filter((stage) => selected.has(stage));
 const useDocker = docker || process.platform === "darwin";
 const buildArch = arch ?? "x86_64";
