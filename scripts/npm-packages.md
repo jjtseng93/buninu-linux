@@ -1,6 +1,6 @@
 # npm packages
 # Latest versions checked on 2026-10-11; SHA-256 pins verified against registry SHA-512 integrity.
-# buninu-browser 0.3.0, buninu-land 0.2.0, and casty 1.4.1 verified on 2026-10-22.
+# buninu-browser 0.3.0, buninu-land 0.2.0, casty 1.4.1, and jspulse 0.2.3 verified on 2026-10-22.
 
 "buninu-browser@0.3.0":
   - https://registry.npmjs.org/buninu-browser/-/buninu-browser-0.3.0.tgz
@@ -14,9 +14,9 @@
   - https://registry.npmjs.org/@drxiaozhi/casty/-/casty-1.4.1.tgz
   - sha256:0179c699a82202dc3d84f8736c8d88b29941d87995d6c6b554fd534daa70d280
 
-"@drxiaozhi/jspulse@0.2.1":
-  - https://registry.npmjs.org/@drxiaozhi/jspulse/-/jspulse-0.2.1.tgz
-  - sha256:9a34a76b1edac6767fa90e33cbc4d3a511c082e9ab73fb196390f841aad37839
+"@drxiaozhi/jspulse@0.2.3":
+  - https://registry.npmjs.org/@drxiaozhi/jspulse/-/jspulse-0.2.3.tgz
+  - sha256:c4a1a7adb559f94096243bebaac0890dc5096d518f7f83ed489c38d5cdfaa263
 
 "@drxiaozhi/jspinyin@0.1.1":
   - https://registry.npmjs.org/@drxiaozhi/jspinyin/-/jspinyin-0.1.1.tgz
