@@ -490,6 +490,53 @@ HTTP／HTTPS 與 `about:` URL 直接開啟；本機路徑與 `file://` URL
 Kitty 模式尚未實作 dead key／Compose 序列。完整
 選項與鍵盤細節見 `bunterm --help`。
 
+### 使用命令殼層
+
+bunmsh 是 Buninu 內附、受 mksh 啟發且無外部依賴的 shell。
+主要功能如下：
+
+- 以 `Bun.*` 開頭的行作為 JavaScript 執行；印出回傳值並自動
+  等待 Promise。可用 `Bun.e;` 或 `Bun.e,` 執行任意
+  JavaScript。
+- 輕量的工作目錄分頁可保留多個工作目錄。在 bunmsh 中，
+  `Ctrl-T` 建立或向右循環分頁，`Alt-T` 則向左循環。
+  * 其他實用命令：`tab n`、`tab c`（Alt-C）
+- shell 變數與 JavaScript 透過 `$.` 共用即時變數表，`Bun.sha`
+  可跨命令及工作目錄分頁保留 JavaScript 值。
+- 互動模式提供歷史儲存、匯入 Bash／Fish 歷史、
+  補全與幽靈文字建議。
+- `serve [directory]` 啟動可瀏覽的 HTTP 檔案
+  伺服器。搭配 Android USB 網路共享，可簡單地在 Buninu
+  Linux 與連接的手機之間傳輸檔案。
+- 提供跨平台內建命令及 PATH 備援命令。
+- `Ctrl-U` 移除並保存游標前的文字；在行
+  首再次按下可還原。`Ctrl-K` 獨立處理游標後
+  的文字，在行尾時可切換還原。
+- 未加引號的路徑模式使用 `Bun.Glob`，如同
+  傳統 shell，會跟隨路徑中間的目錄符號連結。這對
+  sysfs 很重要，因為 class 項目通常是連結。例如：
+
+```sh
+ls /sys/class/net/*/device
+```
+
+若要方便閱讀的行程概覽，執行：
+
+```sh
+pspac
+
+# 核心執行緒顯示為 [name]；濾除後只看使用者空間
+pspac | grep -v '\[[a-z]'
+```
+
+`pspac` 顯示實際的 `PID COMMAND` 行程表，並以
+micro 的 Monokai 配色將各命令列作為 shell 語法
+上色。開頭的目錄以暗色顯示，凸顯程式名稱。`pspa` 則以純文字顯示同
+一份表格。
+
+完整語法、互動操作、內建命令及目前相容性細節，請見
+[bunmsh 儲存庫](https://github.com/jjtseng93/bunmsh)。
+
 ### 編輯器快速開始
 
 內附的 `jmi` 終端編輯器不需要網路連線：
@@ -581,53 +628,6 @@ VT，或用 `Alt+Left`、`Alt+Right` 移到上一個或下
 會建立新編輯器分頁，而非繞回第一個終端分頁。
 其他情況都執行正常的下一分頁循環。只有確實
 要關閉目前終端窗格時才使用 `Esc`。
-
-### 使用命令殼層
-
-bunmsh 是 Buninu 內附、受 mksh 啟發且無外部依賴的 shell。
-主要功能如下：
-
-- 以 `Bun.*` 開頭的行作為 JavaScript 執行；印出回傳值並自動
-  等待 Promise。可用 `Bun.e;` 或 `Bun.e,` 執行任意
-  JavaScript。
-- 輕量的工作目錄分頁可保留多個工作目錄。在 bunmsh 中，
-  `Ctrl-T` 建立或向右循環分頁，`Alt-T` 則向左循環。
-  * 其他實用命令：`tab n`、`tab c`（Alt-C）
-- shell 變數與 JavaScript 透過 `$.` 共用即時變數表，`Bun.sha`
-  可跨命令及工作目錄分頁保留 JavaScript 值。
-- 互動模式提供歷史儲存、匯入 Bash／Fish 歷史、
-  補全與幽靈文字建議。
-- `serve [directory]` 啟動可瀏覽的 HTTP 檔案
-  伺服器。搭配 Android USB 網路共享，可簡單地在 Buninu
-  Linux 與連接的手機之間傳輸檔案。
-- 提供跨平台內建命令及 PATH 備援命令。
-- `Ctrl-U` 移除並保存游標前的文字；在行
-  首再次按下可還原。`Ctrl-K` 獨立處理游標後
-  的文字，在行尾時可切換還原。
-- 未加引號的路徑模式使用 `Bun.Glob`，如同
-  傳統 shell，會跟隨路徑中間的目錄符號連結。這對
-  sysfs 很重要，因為 class 項目通常是連結。例如：
-
-```sh
-ls /sys/class/net/*/device
-```
-
-若要方便閱讀的行程概覽，執行：
-
-```sh
-pspac
-
-# 核心執行緒顯示為 [name]；濾除後只看使用者空間
-pspac | grep -v '\[[a-z]'
-```
-
-`pspac` 顯示實際的 `PID COMMAND` 行程表，並以
-micro 的 Monokai 配色將各命令列作為 shell 語法
-上色。開頭的目錄以暗色顯示，凸顯程式名稱。`pspa` 則以純文字顯示同
-一份表格。
-
-完整語法、互動操作、內建命令及目前相容性細節，請見
-[bunmsh 儲存庫](https://github.com/jjtseng93/bunmsh)。
 
 ### 顯示圖片
 
@@ -1851,13 +1851,13 @@ KGSL 或特定 ARM 板子的 GPU／DT／韌體啟用支援。
 - [使用作業系統](#使用作業系統)
   * [基本設定](#基本設定)
   * [使用終端機](#使用終端機)
+  * [使用命令殼層](#使用命令殼層)
   * [編輯器快速開始](#編輯器快速開始)
     + [jsmdcui](#jsmdcui)
   * [多工模式](#多工模式)
     + [多個虛擬主控台](#多個虛擬主控台)
     + [編輯器的窗格與終端分頁](#編輯器的窗格與終端分頁)
       - [窗格與分頁操作](#窗格與分頁操作)
-  * [使用命令殼層](#使用命令殼層)
   * [顯示圖片](#顯示圖片)
   * [剪貼簿](#剪貼簿)
   * [實驗性有聲影片播放](#實驗性有聲影片播放)

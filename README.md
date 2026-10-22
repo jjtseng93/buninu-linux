@@ -490,6 +490,53 @@ when the application disables Kitty or bunterm exits. VT-switching shortcuts sta
 reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
 Use `bunterm --help` for full options and keyboard details.
 
+### Using Bun Modern Shell
+
+bunmsh is the dependency-free, mksh-inspired shell bundled with Buninu. Its
+main features are:
+
+- Lines beginning with `Bun.*` run as JavaScript; returned values are printed
+  and promises are awaited automatically. Use `Bun.e;` or `Bun.e,` for
+  arbitrary JavaScript.
+- Lightweight cwd tabs keep several working directories ready. In bunmsh,
+  `Ctrl-T` creates or cycles right through tabs, while `Alt-T` cycles left.
+  * Also useful cmds: `tab n`, `tab c`(Alt-C)
+- Shell variables and JavaScript share a live variable table by `$.`, and `Bun.sha`
+  can retain JavaScript values across commands and cwd tabs.
+- Saved history, Bash/Fish history import, completions, and ghost suggestions
+  are available interactively.
+- `serve [directory]` starts a browsable HTTP file server. Together with
+  Android USB tethering, it provides a simple way to transfer files between
+  Buninu Linux and the connected phone.
+- Cross-platform builtins and PATH-fallback commands.
+- `Ctrl-U` removes and saves the text before the cursor; press it again at the
+  beginning of the line to restore it. `Ctrl-K` independently toggles the text
+  after the cursor when at the end of the line.
+- Unquoted pathname patterns use `Bun.Glob` and follow directory symbolic
+  links used as intermediate path components, as traditional shells do. This
+  matters for sysfs, where class entries are normally links. For example:
+
+```sh
+ls /sys/class/net/*/device
+```
+
+For a readable process overview, run:
+
+```sh
+pspac
+
+# Kernel threads show as [name]; filter them out to see only userspace
+pspac | grep -v '\[[a-z]'
+```
+
+`pspac` shows the real `PID COMMAND` process table and highlights each command
+line as shell syntax with micro's Monokai colours. Leading directories are
+dimmed so the program name stands out. Use `pspa` for the same table as plain
+text.
+
+See the [bunmsh repository](https://github.com/jjtseng93/bunmsh) for its full
+syntax, interactive controls, builtins, and current compatibility details.
+
 ### Editor quick start
 
 The bundled `jmi` terminal editor works without a network connection:
@@ -581,53 +628,6 @@ the current tab is the rightmost tab and every existing tab contains only
 terminal panes, it creates a new editor tab instead of wrapping back to the
 first terminal tab. In every other case it performs the normal next-tab cycle.
 Use `Esc` only when you actually want to close the current terminal pane.
-
-### Using Bun Modern Shell
-
-bunmsh is the dependency-free, mksh-inspired shell bundled with Buninu. Its
-main features are:
-
-- Lines beginning with `Bun.*` run as JavaScript; returned values are printed
-  and promises are awaited automatically. Use `Bun.e;` or `Bun.e,` for
-  arbitrary JavaScript.
-- Lightweight cwd tabs keep several working directories ready. In bunmsh,
-  `Ctrl-T` creates or cycles right through tabs, while `Alt-T` cycles left.
-  * Also useful cmds: `tab n`, `tab c`(Alt-C)
-- Shell variables and JavaScript share a live variable table by `$.`, and `Bun.sha`
-  can retain JavaScript values across commands and cwd tabs.
-- Saved history, Bash/Fish history import, completions, and ghost suggestions
-  are available interactively.
-- `serve [directory]` starts a browsable HTTP file server. Together with
-  Android USB tethering, it provides a simple way to transfer files between
-  Buninu Linux and the connected phone.
-- Cross-platform builtins and PATH-fallback commands.
-- `Ctrl-U` removes and saves the text before the cursor; press it again at the
-  beginning of the line to restore it. `Ctrl-K` independently toggles the text
-  after the cursor when at the end of the line.
-- Unquoted pathname patterns use `Bun.Glob` and follow directory symbolic
-  links used as intermediate path components, as traditional shells do. This
-  matters for sysfs, where class entries are normally links. For example:
-
-```sh
-ls /sys/class/net/*/device
-```
-
-For a readable process overview, run:
-
-```sh
-pspac
-
-# Kernel threads show as [name]; filter them out to see only userspace
-pspac | grep -v '\[[a-z]'
-```
-
-`pspac` shows the real `PID COMMAND` process table and highlights each command
-line as shell syntax with micro's Monokai colours. Leading directories are
-dimmed so the program name stands out. Use `pspa` for the same table as plain
-text.
-
-See the [bunmsh repository](https://github.com/jjtseng93/bunmsh) for its full
-syntax, interactive controls, builtins, and current compatibility details.
 
 ### Showing images
 
@@ -1851,13 +1851,13 @@ driver, Android KGSL, or board-specific ARM GPU/DT/firmware enablement.
 - [Using Buninu Linux](#using-buninu-linux)
   * [Basic configuration](#basic-configuration)
   * [Using bunterm](#using-bunterm)
+  * [Using Bun Modern Shell](#using-bun-modern-shell)
   * [Editor quick start](#editor-quick-start)
     + [jsmdcui](#jsmdcui)
   * [Multitasking modes](#multitasking-modes)
     + [Multiple virtual consoles with bunterm](#multiple-virtual-consoles-with-bunterm)
     + [Panes, terminals, and tabs with jsmdcui](#panes-terminals-and-tabs-with-jsmdcui)
       - [Pane and tab controls](#pane-and-tab-controls)
-  * [Using Bun Modern Shell](#using-bun-modern-shell)
   * [Showing images](#showing-images)
   * [Clipboard](#clipboard)
   * [Playing YouTube with sound (experimental)](#playing-youtube-with-sound-experimental)
