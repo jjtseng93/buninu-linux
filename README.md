@@ -434,7 +434,14 @@ Run `poweroff` for a synced shutdown.
 
 Click the FPS button on the right of the bunterm menu title to toggle a cyan counter at the top-right of the terminal. It reports newly presented Kitty image frames per second (such as Casty/Land output), sampled once per second; mouse/menu redraws are excluded. Static images and text-only sessions show 0 FPS. The setting is local to this bunterm session and defaults off.
 
-Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
+Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty, buninu-browser and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
+
+To inspect the current picture path in Casty, press `Ctrl-E`, type `kitty`,
+and press Enter. In Land, click **@** instead to open the command line.
+For example, `Kitty: file · format=bgra` reports shared-file raw frames;
+`rgba` is also raw, while PNG/JPEG indicate encoded images. Raw is negotiated
+automatically with supported local peers; no extra launch flag is needed.
+The bunterm FPS counter measures presented images, not a client's rendering FPS.
 
 `bunterm` is the graphical terminal on the Linux framebuffer. It displays CJK
 text, colour emoji and Kitty graphics without starting X11 or Wayland. On the
@@ -681,6 +688,13 @@ Paste uses bracketed paste when the application requests it.
 
 See [Using bunterm](#using-bunterm) for the menu and Kitty keyboard support.
 
+In `buninu-browser`, a website's Copy button can write text through
+`navigator.clipboard.writeText()` after a user click or key press on HTTPS
+or localhost. The browser controller prefers `xclip -selection clipboard`,
+so copied text reaches the same clipboard used by bunterm and jsmdcui.
+If no clipboard provider is available, the operation reports failure.
+This is separate from selecting text and copying it with Casty's shortcuts.
+
 For Chinese input, run the pinyin input method
 [jspinyin](https://www.npmjs.com/package/@drxiaozhi/jspinyin) in a bunterm
 that is not inside a chroot, so it uses Buninu's `xclip`:
@@ -694,6 +708,11 @@ jspinyin
 - casty → jsmdcui / jspinyin: `Alt-C` in casty copies the selection through
   OSC 52, and `Ctrl-V` pastes it in jsmdcui or jspinyin, since jsmdcui reads
   from `xclip` first by default.
+
+jspinyin also has **Clear / Restore** buttons. Clear saves the current result
+before emptying it; Restore appends that saved text to the end of the result.
+Restoring keeps the saved text, so repeated clicks can append it repeatedly.
+The input panel's help link explains candidate selection and other controls.
 
 ### Playing YouTube with sound (experimental)
 
@@ -850,6 +869,7 @@ umount /mnt/data
 | `ping` | IPv4 ICMP / IPv6 ICMPv6 echo via Bun FFI; count, interval, timeout, deadline, payload size, TTL and source selection | `ping --help` |
 | `ps` | composable process fields from `/proc`; also exports its snapshot and single-row formatter for other commands | `ps --help` |
 | `top` | periodically refreshes the process snapshot and rows supplied by `ps` | `top --help` |
+| `xdg-open` | open HTTP/HTTPS, `about:`, or an existing local file in buninu-browser on a new bunterm VT | `xdg-open --help` |
 | `chvt` | Switch Linux VTs (`chvt 1` / `chvt 2`), including switching away from and back to bunterm | `chvt --help` |
 | `poweroff` | sync pending writes and power off through the Linux reboot system call | `poweroff --help` |
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
@@ -901,6 +921,17 @@ REPL, then run `jspulse --alsa` in another terminal or use `jspulse --alsa &` to
 buninu-browser about:audio
 ```
 
+For a trusted test website with a self-signed HTTPS certificate, disable
+certificate verification for that invocation only:
+
+```sh
+env NODE_TLS_REJECT_UNAUTHORIZED=0 buninu-browser https://localhost:8443
+```
+
+This also disables verification for other requests made by that process and
+its inherited child processes. Avoid exporting it globally; verification
+remains enabled when this override is absent.
+
 ### Buninu Land (early-stage, experimental)
 
 Run `buninu-land` inside `bunterm` (or another Kitty-graphics terminal) to
@@ -910,6 +941,49 @@ requires no npm download.
 ```sh
 buninu-land
 ```
+
+The launcher enables Casty's `--no-shortcuts`: page keys go to Land and its
+clients instead of triggering Casty shortcuts. To quit the frontend, click
+**@** at the left of the address bar, type `q`, and press Enter. Clicking the
+address itself edits it; the bar displays the actual Wayland socket path.
+
+With the bundled Casty inside bunterm or a Kitty-keyboard-capable jsgotty,
+Super combinations and key releases are forwarded automatically:
+
+| Shortcut | Action |
+| --- | --- |
+| Super+Arrow | Focus a window in that direction |
+| Super+W / Super+Q | Ask the focused window to close |
+| Super+F | Toggle fullscreen |
+| Super+T | Toggle floating/tiling |
+| Super+Alt+F | Toggle maximization on Land's single output |
+| Super+Shift+Arrow | Swap with a tiled window in that direction |
+| Alt+Tab / Alt+Shift+Tab | Cycle forward/backward through windows |
+| Super+1–9 | Switch workspace |
+| Super+Shift+1–9 | Move the focused window to that workspace and follow it |
+| Super+- / Super+= | Shrink/grow horizontally; add Shift for vertically |
+
+Resize increments are 100 logical pixels; add Alt for 25 or Ctrl for 300.
+Tiled windows change the split ratio. These are the implemented window actions,
+not the complete Omarchy desktop. Legacy terminals cannot reliably send Super;
+Ctrl+Alt combinations now pass through to clients rather than acting as aliases.
+
+**Client GPU acceleration:** first run `cfg.gpu` in the initial REPL before
+opening bunterm (see [Optional client GPU acceleration](#optional-client-gpu-acceleration-cfggpu)).
+Then run Land in bunterm with the render node for the GPU you want to advertise:
+
+```sh
+buninu-land -- --gpu=/dev/dri/renderD128
+```
+
+Replace that example node with the actual one; numbering can change at boot.
+The client environment still needs working Mesa drivers and access to the same
+render node. Clients in a chroot also need access to Land's Wayland socket.
+The preset enables linear DMA-BUF import, deferred capture and 2 ms polling.
+Bare `--gpu` enables the preset without selecting a DRM device. Land itself
+still composites in software; only client rendering can use the GPU.
+Driver support is limited: the tested Intel path worked, but the tested Nouveau
+path produced blank/corrupt images. This does not guarantee NVIDIA support.
 
 The socket directory defaults to `$TMPDIR`, or the system temporary directory
 if `TMPDIR` is unset; an explicitly set `XDG_RUNTIME_DIR` takes precedence.
@@ -1355,15 +1429,11 @@ tampered with is fetched again and has to pass the same hash before a script
 extracts from it. Bumping a version changes both the file name and the hash, so
 it always refetches.
 
-The five application packages are pinned separately in
-`scripts/npm-packages.md`: `buninu-browser@0.2.4`, `buninu-land@0.1.4`,
-`@drxiaozhi/casty@1.3.7`, `@drxiaozhi/jspulse@0.2.1`, and
-`@drxiaozhi/jspinyin@0.1.1`. These were npm's `latest` versions when checked
-on 2026-10-11, with buninu-browser updated on 2026-10-12, and
-casty 1.3.7 and buninu-land 0.1.3 verified on 2026-10-16;
-fetch never resolves `latest` or a version range at runtime.
+The five application packages and their exact versions are pinned in
+[`scripts/npm-packages.md`](scripts/npm-packages.md), the authoritative list
+for this image. Fetch never resolves `latest` or a version range at runtime.
 Each registry tarball was checked against its published SHA-512 integrity
-before its SHA-256 was recorded in the shared pins file.
+before its SHA-256 was recorded in that shared pins file.
 
 The manifest uses fixed YAML-compatible blocks: a double-quoted
 `"package@version":` header, followed by two `  - ` lines containing the
@@ -1940,12 +2010,12 @@ when redistributing the image.
 | Linux kernels and networking, storage, xHCI, USB and HID modules | GPL-2.0-only with the Linux syscall note | image only |
 | systemd EFI stub | LGPL-2.1-or-later | image only |
 | Bun | MIT, plus the licenses of what it statically links | image only |
-| buninu-browser 0.2.3 | MIT for its own code; bundled components have their own licenses | npm download → image |
-| buninu-land 0.1.3 | MIT for its own code; bundled components retain their own licenses and notices | npm download → image |
+| buninu-browser | MIT for its own code; bundled components have their own licenses | npm download → image |
+| buninu-land | MIT for its own code; bundled components retain their own licenses and notices | npm download → image |
 | wasmpeg / FFmpeg (`@wasmpeg/cpu` 1.0.1, bundled in buninu-browser) | LGPL-2.1-or-later, plus component notices; source archive and rebuild documentation retained | browser package → image |
-| `@drxiaozhi/casty` 1.3.7 | MIT | npm download → image |
-| `@drxiaozhi/jspulse` 0.2.1 | LGPL-2.1-or-later, plus component notices | npm download → image |
-| `@drxiaozhi/jspinyin` 0.1.1 | MIT; hanzipinyin material under the Unlicense | npm download → image |
+| `@drxiaozhi/casty` | MIT | npm download → image |
+| `@drxiaozhi/jspulse` | LGPL-2.1-or-later, plus component notices | npm download → image |
+| `@drxiaozhi/jspinyin` | MIT; hanzipinyin material under the Unlicense | npm download → image |
 | CanvasKit 0.41.1 (`initramfs/lib/canvaskit/`, Skia compiled to WebAssembly) | BSD-3-Clause (`LICENSES/BSD-3-Clause-Skia.txt`) | committed |
 | xterm.js 6.0.0 headless core and unicode-graphemes addon (`initramfs/lib/xterm/`); box-drawing shape tables in `initramfs/lib/bunterm/glyphs.js` | MIT (`LICENSES/MIT-xterm.js.txt`) | committed |
 | DejaVu Sans Mono (`initramfs/usr/share/fonts/DejaVuSansMono*.ttf`) | Bitstream Vera (`LICENSES/Bitstream-Vera.txt`) | committed |

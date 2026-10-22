@@ -434,7 +434,14 @@ mount -fv /dev/sda1 /mnt
 
 點擊 bunterm 選單標題右側的 FPS 按鈕，可開啟／關閉終端右上角的青藍色計數器。它每秒取樣一次，統計實際呈現的新 Kitty 圖片幀（例如 Casty／Land 輸出），不計滑鼠與選單重畫。靜態圖片與純文字工作階段顯示 0 FPS。設定僅作用於目前 bunterm，預設關閉。
 
-原生 bunterm 依 framebuffer 的位元欄位宣告偏好的原始像素格式：支援的 32 位元排列採用 BGRA 或 RGBA，其餘回報 PNG。新版 Casty 與 Land 透過 Kitty 共用檔案傳輸自動協商；BGRA 使用私有格式 `f=1111970369`，RGBA 使用標準 `f=32`。其他終端機與 jsgotty 維持既有協議。
+原生 bunterm 依 framebuffer 的位元欄位宣告偏好的原始像素格式：支援的 32 位元排列採用 BGRA 或 RGBA，其餘回報 PNG。新版 Casty、buninu-browser 與 Land 透過 Kitty 共用檔案傳輸自動協商；BGRA 使用私有格式 `f=1111970369`，RGBA 使用標準 `f=32`。其他終端機與 jsgotty 維持既有協議。
+
+若要查看 Casty 目前的畫面傳輸路徑，按 `Ctrl-E`，輸入 `kitty`，
+再按 Enter。在 Land 中則點擊 **@** 開啟命令列。
+例如 `Kitty: file · format=bgra` 表示透過共用檔案傳送原始像素；
+`rgba` 也是原始像素，PNG／JPEG 則表示已編碼圖片。支援的本機兩端
+會自動協商 raw，不需要額外啟動旗標。
+bunterm 的 FPS 計數器統計實際呈現的圖片，不是客戶端本身的渲染 FPS。
 
 `bunterm` 是 Linux framebuffer 上的圖形終端機，不必啟動
 X11 或 Wayland 即可顯示中日韓文字、彩色 emoji 與 Kitty
@@ -681,6 +688,13 @@ emoji。顯示圖片後游標會移到圖片下方，圖片也會隨文字捲動
 
 選單與 Kitty keyboard 支援請見[使用終端機](#使用終端機)。
 
+在 `buninu-browser` 中，HTTPS 或 localhost 網頁的 Copy 按鈕可在
+使用者點擊或按鍵後，透過 `navigator.clipboard.writeText()` 寫入文字。
+瀏覽器控制端優先使用 `xclip -selection clipboard`，
+因此複製的文字會進入 bunterm 與 jsmdcui 使用的同一剪貼簿。
+若沒有可用的剪貼簿提供者，操作會回報失敗。
+這與在 Casty 中選取文字後使用複製快捷鍵是不同的功能。
+
 若要輸入中文，在 chroot 外的 bunterm 執行拼音輸入法
 [jspinyin](https://www.npmjs.com/package/@drxiaozhi/jspinyin)，
 讓它使用 Buninu 的 `xclip`：
@@ -694,6 +708,11 @@ jspinyin
 - casty → jsmdcui／jspinyin：在 casty 按 `Alt-C` 透過 OSC
   52 複製選取內容，再於 jsmdcui 或 jspinyin 按 `Ctrl-V` 貼上，因為
   jsmdcui 預設優先讀取 `xclip`。
+
+jspinyin 也提供**清除／還原**按鈕。清除會先保存目前結果，
+再清空結果框；還原則把保存的文字追加到結果尾端。
+還原後仍保留緩衝內容，因此可重複點擊以追加同一段文字。
+候選字選取與其他操作，請見輸入面板內的說明連結。
 
 ### 實驗性有聲影片播放
 
@@ -850,6 +869,7 @@ umount /mnt/data
 | `ping` | 透過 Bun FFI 傳送 IPv4 ICMP／IPv6 ICMPv6 echo；支援次數、間隔、逾時、總期限、資料大小、TTL 及來源選擇 | `ping --help` |
 | `ps` | 從 `/proc` 取得可組合的行程欄位，也匯出快照及單列格式化函式供其他命令使用 | `ps --help` |
 | `top` | 定期更新由 `ps` 提供的行程快照與各列 | `top --help` |
+| `xdg-open` | 在新的 bunterm VT 用 buninu-browser 開啟 HTTP／HTTPS、`about:` 或既有本機檔案 | `xdg-open --help` |
 | `chvt` | 切換 Linux VT（`chvt 1`／`chvt 2`），包含離開與返回 bunterm | `chvt --help` |
 | `poweroff` | 同步待寫入資料，透過 Linux reboot 系統呼叫關機 | `poweroff --help` |
 | `reboot` | 同步待寫入資料，透過共用的 Linux reboot 邏輯重新啟動 | `reboot --help` |
@@ -901,6 +921,17 @@ buninu-browser about:audio
 buninu-browser about:audio
 ```
 
+若要瀏覽使用自簽 HTTPS 憑證的可信任測試網站，可只針對
+該次執行停用憑證驗證：
+
+```sh
+env NODE_TLS_REJECT_UNAUTHORIZED=0 buninu-browser https://localhost:8443
+```
+
+這也會停用該行程及繼承環境的子行程對其他請求的憑證驗證。
+請勿將它全域匯出；未設定此覆寫時，
+憑證驗證仍保持啟用。
+
 ### 內建合成器的早期實驗支援
 
 在 `bunterm`（或其他支援 Kitty 圖形的終端）內執行
@@ -910,6 +941,49 @@ buninu-browser about:audio
 ```sh
 buninu-land
 ```
+
+啟動器啟用 Casty 的 `--no-shortcuts`：頁面按鍵傳給 Land 與其
+客戶端，不觸發 Casty 快捷鍵。若要退出前端，點擊網址列左側的
+**@**，輸入 `q` 後按 Enter。點擊網址本身
+則進入編輯；網址列顯示實際的 Wayland socket 路徑。
+
+在 bunterm 或支援 Kitty keyboard 的 jsgotty 中使用內附 Casty，
+會自動轉送 Super 組合鍵及放開事件：
+
+| 快捷鍵 | 動作 |
+| --- | --- |
+| Super+方向鍵 | 聚焦該方向的視窗 |
+| Super+W／Super+Q | 要求關閉目前聚焦視窗 |
+| Super+F | 切換全螢幕 |
+| Super+T | 切換浮動／平鋪 |
+| Super+Alt+F | 在 Land 的單一輸出切換最大化 |
+| Super+Shift+方向鍵 | 與該方向的平鋪視窗交換 |
+| Alt+Tab／Alt+Shift+Tab | 向前／向後循環切換視窗 |
+| Super+1–9 | 切換工作區 |
+| Super+Shift+1–9 | 將聚焦視窗移到該工作區並跟隨過去 |
+| Super+-／Super+= | 水平縮小／放大；加 Shift 改為垂直 |
+
+調整尺寸預設每次 100 邏輯像素，加 Alt 為 25，加 Ctrl 為 300。
+平鋪視窗調整的是分割比例。這些是已實作的視窗操作，
+不是完整 Omarchy 桌面。傳統終端無法可靠傳送 Super；
+Ctrl+Alt 組合現在直接傳給客戶端，不再作為替代快捷鍵。
+
+**客戶端 GPU 加速：**先在初始 REPL 執行 `cfg.gpu`，再開啟
+bunterm（見[可選的客戶端圖形加速](#可選的客戶端圖形加速)）。
+接著在 bunterm 執行 Land，指定要向客戶端宣告的 GPU render 節點：
+
+```sh
+buninu-land -- --gpu=/dev/dri/renderD128
+```
+
+請將範例節點換成實際裝置；編號可能隨開機改變。
+客戶端環境仍須具備可運作的 Mesa 驅動，並能存取同一個
+render 節點。chroot 內的客戶端也必須能存取 Land 的 Wayland socket。
+此預設組合啟用線性 DMA-BUF 匯入、延後擷取及 2 ms 輪詢。
+單獨 `--gpu` 啟用此組合，但不指定 DRM 裝置。Land 本身
+仍使用軟體合成，只有客戶端繪圖能使用 GPU。
+驅動支援仍有限：測試過的 Intel 路徑可運作，但測試的 Nouveau
+路徑產生空白或損壞圖片，因此不保證 NVIDIA 可用。
 
 socket 目錄預設為 `$TMPDIR`，未設定 `TMPDIR`
 時則使用系統暫存目錄；明確設定的 `XDG_RUNTIME_DIR`
@@ -1355,15 +1429,11 @@ SHA-256 作為快取鍵，`downloads/<arch>/` 中雜湊正確的
 通過同一雜湊驗證，腳本才會解開。更新版本同時更換檔名與雜湊，因此
 一定會重新取得。
 
-五個應用套件另鎖定於 `scripts/npm-packages.md`：
-`buninu-browser@0.2.4`、`buninu-land@0.1.4`、
-`@drxiaozhi/casty@1.3.7`、
-`@drxiaozhi/jspulse@0.2.1` 與 `@drxiaozhi/jspinyin@0.1.1`。
-這些是 2026-10-11 檢查時 npm 的 `latest`，buninu-
-browser 於 2026-10-12 更新，casty 1.3.7 與
-buninu-land 0.1.3 於 2026-10-16 驗證；下載時絕不
-即時解析 `latest` 或版本範圍。各 registry tarball 都先依發布的 SHA
--512 integrity 驗證，再將 SHA-256 記入共用鎖定清單。
+五個應用套件與精確版本鎖定於
+[`scripts/npm-packages.md`](scripts/npm-packages.md)，以該清單為映像依據。
+下載時絕不即時解析 `latest` 或版本範圍。
+各 registry tarball 都先依發布的 SHA-512 integrity 驗證，
+再將 SHA-256 記入該共用鎖定清單。
 
 清單使用固定且相容 YAML 的區塊：以雙引號包住
 `"package@version":` 標頭，後接兩行 `  - `，分別包含
@@ -1940,12 +2010,12 @@ jspulse 與瀏覽器內附的 wasmpeg／FFmpeg
 | Linux 核心及網路、儲存、xHCI、USB、HID 模組 | GPL-2.0-only，附 Linux syscall note | 僅映像內 |
 | systemd EFI stub | LGPL-2.1-or-later | 僅映像內 |
 | Bun | MIT，以及靜態連結元件的各自授權 | 僅映像內 |
-| buninu-browser 0.2.3 | 自有程式碼採 MIT；內附元件各有授權 | npm 下載 → 映像 |
-| buninu-land 0.1.3 | 自有程式碼採 MIT；內附元件保留各自授權與聲明 | npm 下載 → 映像 |
+| buninu-browser | 自有程式碼採 MIT；內附元件各有授權 | npm 下載 → 映像 |
+| buninu-land | 自有程式碼採 MIT；內附元件保留各自授權與聲明 | npm 下載 → 映像 |
 | wasmpeg／FFmpeg（`@wasmpeg/cpu` 1.0.1，內附於 buninu-browser） | LGPL-2.1-or-later，另附元件聲明；保留原始碼封存檔與重建文件 | 瀏覽器套件 → 映像 |
-| `@drxiaozhi/casty` 1.3.7 | MIT | npm 下載 → 映像 |
-| `@drxiaozhi/jspulse` 0.2.1 | LGPL-2.1-or-later，另附元件聲明 | npm 下載 → 映像 |
-| `@drxiaozhi/jspinyin` 0.1.1 | MIT；hanzipinyin 素材採 Unlicense | npm 下載 → 映像 |
+| `@drxiaozhi/casty` | MIT | npm 下載 → 映像 |
+| `@drxiaozhi/jspulse` | LGPL-2.1-or-later，另附元件聲明 | npm 下載 → 映像 |
+| `@drxiaozhi/jspinyin` | MIT；hanzipinyin 素材採 Unlicense | npm 下載 → 映像 |
 | CanvasKit 0.41.1（`initramfs/lib/canvaskit/`，編譯成 WebAssembly 的 Skia） | BSD-3-Clause（`LICENSES/BSD-3-Clause-Skia.txt`） | 已提交 |
 | xterm.js 6.0.0 無頭核心與 unicode-graphemes 附加元件（`initramfs/lib/xterm/`）；`initramfs/lib/bunterm/glyphs.js` 中的框線形狀表 | MIT（`LICENSES/MIT-xterm.js.txt`） | 已提交 |
 | DejaVu Sans Mono（`initramfs/usr/share/fonts/DejaVuSansMono*.ttf`） | Bitstream Vera（`LICENSES/Bitstream-Vera.txt`） | 已提交 |
