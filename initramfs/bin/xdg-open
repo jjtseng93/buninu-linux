@@ -1,0 +1,33 @@
+#!/bin/bun
+import { browserTarget, parseOpenArgs, openError, openExitCode, releaseVersion } from "../lib/xdg-open.js";
+import { showDocument } from "../lib/document.js";
+
+try {
+  const options = parseOpenArgs(process.argv.slice(2));
+  if (options.help) {
+    await showDocument("xdg-open");
+  } else if (options.version) {
+    // Both image builders already generate this from buninu-linux's version.
+    const release = new URL("../usr/lib/os-release", import.meta.url);
+    let version;
+    if (await Bun.file(release).exists()) version = releaseVersion(await Bun.file(release).text());
+    else version = (await Bun.file(new URL("../../package.json", import.meta.url)).json()).version;
+    console.log(`xdg-open (Buninu Linux) ${version}`);
+  } else {
+    const url = browserTarget(options.target);
+    for (const tool of ["bunterm", "buninu-browser"])
+      if (!Bun.which(tool)) throw openError(`Required tool not found: ${tool}`, 3);
+    let child;
+    try {
+      child = Bun.spawn(["bunterm", "-e", "buninu-browser", url], {
+        stdio: ["inherit", "inherit", "inherit"],
+      });
+    } catch (error) {
+      throw openError(error.message, error.code === "ENOENT" ? 3 : 4);
+    }
+    process.exitCode = await child.exited === 0 ? 0 : 4;
+  }
+} catch (error) {
+  console.error(`xdg-open: ${error.message}`);
+  process.exitCode = openExitCode(error);
+}

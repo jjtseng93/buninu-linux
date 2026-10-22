@@ -454,6 +454,22 @@ bunterm 3 -s 16             # another session, with a 16 px font (default: 13)
 bunterm 4 -e jsmdcui --allow-url README.md
 ```
 
+To open a web URL or an existing local file in a new browser terminal:
+
+```sh
+xdg-open https://buninu.org
+xdg-open "./page with spaces.html"
+```
+
+`xdg-open` runs `bunterm -e buninu-browser URL` on a new VT. HTTP/HTTPS URLs
+and `about:` URLs open directly; local paths and `file://` URLs are resolved to existing regular
+files and encoded as absolute file URLs. Directories and other URL schemes
+are not supported. Run `xdg-open --help` for usage.
+
+中文：`xdg-open https://buninu.org`、`xdg-open about:audio` 或 `xdg-open ./page.html` 會透過
+bunterm 在新的 tty 啟動瀏覽器。本地檔案先確認存在並解析實際路徑，轉成
+`file://` URL；空白、中文與特殊字元會正確編碼。目前不支援目錄與其他協定。
+
 Use `Ctrl+Alt+F1` to return to the initial console, `Ctrl+Alt+F2` to return to
 VT 2, or `Alt+Left` / `Alt+Right` to switch VTs. From a shell, `chvt 1` and
 `chvt 2` do the same. Switching preserves the running sessions; exiting a
