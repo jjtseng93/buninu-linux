@@ -462,7 +462,10 @@ Type bunterm in bunmsh: Graphical Terminal
         ...process.env,
         PATH:  classic_path + ":" +
                buninu_path,
-        HOME:"/buninu"
+        HOME:"/buninu",
+        PULSE_SERVER:"127.0.0.1",
+        XDG_RUNTIME_DIR:"/tmp",
+        WAYLAND_DISPLAY:"wayland-buninu"
       },
       stdin: "inherit",
       stdout: "inherit",
