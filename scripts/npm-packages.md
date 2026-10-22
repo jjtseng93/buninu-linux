@@ -1,19 +1,18 @@
 # npm packages
 # Latest versions checked on 2026-10-11; SHA-256 pins verified against registry SHA-512 integrity.
-# buninu-browser 0.2.4 and buninu-land 0.1.4 verified on 2026-10-18.
-# casty 1.3.7 verified on 2026-10-16.
+# buninu-browser 0.3.0, buninu-land 0.2.0, and casty 1.4.1 verified on 2026-10-22.
 
-"buninu-browser@0.2.4":
-  - https://registry.npmjs.org/buninu-browser/-/buninu-browser-0.2.4.tgz
-  - sha256:247c1ae9644b5016d1dc3f74d1c6c18a986e3961b1d86d2497862e4007bc50aa
+"buninu-browser@0.3.0":
+  - https://registry.npmjs.org/buninu-browser/-/buninu-browser-0.3.0.tgz
+  - sha256:4590c523f76ce7c3a079894b80a541b788c95895036d0094c0e98c2acc6d5179
 
-"buninu-land@0.1.4":
-  - https://registry.npmjs.org/buninu-land/-/buninu-land-0.1.4.tgz
-  - sha256:5cda65c60a7af8c7a05ec519a254e0af3f9913ea94f6ae493e5ddc93a8d87407
+"buninu-land@0.2.0":
+  - https://registry.npmjs.org/buninu-land/-/buninu-land-0.2.0.tgz
+  - sha256:543098c9f934fe4d723ca65b5a0c8a0bd11a04268228c23c3272073dc4549b56
 
-"@drxiaozhi/casty@1.3.7":
-  - https://registry.npmjs.org/@drxiaozhi/casty/-/casty-1.3.7.tgz
-  - sha256:acc0641fb68c00222ba1cd2b7520ba99c269b996e145e82f18466be4d126b811
+"@drxiaozhi/casty@1.4.1":
+  - https://registry.npmjs.org/@drxiaozhi/casty/-/casty-1.4.1.tgz
+  - sha256:0179c699a82202dc3d84f8736c8d88b29941d87995d6c6b554fd534daa70d280
 
 "@drxiaozhi/jspulse@0.2.1":
   - https://registry.npmjs.org/@drxiaozhi/jspulse/-/jspulse-0.2.1.tgz
