@@ -101,9 +101,16 @@ test("distribution launcher ensures resources then forwards to local casty witho
   `);
   writeFileSync(join(root, "usr/lib/node_modules/@drxiaozhi/casty/index.js"),
     "console.log(JSON.stringify({args:process.argv.slice(2),engine:process.env.CASTY_BROWSER}));");
-  const result = spawnSync(process.execPath, [join(root, "bin/buninu-browser"), "--casty", "https://example.test", "--", "--chromium"], { encoding: "utf8" });
-  expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout)).toEqual({ args: ["https://example.test", "--", "--chromium"], engine: join(browser, "buninu-browser.js") });
+  for (const args of [
+    ["https://example.test", "--", "--chromium"],
+    ["--", "--help"],
+    ["--", "--version"],
+    ["--", "--window-size=160,90"],
+  ]) {
+    const result = spawnSync(process.execPath, [join(root, "bin/buninu-browser"), "--casty", ...args], { encoding: "utf8" });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ args, engine: join(browser, "buninu-browser.js") });
+  }
 });
 
 test("land launcher selects bundled casty and preserves package frontend dispatch", async () => {

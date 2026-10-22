@@ -14,9 +14,12 @@ const { chooseFrontend } = await import(pathToFileURL(entry).href);
 const args = process.argv.slice(2);
 const choice = chooseFrontend(args);
 const casty = choice.frontend === "casty";
+const forwarded = casty ? choice.args : args;
+// Preserve Casty's separator when Bun consumes the first one after the script.
+const runtimeArgs = forwarded[0] === "--" ? ["--", ...forwarded] : forwarded;
 const child = Bun.spawn({
   cmd: [process.execPath, casty ? join(modules, "@drxiaozhi/casty/index.js") : entry,
-    ...(casty ? choice.args : args)],
+    ...runtimeArgs],
   env: casty ? { ...process.env, CASTY_BROWSER: join(browser, "buninu-browser.js") } : process.env,
   stdio: ["inherit", "inherit", "inherit"],
 });
