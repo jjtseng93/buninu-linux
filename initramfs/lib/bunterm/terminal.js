@@ -21,7 +21,7 @@ import { UnicodeGraphemesAddon } from "../xterm/addon-unicode-graphemes.mjs";
 import { Renderer, defaultTheme } from "./renderer.js";
 import { ImageStore } from "./images.js";
 import { openKeyboard, translateKeys } from "./input.js";
-import { claimVirtualConsole, listVirtualTerminals } from "./vt.js";
+import { claimVirtualConsole, listVirtualTerminals, nextVirtualTerminal } from "./vt.js";
 import { createFpsMeter } from "./fps.js";
 import { createVtMenu } from "./vt-menu.js";
 import { attachGeometry } from "./geometry.js";
@@ -422,8 +422,7 @@ export const runTerminal = async ({ console: consoleDevice = null, device = "/de
         // Re-scan at activation, since another session may have opened while
         // the menu was visible. The launcher detaches onto the new console;
         // its normal VT ownership checks still apply.
-        const number = Math.max(1, ...listVirtualTerminals().map(entry => entry.number)) + 1;
-        if (number > 63) throw new Error("沒有可用 tty / No next tty available");
+        const number = nextVirtualTerminal();
         const child = Bun.spawn([process.execPath, `${import.meta.dir}/../../bin/bunterm`,
           String(number), "-s", String(fontSize), "--fb", device],
           { stdin: "ignore", stdout: "ignore", stderr: "pipe" });

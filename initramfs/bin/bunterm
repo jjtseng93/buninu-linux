@@ -4,7 +4,7 @@
 import { showDocument } from "../lib/document.js";
 import { runTerminal } from "../lib/bunterm/terminal.js";
 import { activeConsole, openConsole } from "../lib/fbdev.js";
-import { virtualConsoleNumber } from "../lib/bunterm/vt.js";
+import { virtualConsoleNumber, nextVirtualTerminal } from "../lib/bunterm/vt.js";
 import { closeSync, openSync, readFileSync } from "node:fs";
 
 const CANONICAL_BUNTERM = "/bin/bunterm";
@@ -79,7 +79,7 @@ const main = async () => {
   } finally {
     probe.close();
   }
-  if (!options.console) options.console = "/dev/tty2";
+  if (!options.console) options.console = `/dev/tty${nextVirtualTerminal()}`;
 
   // Every live bunterm converges on one unambiguous /proc/<pid>/cmdline:
   //   /bin/bunterm /bin/bunterm /dev/ttyN [options...]

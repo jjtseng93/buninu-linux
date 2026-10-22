@@ -448,7 +448,7 @@ real-hardware image, enter the shell with `start()` at the `bun-repl>` prompt,
 then run:
 
 ```sh
-bunterm                     # default to VT 2; keep tty1 for hardware setup
+bunterm                     # open a new VT after the last session; first is tty2
 bunterm 3 -s 16             # another session, with a 16 px font (default: 13)
 # Alternatively, start a specific application on an unused VT:
 bunterm 4 -e jsmdcui --allow-url README.md
@@ -484,7 +484,7 @@ when the application disables Kitty or bunterm exits. VT-switching shortcuts sta
 reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
 Use `bunterm --help` for full options and keyboard details.
 
-中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm` 預設在 tty2 開啟圖形終端機，保留 tty1 設定硬體；
+中文：在 `bun-repl>` 輸入 `start()` 後，執行 `bunterm` 會在最後一個工作階段之後的新 tty 開啟圖形終端機；第一次使用 tty2，保留 tty1 設定硬體；
 預設字體為 13，可用 `bunterm 3 -s 16` 另開一個較大字體的工作階段。
 點擊最左上角 2×2 像素可調字體、複製／貼上、切換 tty，或在淺色輸入框
 輸入 `font 16`、`copy`、`paste`、`vt 2`、`help`。目前 tty 標記為 `(current)`。
@@ -537,7 +537,7 @@ If `Enter` is not recognized in a particular terminal, try `Ctrl-J` or
 
 Run a separate `bunterm` on each Linux virtual console. A numeric positional
 argument is a short form of the corresponding device, so `bunterm 2` means
-`bunterm /dev/tty2`. Omitting the argument also uses tty2:
+`bunterm /dev/tty2`. Omitting the argument opens a new VT after the last known session (tty2 initially):
 
 ```sh
 bunterm 2

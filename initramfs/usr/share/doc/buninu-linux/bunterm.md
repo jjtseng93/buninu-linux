@@ -8,7 +8,7 @@ box drawing and kitty graphics protocol images — no X11, Wayland or GPU.
 ```sh
 bunterm 2                    # start a detached bunterm on /dev/tty2
 bunterm /dev/tty2            # the full virtual-console spelling also works
-bunterm                      # default to tty2, keeping tty1 for hardware setup
+bunterm                      # open a new VT after the last session; first is tty2
 bunterm -s 20                # short for --font-size 20
 bunterm -e bun /buninu/apps/jsmdcui/src/index.js --demo
 bunterm --no-mouse          # keyboard only
@@ -26,7 +26,8 @@ Markdown images without `--kitty`). When it exits, the console returns to
 text mode and `bunterm` exits with its status.
 
 Every live session has a canonical `/bin/bunterm /dev/ttyN ...` command line.
-When no console is named, tty2 is used, keeping tty1 for hardware setup.
+When no console is named, a new VT after the last known session is selected,
+starting at tty2 and keeping tty1 for hardware setup.
 Using a VT other than the active one starts bunterm as a detached session and returns
 immediately to the calling shell. Only one bunterm may control a given VT;
 ownership is
@@ -37,7 +38,7 @@ identified from the process task name and its open console descriptor under
 
 | Option | Meaning |
 | --- | --- |
-| `N`, `/dev/ttyN` | The virtual console to use for graphics and the keyboard; for example, `2` means `/dev/tty2`. Naming a VT other than the active one starts a detached bunterm there, switches the display to it, and immediately returns control to the calling shell. Without this argument, bunterm uses tty2. |
+| `N`, `/dev/ttyN` | The virtual console to use for graphics and the keyboard; for example, `2` means `/dev/tty2`. Naming a VT other than the active one starts a detached bunterm there, switches the display to it, and immediately returns control to the calling shell. Without this argument, bunterm selects the next VT after the last known session (tty2 initially). |
 | `-e command [argument...]` | The program to run; everything after `-e` belongs to it. Default `/bin/sh`. |
 | `-s N`, `--font-size N` | Font size in pixels (default 13). The cell is 0.6 × N wide and 1.16 × N tall with DejaVu Sans Mono, so 1024×768 at 16 px gives 106 × 41 cells. |
 | `--line-height F` | Multiplies the cell height (default 1). |

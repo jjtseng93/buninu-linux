@@ -108,3 +108,10 @@ export const listVirtualTerminals = () => {
   }
   return [...entries.values()].sort((a, b) => a.number - b.number);
 };
+
+// Match the menu: append after the last known session, reserving tty1.
+export const nextVirtualTerminal = (entries = listVirtualTerminals()) => {
+  const number = Math.max(1, ...entries.map(entry => entry.number)) + 1;
+  if (number > 63) throw new Error("沒有可用 tty / No next tty available");
+  return number;
+};
