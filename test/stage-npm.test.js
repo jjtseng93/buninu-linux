@@ -130,7 +130,7 @@ test("land launcher selects bundled casty and preserves package frontend dispatc
     });
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
-      args: args[0] === '--casty' ? args.slice(1) : args,
+      args: ['--no-shortcuts', ...(args[0] === '--casty' ? args.slice(1) : args)],
       engine: join(land, "compositor.js"),
     });
   }

@@ -14,7 +14,7 @@ const { chooseFrontend } = await import(pathToFileURL(entry).href);
 const args = process.argv.slice(2);
 const choice = chooseFrontend(args);
 const casty = choice.frontend === "casty";
-const forwarded = casty ? choice.args : args;
+const forwarded = casty ? ["--no-shortcuts", ...choice.args] : args;
 // Bun consumes a leading separator after the script path; preserve Casty's
 // own separator when --casty is followed directly by -- engine flags.
 const runtimeArgs = forwarded[0] === "--" ? ["--", ...forwarded] : forwarded;
