@@ -17,3 +17,10 @@ html, body, #terminal {
 #terminal, #terminal .xterm, #terminal .xterm-viewport, #terminal .xterm-screen {
     touch-action: manipulation;
 }
+
+/* Chromium skips focused-editable auto-zoom when that element disallows
+   pinch zoom. Restrict only the hidden input, not the terminal canvas:
+   native paste/IME remain available and the visible terminal can still pinch. */
+#terminal .xterm-helper-textarea {
+    touch-action: none;
+}

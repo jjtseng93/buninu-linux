@@ -1,0 +1,42 @@
+A
+Aa
+byte
+private
+for
+break
+package
+this
+goto
+/
+(
+100D
+0B000D
+0000D
+0XaaaD
+000.000E+000D
+true
+@aa
+"""sample 42"""
+"""\""""
+"""$a.a"""
+"""${sample 42}"""
+'''sample 42'''
+'''\"'''
+"sample 42"
+"\""
+"$a.a"
+"${x}"
+'sample 42'
+'\"'
+$/sample 42/$
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+/**@sample 42*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

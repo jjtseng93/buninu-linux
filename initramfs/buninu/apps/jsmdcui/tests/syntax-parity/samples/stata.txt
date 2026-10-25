@@ -1,0 +1,32 @@
+`"sample 42"'
+`"`sample 42'"'
+`"$a"'
+`"\x"'
+"sample 42"
+"`sample 42'"
+"$a"
+"\x"
+_caller
+if
++0.0E+0i
+-
+/
+(
+%-0.0ec
+%21x
+%-tCx
+%-0s
+$a
+`sample 42'
+///sample 42
+///TODO:
+/*sample 42*/
+/*TODO:*/
+ *sample 42
+ *TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

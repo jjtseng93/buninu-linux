@@ -1,0 +1,34 @@
+AA
+_Atomic
+ssize_t
+_Float16
+aa_T
+auto
+for
+goto
+asm
+ # define
+ _Pragma
+__attribute__ ((a))
+__aligned__
+/
+(
+10ULL
+0.0E+0F
+0Xa.aP+0F
+true
+"sample 42"
+"\a"
+'sample 42'
+'aa''
+'\a'
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

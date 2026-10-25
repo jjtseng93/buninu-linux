@@ -1,0 +1,33 @@
+break
+else
+package
+/
+,
+uint8
+uintptr
+struct
+true
+{
+(
+[
+0
+"sample 42"
+"%x"
+"\a"
+"\000"
+'sample 42'
+'xx'
+'%x'
+'\a'
+'\000'
+`sample 42`
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

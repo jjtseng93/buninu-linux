@@ -8,9 +8,7 @@ export class Highlighter {
   highlightLine(line, state = null, progress = null) {
     const text = String(line);
     const changes = new Map([[0, state?.group ?? "default"]]);
-    const nextState = state
-      ? scanRegion(changes, text, 0, state, this.rules, progress)
-      : scanTop(changes, text, 0, this.rules, progress);
+    const nextState = scanLine(changes, text, state, this.rules, progress);
     return {
       changes: normalizeChanges(changes, text.length),
       state: nextState,
@@ -29,16 +27,18 @@ export class Highlighter {
   }
 }
 
-export function resolveRules(rules, definitions, seen) {
+export function resolveRules(rules, definitions, seen, ancestors = new Set()) {
+  if (ancestors.has(rules) || ancestors.size >= 128) return [];
+  const path = new Set(ancestors); path.add(rules);
   const out = [];
   for (const rule of rules) {
     if (rule.type === "include") {
       if (seen.has(rule.include)) continue;
       seen.add(rule.include);
       const def = definitions.find((candidate) => candidate.filetype === rule.include);
-      if (def) out.push(...resolveRules(def.rules, definitions, seen));
+      if (def) out.push(...resolveRules(def.rules, definitions, seen, path));
     } else if (rule.type === "region") {
-      out.push({ ...rule, rules: resolveRules(rule.rules ?? [], definitions, new Set(seen)) });
+      out.push({ ...rule, rules: resolveRules(rule.rules ?? [], definitions, new Set(seen), path) });
     } else {
       out.push(rule);
     }
@@ -53,65 +53,65 @@ export function flattenRules(rules, definitions, seen) {
   });
 }
 
-function scanTop(changes, line, pos, rules, progress = null) {
-  let cursor = pos;
+// Iterative state machine: adjacent tokens on a minified line must not consume
+// call-stack depth. A state repeated at an unchanged position steps forward.
+function scanLine(changes, line, region, rootRules, progress) {
+  let cursor = 0, previous = -1;
+  const visited = new Set();
+  const parents = new Set();
+  for (let r = region; r; r = r.parent) {
+    if (parents.has(r) || parents.size >= 128) { region = null; changes.set(0, "default"); break; }
+    parents.add(r);
+  }
   while (cursor <= line.length) {
-    progress?.(cursor);
-    const regionStart = findFirstRegion(rules, line, cursor, progress);
-    if (!regionStart) {
-      applyPatterns(changes, line, cursor, line.length, rules, "default", progress);
-      changes.set(line.length, "default");
-      progress?.(line.length);
+    if (cursor !== previous) { visited.clear(); previous = cursor; }
+    if (visited.has(region)) {
+      // A zero-width child can end and reopen forever at the same position.
+      // Skip one character in the current region, like a zero-width match.
+      cursor = advanceIndex(line, cursor);
+      continue;
+    }
+    if (visited.size >= 256) {
+      // Fresh object states from malformed externally supplied trees.
+      // Discard this line's unfinished region; do not poison subsequent lines.
+      changes.set(cursor, "default"); changes.set(line.length, "default");
       return null;
     }
-
-    applyPatterns(changes, line, cursor, regionStart.start, rules, "default", progress);
-    changes.set(regionStart.start, regionStart.region.limitGroup ?? "default");
-    changes.set(regionStart.end, regionStart.region.group);
-    progress?.(regionStart.end);
-
-    const state = scanRegion(changes, line, regionStart.end, regionStart.region, rules, progress);
-    if (state) return state;
-    return null;
-  }
-  return null;
-}
-
-function scanRegion(changes, line, pos, region, rootRules, progress = null) {
-  let cursor = pos;
-  const rules = region.rules ?? [];
-  while (cursor <= line.length) {
+    visited.add(region);
     progress?.(cursor);
-    const end = findMatch(region.end, line, cursor, region.skip, progress);
+    const rules = region?.rules ?? rootRules;
+    const end = region ? findMatch(region.end, line, cursor, region.skip, progress) : null;
     const nested = findFirstRegion(rules, line, cursor, progress);
-
     if (end && (!nested || end.start <= nested.start)) {
       applyPatterns(changes, line, cursor, end.start, rules, region.group, progress);
       changes.set(end.start, region.limitGroup ?? region.group);
       changes.set(end.end, parentGroup(region));
       progress?.(end.end);
-      if (region.parent) return scanRegion(changes, line, end.end, region.parent, rootRules, progress);
-      return scanTop(changes, line, Math.max(end.end, end.start + 1), rootRules, progress);
-    }
-
-    if (nested) {
-      applyPatterns(changes, line, cursor, nested.start, rules, region.group, progress);
-      changes.set(nested.start, nested.region.limitGroup ?? region.group);
-      const child = { ...nested.region, parent: region };
-      changes.set(nested.end, child.group);
-      progress?.(nested.end);
-      const state = scanRegion(changes, line, nested.end, child, rootRules, progress);
-      if (state) return state;
-      cursor = Math.max(nested.end + 1, nextChangeAfter(changes, nested.end));
+      const parent = region.parent ?? null;
+      cursor = parent ? end.end : Math.max(end.end, advanceIndex(line, end.start));
+      region = parent;
       continue;
     }
-
-    applyPatterns(changes, line, cursor, line.length, rules, region.group, progress);
-    changes.set(line.length, region.group);
+    if (nested) {
+      applyPatterns(changes, line, cursor, nested.start, rules, region?.group ?? "default", progress);
+      changes.set(nested.start, nested.region.limitGroup ?? nested.region.group);
+      region = region ? { ...nested.region, parent: region } : nested.region;
+      changes.set(nested.end, region.group);
+      progress?.(nested.end);
+      cursor = nested.end;
+      continue;
+    }
+    applyPatterns(changes, line, cursor, line.length, rules, region?.group ?? "default", progress);
+    changes.set(line.length, region?.group ?? "default");
     progress?.(line.length);
     return region;
   }
   return region;
+}
+
+// AdvanceStringIndex for Unicode regexps, including isolated surrogate units.
+function advanceIndex(text, index) {
+  return index + (text.codePointAt(index) > 0xFFFF ? 2 : 1);
 }
 
 function applyPatterns(changes, line, start, end, rules, fallbackGroup, progress = null) {
@@ -161,18 +161,12 @@ function findMatch(regex, line, pos, skip, progress = null) {
   const global = globalize(regex);
   global.lastIndex = pos;
   let match;
-  if (!progress) {
-    match = global.exec(masked);
-    if (!match) return null;
-    const start = match.index ?? 0;
-    return { start, end: start + match[0].length };
-  }
   while ((match = global.exec(masked)) !== null) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
     progress?.(start);
     if (start >= pos) return { start, end };
-    if (match[0].length === 0) global.lastIndex++;
+    global.lastIndex = Math.max(global.lastIndex, advanceIndex(masked, start));
   }
   progress?.(line.length);
   return null;
@@ -189,7 +183,7 @@ function findAllMatches(regex, line, start, end, progress = null) {
       if (matchStart >= end) break;
       const matchEnd = matchStart + match[0].length;
       if (match[0].length === 0) {
-        global.lastIndex++;
+        global.lastIndex = advanceIndex(line, matchStart);
         continue;
       }
       if (matchEnd > start) out.push({ start: Math.max(matchStart, start), end: Math.min(matchEnd, end) });
@@ -202,7 +196,7 @@ function findAllMatches(regex, line, start, end, progress = null) {
     if (matchStart >= end) break;
     progress?.(matchStart);
     if (match[0].length === 0) {
-      global.lastIndex++;
+      global.lastIndex = advanceIndex(line, matchStart);
       continue;
     }
     if (matchEnd <= start || matchStart >= end) continue;
@@ -227,13 +221,6 @@ function normalizeChanges(changes, lineLength) {
 
 function parentGroup(region) {
   return region.parent?.group ?? "default";
-}
-
-function nextChangeAfter(changes, index) {
-  for (const key of [...changes.keys()].sort((a, b) => a - b)) {
-    if (key > index) return key;
-  }
-  return index + 1;
 }
 
 function globalize(regex) {

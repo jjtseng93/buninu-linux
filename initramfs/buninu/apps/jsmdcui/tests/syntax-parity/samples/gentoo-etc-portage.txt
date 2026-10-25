@@ -1,0 +1,14 @@
+ +a
+ -a
+-0x 
+-alpha
+ -*
+ x/
+ <
+#sample 42
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

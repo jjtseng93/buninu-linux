@@ -1,0 +1,18 @@
+.ds a]
+\x
+\fx
+\nx
+\n[sample 42]
+. a]
+.\"x
+\*x
+\*[sample 42]
+\(xx
+\[sample 42]
+\\$1
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

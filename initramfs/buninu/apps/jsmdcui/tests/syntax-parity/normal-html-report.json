@@ -1,0 +1,619 @@
+[
+  {
+    "name": "simple",
+    "syntax": "html.yaml",
+    "diffs": 6,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 6,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 7,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 8,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 9,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 10,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 11,
+        "micro": "symbol.tag",
+        "jmi": "symbol",
+        "context": "<div class=\"hello\">Hello</div>"
+      }
+    ]
+  },
+  {
+    "name": "simple",
+    "syntax": "html5.yaml",
+    "diffs": 9,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 2,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 3,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 4,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 5,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 6,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 7,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 8,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 9,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 10,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      }
+    ]
+  },
+  {
+    "name": "simple",
+    "syntax": "html4.yaml",
+    "diffs": 9,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 2,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 3,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 4,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 5,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 6,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 7,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 8,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 9,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 1,
+        "column": 10,
+        "micro": "default",
+        "jmi": "symbol.tag.extended",
+        "context": "<div class=\"hello\">Hello</div>"
+      }
+    ]
+  },
+  {
+    "name": "twoAttributes",
+    "syntax": "html.yaml",
+    "diffs": 11,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 4,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<a href=\"https://example.com\" class=\"l"
+      },
+      {
+        "line": 1,
+        "column": 5,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<a href=\"https://example.com\" class=\"li"
+      },
+      {
+        "line": 1,
+        "column": 6,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<a href=\"https://example.com\" class=\"lin"
+      },
+      {
+        "line": 1,
+        "column": 7,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<a href=\"https://example.com\" class=\"link"
+      },
+      {
+        "line": 1,
+        "column": 8,
+        "micro": "symbol.tag",
+        "jmi": "symbol",
+        "context": "<a href=\"https://example.com\" class=\"link\""
+      },
+      {
+        "line": 1,
+        "column": 31,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "ttps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 32,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "tps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 33,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "ps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 34,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "s://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 35,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 36,
+        "micro": "symbol.tag",
+        "jmi": "symbol",
+        "context": "//example.com\" class=\"link\">Example</a>"
+      }
+    ]
+  },
+  {
+    "name": "twoAttributes",
+    "syntax": "html5.yaml",
+    "diffs": 8,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 2,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "<a href=\"https://example.com\" class="
+      },
+      {
+        "line": 1,
+        "column": 3,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "<a href=\"https://example.com\" class=\""
+      },
+      {
+        "line": 1,
+        "column": 30,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "https://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 31,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "ttps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 32,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "tps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 33,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "ps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 34,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "s://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 35,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "://example.com\" class=\"link\">Example</a>"
+      }
+    ]
+  },
+  {
+    "name": "twoAttributes",
+    "syntax": "html4.yaml",
+    "diffs": 8,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 1,
+        "column": 2,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "<a href=\"https://example.com\" class="
+      },
+      {
+        "line": 1,
+        "column": 3,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "<a href=\"https://example.com\" class=\""
+      },
+      {
+        "line": 1,
+        "column": 30,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "https://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 31,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "ttps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 32,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "tps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 33,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "ps://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 34,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "s://example.com\" class=\"link\">Example</a>"
+      },
+      {
+        "line": 1,
+        "column": 35,
+        "micro": "default",
+        "jmi": "symbol.tag",
+        "context": "://example.com\" class=\"link\">Example</a>"
+      }
+    ]
+  },
+  {
+    "name": "document",
+    "syntax": "html.yaml",
+    "diffs": 14,
+    "extraStringChars": 0,
+    "first": [
+      {
+        "line": 3,
+        "column": 13,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title>"
+      },
+      {
+        "line": 3,
+        "column": 14,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title><"
+      },
+      {
+        "line": 3,
+        "column": 15,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></"
+      },
+      {
+        "line": 3,
+        "column": 16,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></h"
+      },
+      {
+        "line": 3,
+        "column": 17,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></he"
+      },
+      {
+        "line": 3,
+        "column": 18,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></hea"
+      },
+      {
+        "line": 3,
+        "column": 19,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></head"
+      },
+      {
+        "line": 3,
+        "column": 20,
+        "micro": "symbol.tag",
+        "jmi": "symbol",
+        "context": "<head><meta charset=\"utf-8\"><title>Test</title></head>"
+      },
+      {
+        "line": 5,
+        "column": 6,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 5,
+        "column": 7,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 5,
+        "column": 8,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      },
+      {
+        "line": 5,
+        "column": 9,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "<div class=\"hello\">Hello</div>"
+      }
+    ]
+  },
+  {
+    "name": "document",
+    "syntax": "html5.yaml",
+    "diffs": 0,
+    "extraStringChars": 0,
+    "first": []
+  },
+  {
+    "name": "document",
+    "syntax": "html4.yaml",
+    "diffs": 0,
+    "extraStringChars": 0,
+    "first": []
+  },
+  {
+    "name": "comparison",
+    "syntax": "html.yaml",
+    "diffs": 91819,
+    "extraStringChars": 4240,
+    "first": [
+      {
+        "line": 1,
+        "column": 22,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "!doctype html><meta charset=\"utf-8\"><title>micro / jmi "
+      },
+      {
+        "line": 1,
+        "column": 23,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "doctype html><meta charset=\"utf-8\"><title>micro / jmi s"
+      },
+      {
+        "line": 1,
+        "column": 24,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "octype html><meta charset=\"utf-8\"><title>micro / jmi sy"
+      },
+      {
+        "line": 1,
+        "column": 25,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "ctype html><meta charset=\"utf-8\"><title>micro / jmi syn"
+      },
+      {
+        "line": 1,
+        "column": 26,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "type html><meta charset=\"utf-8\"><title>micro / jmi synt"
+      },
+      {
+        "line": 1,
+        "column": 27,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "ype html><meta charset=\"utf-8\"><title>micro / jmi synta"
+      },
+      {
+        "line": 1,
+        "column": 28,
+        "micro": "symbol.tag",
+        "jmi": "identifier",
+        "context": "pe html><meta charset=\"utf-8\"><title>micro / jmi syntax"
+      },
+      {
+        "line": 1,
+        "column": 29,
+        "micro": "symbol.tag",
+        "jmi": "symbol",
+        "context": "e html><meta charset=\"utf-8\"><title>micro / jmi syntax "
+      },
+      {
+        "line": 1,
+        "column": 89,
+        "micro": "default",
+        "jmi": "statement",
+        "context": "rison</title><style>body{background:#181818;color:#eee;"
+      },
+      {
+        "line": 1,
+        "column": 90,
+        "micro": "default",
+        "jmi": "statement",
+        "context": "ison</title><style>body{background:#181818;color:#eee;f"
+      },
+      {
+        "line": 1,
+        "column": 91,
+        "micro": "default",
+        "jmi": "statement",
+        "context": "son</title><style>body{background:#181818;color:#eee;fo"
+      },
+      {
+        "line": 1,
+        "column": 92,
+        "micro": "default",
+        "jmi": "statement",
+        "context": "on</title><style>body{background:#181818;color:#eee;fon"
+      }
+    ]
+  },
+  {
+    "name": "comparison",
+    "syntax": "html5.yaml",
+    "diffs": 0,
+    "extraStringChars": 0,
+    "first": []
+  },
+  {
+    "name": "comparison",
+    "syntax": "html4.yaml",
+    "diffs": 0,
+    "extraStringChars": 0,
+    "first": []
+  }
+]

@@ -1,0 +1,23 @@
+Aa
+0.0e-0
+0#a
+true
+$\a
+after
+-module
+?A
+ext_binary
+'sample 42'
+"sample 42"
+"%x"
+"\a"
+"\000"
+(*sample 42*)
+(*TODO:*)
+%sample 42
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

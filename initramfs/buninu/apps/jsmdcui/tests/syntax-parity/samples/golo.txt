@@ -1,0 +1,50 @@
+function
+struct
+list
+Ok
+augment
+interfaces
+isEmpty
+result
+promise
+initialize
+println
+likelySupported
+emptyList
+asLazyList
+import
+module
+JSON
+stringify
+newInstance
+times
+format
+head
+newWithSameType
+add
+toUpperCase
+if
+with
+try
+super
+(
+for
+and
+true
+null
+/
+0
+"sample 42"
+"\x"
+'sample 42'
+'\x'
+#sample 42
+#TODO:
+----sample 42----
+----TODO:----
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

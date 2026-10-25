@@ -1,0 +1,37 @@
+AA
+float
+ssize_t
+aa_T
+final
+auto
+class
+concept
+import
+for
+try
+goto
+ # define
+asm
+__attribute__ ((a))
+__global__
+/
+(
+10ULL
+0.0E+0F
+0Xa.aP+0F
+true
+"sample 42"
+"\a"
+'sample 42'
+'xx'
+'\a'
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

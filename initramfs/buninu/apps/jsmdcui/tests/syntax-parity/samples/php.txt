@@ -1,0 +1,44 @@
+<
+<ax>
+</ABBR x>
+</BODY x>
+</SCRIPT x>
+<?php
+?>
+<!DOCTYPEx>
+&a];
+:
+alt=
+#aaaaaa
+ftps://a
+<!--x-->
+<?php" end="?>
+a(
+array
+a::
+Aa
+A 
+global
+abstract
+new a
+as
+true
+ 
+0
+$this
+=>
+$a
+/
+(
+//sample 42
+/*sample 42*/
+"sample 42"
+"\a"
+'sample 42'
+'\a'
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

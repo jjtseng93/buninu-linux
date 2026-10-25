@@ -351,3 +351,7 @@ printf '\033]52;c;%s\007' "$(printf 'Hello' | base64 | tr -d '\n')"
 程式可送出 `ESC ] 52 ; c ; ? ST` 讀取，並從 stdin 接收 base64 編碼的 OSC 52 回覆。
 
 `jsgotty --client` **不攔截 OSC 52**，讀寫控制碼都原樣轉送，交給最外層真正的終端模擬器決定。
+
+### 觸控拖曳與右鍵
+
+在程式啟用滑鼠回報時，快速點兩下並按住第二下可拖曳左鍵，放開即釋放；單指滑動仍是捲動。既有圖片長按選單的 `Remove image` 下方新增 `Right click`，會在叫出選單的原始位置送出右鍵點擊。雙指縮放與原本的移除圖片入口不變。若要停用雙擊拖曳，可在網頁 JavaScript 設定 `window.touchDoubleTapDrag = false`。

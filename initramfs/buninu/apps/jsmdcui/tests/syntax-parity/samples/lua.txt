@@ -1,0 +1,48 @@
+do
+not
+debug.
+_ENV (
+io.close
+math.abs
+os.clock
+package.config
+string.byte
+table.concat
+utf8.char
+coroutine.create
+debug.debug
+bit32.arshift
+:close
+self
+false
+dofile
+(
+*
+0Xa.aP+0
+"sample 42"
+"\a"
+'sample 42'
+'\a'
+[[sample 42]]
+[=[sample 42]=]
+[==[sample 42]==]
+[===[sample 42]===]
+[====[sample 42]====]
+--[[sample 42]]
+--[[TODO:]]
+--[=[sample 42]=]
+--[=[TODO:]=]
+--[==[sample 42]==]
+--[==[TODO:]==]
+--[===[sample 42]===]
+--[===[TODO:]===]
+--[====[sample 42]====]
+--[====[TODO:]====]
+--sample 42
+--TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

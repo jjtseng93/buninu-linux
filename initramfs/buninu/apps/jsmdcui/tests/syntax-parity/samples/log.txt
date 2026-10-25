@@ -1,0 +1,45 @@
+WARNING
+CRITICAL
+INFORMATION
+DEBUG
+VERBOSE
+ALERT
+TRACE
+ERROR
+FATAL
+EMERGENCY
+FAILURE
+YES
+NO
+None
+0_0.0_0e0_0
+0b_0
+0o_0
+0x_a
+/
+(
+"sample 42"
+"\x"
+'sample 42'
+'\x'
+FILE
+Monday January 0, 0000
+00/00/00
+00:00:00,0+0+0+0+0 -0
+0000/00/00
+0000/00/00 00:00:00.00
+00-00-00 00:00:00,000
+0000-00-00T00:00:00.0+00:00
+0000-00-00T00:00:00+00:00
+0000-00-00T00:00+00:00
+0000-00-00T00:00:00.0
+0000-00-00T00:00:00
+0000-00-00T00:00
+https://sample 42 
+Commit: a[a]
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

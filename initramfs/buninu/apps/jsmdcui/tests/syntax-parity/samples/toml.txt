@@ -1,0 +1,31 @@
+,
+[
+"""sample 42"""
+"""\uaaaa"""
+"""\Uaaaaaaaa"""
+"""\""""
+"sample 42"
+"\uaaaa"
+"\Uaaaaaaaa"
+"\""
+'''sample 42'''
+'sample 42'
++0_0
+0xa_a
++0_0.0_0
++0_0.0_0E+0_0
++inf
+aa
+true
+false
+inf
+0-00-00 00:00:00.0+00:00
+00:00:00.0
+#sample 42
+#TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

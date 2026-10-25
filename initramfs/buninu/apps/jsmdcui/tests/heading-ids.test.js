@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { escapesSlashTags } from "./markdown-behavior.mjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -347,23 +348,27 @@ test("raw heading markers do not change quoted attribute parsing", () => {
   expect(rendered.html).toContain('<h1 id="中文-1">中文</h1>');
 });
 
-test("raw heading markers preserve slash-separated HTML attributes", () => {
-  const markdown = `<h1/id=中文>Raw</h1>
-
-# 中文
-`;
-  expect(collectRawHtmlHeadingDeclarations(markdown)).toEqual([
-    {
-      id: "中文",
-      kind: "raw HTML heading",
-      line: 1,
-      source: "<h1/id=中文>Raw</h1>",
-    },
+test("raw heading markers follow Bun's slash-separated HTML behavior", () => {
+  const markdown = "<h1/id=中文>Raw</h1>\n\n# 中文\n";
+  expect(collectRawHtmlHeadingDeclarations(markdown)).toEqual(escapesSlashTags ? [] : [
+    { id: "中文", kind: "raw HTML heading", line: 1, source: "<h1/id=中文>Raw</h1>" },
   ]);
   const rendered = renderMarkdownWithHeadingIds(markdown);
-  expect(rendered.headings.map(heading => heading.id)).toEqual(["中文-1"]);
-  expect(rendered.html).toContain("<h1/id=中文>Raw</h1>");
-  expect(rendered.html).toContain('<h1 id="中文-1">中文</h1>');
+  const id = escapesSlashTags ? "中文" : "中文-1";
+  expect(rendered.normalized).toBe(true);
+  expect(rendered.headings.map(heading => heading.id)).toEqual([id]);
+  expect(rendered.html).toContain(escapesSlashTags
+    ? "<p>&lt;h1/id=中文&gt;Raw</h1></p>"
+    : "<h1/id=中文>Raw</h1>");
+  expect(rendered.html).toContain(`<h1 id="${id}">中文</h1>`);
+});
+
+test("slash-tag ambiguity follows Bun's actual Markdown output", () => {
+  const rendered = renderMarkdownWithHeadingIds('<div/a< x=">TAIL\n\n# 中文\n');
+  expect(rendered.normalized).toBe(escapesSlashTags);
+  expect(rendered.headings.map(heading => heading.id)).toEqual(escapesSlashTags ? ["中文"] : []);
+  expect(rendered.html).toContain(escapesSlashTags
+    ? '<h1 id="中文">中文</h1>' : '<h1 id="">中文</h1>');
 });
 
 test("self-closing inline headings cannot suppress other raw collisions", () => {
@@ -511,7 +516,7 @@ test("quoted tag delimiters preserve raw IDs and Markdown heading metadata", () 
 });
 
 test("browser alignment failures never fall back to lexical heading rewrites", () => {
-  const markdown = '<div/a< x=">TAIL\n\n# 中文\n';
+  const markdown = '<div x=">TAIL\n\n# 中文\n';
   const rendered = renderMarkdownWithHeadingIds(markdown);
   expect(rendered.normalized).toBe(false);
   expect(rendered.headings).toEqual([]);

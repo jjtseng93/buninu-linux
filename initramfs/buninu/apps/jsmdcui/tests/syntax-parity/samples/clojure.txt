@@ -1,0 +1,18 @@
+true
+nil
+-0
+0x0a
+-30rA
+-40rA
+/
+byte
+"sample 42"
+"\uaaaa"
+;sample 42
+;TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

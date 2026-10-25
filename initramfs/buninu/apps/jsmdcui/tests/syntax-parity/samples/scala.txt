@@ -1,0 +1,16 @@
+boolean
+match
+def
+"""sample 42"""
+"sample 42"
+"\x"
+true
+//sample 42
+/*sample 42*/
+/**sample 42*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0 - 2026-10-26
+
+- Sync jsgotty to 1.4.0:
+  * Add horizontal and diagonal scrolling through terminal mouse reporting,
+    including Shift-wheel horizontal scrolling and preserved wheel modifiers.
+  * Double-tap and hold the second tap to drag with the left mouse button when
+    application mouse reporting is enabled. Release the button on touch
+    cancellation, backgrounding or disconnect; ordinary swipes still scroll.
+  * Add Right click to the existing image long-press menu, sending the click
+    at the position where the menu was opened without removing the image.
+  * Prevent Android WebView from automatically zooming the terminal's hidden
+    input after native long-press paste, including at reduced viewport zoom.
+    Keep native paste, IME input and pinch zoom on the visible terminal.
+- Sync jsmdcui to 0.19.4:
+  * Restore Dockerfile highlighting and improve compatibility with Micro's
+    syntax definitions by translating Go regexp flags and POSIX character
+    classes while preserving scoped flags.
+  * Fix nested HTML/XML highlighting regions so quoted attributes return to
+    their enclosing tags and unfinished attributes retain state across lines.
+  * Use iterative region scanning to support long minified lines without
+    recursive stack exhaustion or truncating highlighting.
+  * Guard against zero-width region cycles, cyclic syntax/state trees and
+    excessively nested regexp conversion. Disable failing rules individually
+    instead of losing an entire syntax definition; retain support for long
+    lines. These guards do not impose timeouts on individual JavaScript regexps.
+
 ## 0.6.0 - 2026-10-25
 
 - Sync jsgotty to 1.3.0:

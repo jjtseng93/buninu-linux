@@ -1,0 +1,31 @@
+#INCLUDE
+VERSION
+a:
+GOTO a0
+CLASS a : a
+.a (
+ACTOR
+CLASS
+GOTO
+/
+(
+TRUE
+0.0
+0Xa
+0B0F
+"sample 42"
+"\""
+"\uaaaa"
+'sample 42'
+'\"'
+'\uaaaa'
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

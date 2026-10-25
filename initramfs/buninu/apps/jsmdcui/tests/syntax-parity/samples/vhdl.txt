@@ -1,0 +1,37 @@
+STRING
+LIBRARY a
+USE a
+COMPONENT a
+ARCHITECTURE a OF a
+ENTITY a IS
+END ARCHITECTURE a
+ABS
+BEGIN
+DISCONNECT
+FILE
+IF
+LABEL
+NAND
+PACKAGE
+RANGE
+SELECT
+THEN
+VARIABLE
+'BASE
+'REVERSE_RANGE
+'SIMPLE_NAME
+STD_MATCH
+TO_UNSIGNED
+/
+'0'
+0E-0 FS
+TRUE
+NOTE
+"a"
+--x
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

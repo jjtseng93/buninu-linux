@@ -1,0 +1,10 @@
+# TODO: build a small Bun application
+FROM oven/bun:1.4.4
+WORKDIR /app
+ENV NODE_ENV=production
+COPY . /app
+RUN echo "hello" && mkdir -p /app/data
+EXPOSE 8080
+CMD ["bun", "index.js"]
+# Dockerfile keywords are case-insensitive
+run echo 'lowercase works too'

@@ -1,0 +1,24 @@
+addrspace
+@a
+anyframe
+c_ushort
+!
+(
+null
+0b0
+true
+"sample 42"
+"\""
+'sample 42'
+'xx'
+'\"'
+\\sample 42
+\\\"
+//sample 42
+//TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

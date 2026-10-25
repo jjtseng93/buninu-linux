@@ -1,0 +1,48 @@
+a_
+/
+^
+addr
+lint
+prop
+prop+
+abstype
+classdec
+ifcase
+propdef
+viewtypedef
+abst0ype
+case+
+0E+0F
+0Xa.aP+0F
+0L
+fix
+fix@
+$a
+$arrpsz
+$effmask
+$list_vt
+$record_t
+$tuple_vt
+!wrt
+fun0
+fprintln!
+ # define
+ # codegen2
+true
+%{#sample 42%}
+"a"
+'a'
+////sample 42a
+////TODOa
+//sample 42
+//TODO
+(*sample 42*)
+(*TODO*)
+/*sample 42*/
+/*TODO*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

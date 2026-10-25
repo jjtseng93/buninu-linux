@@ -1,0 +1,29 @@
+<templatex>sample 42</templatex>
+<templatex><ax></templatex>
+<templatex></A x></templatex>
+<templatex></BODY x></templatex>
+<templatex></SCRIPT x></templatex>
+<templatex>&a];</templatex>
+<templatex>alt=</templatex>
+<templatex>:</templatex>
+<templatex>"a"</templatex>
+<templatex>#aaaaaa</templatex>
+<templatex><</templatex>
+<templatex>ftps://a</templatex>
+<templatex><!--x--></templatex>
+<templatex><!--sample 42--></templatex>
+<templatex></B-ALERT</templatex>
+<templatex>variant=</templatex>
+<templatex></COMPONENT</templatex>
+<templatex>v-text=</templatex>
+<templatex></ROUTER-LINK</templatex>
+<templatex>to=</templatex>
+<script>sample 42</script>
+<script lang="ts">sample 42</script>
+<stylex>sample 42</stylex>
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

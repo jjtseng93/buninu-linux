@@ -1,0 +1,31 @@
+Icon:
+BuildArch:
+Conflicts:
+Epoch:
+AutoReq:
+Copyright:
+Name:
+Sourcesample 42:
+i386
+ifarch
+"\x"
+%if
+%_a
+%{sample 42}
+%{__sample 42}
+$RPM_BUILD_ROOT>
+%build
+%files
+%pre
+%trigger
+#ax
+*x
+ 
+	 
+TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

@@ -1,0 +1,19 @@
+# deleted: x
+# deleted:
+# modified:
+# new file:
+# renamed:
+# Changesx:
+# Your branch and 'a
+# Your branch and '
+# On branch a
+# On branch
+FIXED #0
+#sample 42
+diff --gitsample 42ENDOFFILE
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

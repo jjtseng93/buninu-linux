@@ -1,0 +1,77 @@
+MOV
+BOUND
+ARPL
+BSF
+BSWAP
+CPUID
+RDPMC
+SYSCALL
+CMOVA
+MASKMOVQ
+CLFLUSH
+MONITOR
+CDQE
+CLGI
+VMPTRDL
+LZCNT
+BEXTR
+F2XM1
+FSETPM
+FCOS
+FCMOVB
+FCOMI
+FXRSTOR
+FISTTP
+FFREEP
+EMMS
+PAVEB
+FEMMS
+PF2IW
+PFRSQRTV
+ADDPS
+ANDNPS
+MOVUPS
+ADDPD
+MOVDQ2Q
+ADDSUBPD
+LDDQU
+PSIGNB
+DPPD
+MPSADBW
+EXTRQ
+CRC32
+VFMADDPD
+AESENC
+SHA1RNDS4
+AAD
+AH
+CW
+FP_DP
+MM0
+ST0
+XMM0
+YMM0
+ZMM0
+0
+0xa
+%+a
+%[a]
+EXTERN
+DB
+a:
+"sample 42"
+"\x"
+'sample 42'
+'\x'
+;sample 42
+;TODO:
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

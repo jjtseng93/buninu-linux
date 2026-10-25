@@ -349,3 +349,7 @@ printf '\033]52;c;%s\007' "$(printf 'Hello' | base64 | tr -d '\n')"
 Applications can send `ESC ] 52 ; c ; ? ST` to read and receive a base64-encoded OSC 52 reply on stdin.
 
 `jsgotty --client` **does not intercept OSC 52**: it forwards reads and writes unchanged for the outer terminal emulator to handle.
+
+### Touch dragging and right click
+
+When the application enables mouse reporting, double-tap and hold the second tap to drag with the left button; lifting your finger releases it. Single-finger swipes still scroll. The existing image long-press menu now includes `Right click` below `Remove image`; it sends a right click at the position where the menu was opened. Pinch zoom and the existing remove-image gesture remain unchanged. To disable double-tap dragging, set `window.touchDoubleTapDrag = false` in the page JavaScript.

@@ -15997,8 +15997,15 @@
                                 !1 === e._customWheelEventHandler(t)
                               )
                                 return !1;
-                              if (0 === e.viewport.getLinesScrolled(t))
-                                return !1;
+                              // Preserve both axes of diagonal wheel/touch gestures.
+                              // CoreMouseService already encodes wheel actions 2/3 as 66/67.
+                              if (t.deltaX) e.coreMouseService.triggerMouseEvent({
+                                col: i.col, row: i.row, x: i.x, y: i.y,
+                                button: 4, action: t.deltaX < 0 ? 2 : 3,
+                                ctrl: t.ctrlKey, alt: t.altKey, shift: t.shiftKey,
+                              });
+                              if (0 === e.viewport.getLinesScrolled(t, true))
+                                return !!t.deltaX;
                               ((s = t.deltaY < 0 ? 0 : 1), (r = 4));
                               break;
                             default:
@@ -16972,8 +16979,9 @@
                         }
                         return { bufferElements: s, cursorElement: i };
                       }
-                      getLinesScrolled(e) {
-                        if (0 === e.deltaY || e.shiftKey) return 0;
+                      getLinesScrolled(e, mouseReporting = false) {
+                        // Shift belongs to the remote application while mouse reporting is active.
+                        if (0 === e.deltaY || (e.shiftKey && !mouseReporting)) return 0;
                         let t = this._applyScrollModifier(e.deltaY, e);
                         return (
                           e.deltaMode === WheelEvent.DOM_DELTA_PIXEL

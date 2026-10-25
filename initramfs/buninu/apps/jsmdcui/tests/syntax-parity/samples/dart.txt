@@ -1,0 +1,27 @@
++10UL
++0.0E+0F
++0E+0F
+aa (
+break
+for
+switch
+true
+List
+int
+/
+/aaa/g
+\000
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+"sample 42"
+"\x"
+'sample 42'
+'\x'
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

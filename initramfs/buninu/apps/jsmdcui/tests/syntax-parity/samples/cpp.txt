@@ -1,0 +1,46 @@
+AA
+auto
+ssize_t
+aa_T
+final
+volatile
+class
+concept
+import
+for
+try
+goto
+ # define
+asm
+__attribute__ ((a))
+/
+(
+0ULL
+100ULL
+0000ULL
+0XaaaULL
+0B000ULL
+0.0E+0F
+0.0E+000F
+000.000E+0F
+000.000E+000F
+0Xa.aP+0F
+0Xa.aP+000F
+0Xaaa.aaaP+0F
+0Xaaa.aaaP+000F
+true
+"sample 42"
+"\a"
+'sample 42'
+'aa''
+'\a'
+//sample 42
+//TODO:
+/*sample 42*/
+/*TODO:*/
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

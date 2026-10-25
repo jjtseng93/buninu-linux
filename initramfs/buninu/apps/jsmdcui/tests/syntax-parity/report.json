@@ -1,0 +1,2174 @@
+{
+  "syntaxSource": "upstream",
+  "upstreamCommit": "6cf68963a6c0630b696c0e56ae61f733ab7129c0",
+  "excluded": [],
+  "results": [
+    {
+      "file": "PowerShell.yaml",
+      "filetype": "powershell",
+      "coloredMicro": 297,
+      "coloredJmi": 297,
+      "different": 1,
+      "examples": [
+        {
+          "line": 23,
+          "column": 2,
+          "text": "\"\\\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "ada.yaml",
+      "filetype": "ada",
+      "coloredMicro": 132,
+      "coloredJmi": 132,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "apacheconf.yaml",
+      "filetype": "apacheconf",
+      "coloredMicro": 566,
+      "coloredJmi": 566,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "arduino.yaml",
+      "filetype": "ino",
+      "coloredMicro": 300,
+      "coloredJmi": 300,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "asciidoc.yaml",
+      "filetype": "asciidoc",
+      "coloredMicro": 123,
+      "coloredJmi": 123,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "asm.yaml",
+      "filetype": "asm",
+      "coloredMicro": 450,
+      "coloredJmi": 450,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "ats.yaml",
+      "filetype": "ATS",
+      "coloredMicro": 365,
+      "coloredJmi": 367,
+      "different": 2,
+      "examples": [
+        {
+          "line": 32,
+          "column": 11,
+          "text": "%{#sample 42%}",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 32,
+          "column": 12,
+          "text": "%{#sample 42%}",
+          "micro": "default",
+          "jmi": "constant.number"
+        }
+      ]
+    },
+    {
+      "file": "awk.yaml",
+      "filetype": "awk",
+      "coloredMicro": 179,
+      "coloredJmi": 179,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "b.yaml",
+      "filetype": "B",
+      "coloredMicro": 185,
+      "coloredJmi": 185,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "bat.yaml",
+      "filetype": "batch",
+      "coloredMicro": 182,
+      "coloredJmi": 182,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "c.yaml",
+      "filetype": "c",
+      "coloredMicro": 283,
+      "coloredJmi": 283,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "caddyfile.yaml",
+      "filetype": "caddyfile",
+      "coloredMicro": 97,
+      "coloredJmi": 97,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "cake.yaml",
+      "filetype": "cake",
+      "coloredMicro": 76,
+      "coloredJmi": 76,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "clojure.yaml",
+      "filetype": "clojure",
+      "coloredMicro": 91,
+      "coloredJmi": 91,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "cmake.yaml",
+      "filetype": "cmake",
+      "coloredMicro": 117,
+      "coloredJmi": 117,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "coffeescript.yaml",
+      "filetype": "coffeescript",
+      "coloredMicro": 201,
+      "coloredJmi": 201,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "colortest.yaml",
+      "filetype": "colortest",
+      "coloredMicro": 99,
+      "coloredJmi": 99,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "conky.yaml",
+      "filetype": "conky",
+      "coloredMicro": 37,
+      "coloredJmi": 37,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "cpp.yaml",
+      "filetype": "c++",
+      "coloredMicro": 383,
+      "coloredJmi": 383,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "crontab.yaml",
+      "filetype": "crontab",
+      "coloredMicro": 62,
+      "coloredJmi": 62,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "crystal.yaml",
+      "filetype": "crystal",
+      "coloredMicro": 252,
+      "coloredJmi": 250,
+      "different": 2,
+      "examples": [
+        {
+          "line": 14,
+          "column": 11,
+          "text": "\"#{sample 42}\"",
+          "micro": "constant.number",
+          "jmi": "default"
+        },
+        {
+          "line": 14,
+          "column": 12,
+          "text": "\"#{sample 42}\"",
+          "micro": "constant.number",
+          "jmi": "default"
+        }
+      ]
+    },
+    {
+      "file": "csharp.yaml",
+      "filetype": "csharp",
+      "coloredMicro": 213,
+      "coloredJmi": 213,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "css.yaml",
+      "filetype": "css",
+      "coloredMicro": 187,
+      "coloredJmi": 187,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "csx.yaml",
+      "filetype": "csharp-script",
+      "coloredMicro": 71,
+      "coloredJmi": 71,
+      "different": 1,
+      "examples": [
+        {
+          "line": 1,
+          "column": 2,
+          "text": "#!",
+          "micro": "symbol.operator",
+          "jmi": "preproc"
+        }
+      ]
+    },
+    {
+      "file": "cuda.yaml",
+      "filetype": "cuda",
+      "coloredMicro": 262,
+      "coloredJmi": 262,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "cython.yaml",
+      "filetype": "cython",
+      "coloredMicro": 142,
+      "coloredJmi": 142,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "d.yaml",
+      "filetype": "d",
+      "coloredMicro": 452,
+      "coloredJmi": 452,
+      "different": 4,
+      "examples": [
+        {
+          "line": 27,
+          "column": 3,
+          "text": "r\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 27,
+          "column": 4,
+          "text": "r\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 31,
+          "column": 3,
+          "text": "x\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 31,
+          "column": 4,
+          "text": "x\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "dart.yaml",
+      "filetype": "dart",
+      "coloredMicro": 198,
+      "coloredJmi": 198,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "default.yaml",
+      "filetype": "unknown",
+      "coloredMicro": 37,
+      "coloredJmi": 37,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "dockerfile.yaml",
+      "filetype": "dockerfile",
+      "coloredMicro": 167,
+      "coloredJmi": 167,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "dot.yaml",
+      "filetype": "dot",
+      "coloredMicro": 125,
+      "coloredJmi": 125,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "elixir.yaml",
+      "filetype": "elixir",
+      "coloredMicro": 91,
+      "coloredJmi": 91,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "elm.yaml",
+      "filetype": "elm",
+      "coloredMicro": 129,
+      "coloredJmi": 129,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "erb.yaml",
+      "filetype": "erb",
+      "coloredMicro": 79,
+      "coloredJmi": 79,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "erlang.yaml",
+      "filetype": "erlang",
+      "coloredMicro": 128,
+      "coloredJmi": 128,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "fish.yaml",
+      "filetype": "fish",
+      "coloredMicro": 97,
+      "coloredJmi": 97,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "forth.yaml",
+      "filetype": "forth",
+      "coloredMicro": 125,
+      "coloredJmi": 125,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "fortran.yaml",
+      "filetype": "fortran",
+      "coloredMicro": 268,
+      "coloredJmi": 268,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "freebsd-kernel.yaml",
+      "filetype": "freebsd-kernel",
+      "coloredMicro": 70,
+      "coloredJmi": 70,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "fsharp.yaml",
+      "filetype": "fsharp",
+      "coloredMicro": 129,
+      "coloredJmi": 129,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gdscript.yaml",
+      "filetype": "gdscript",
+      "coloredMicro": 187,
+      "coloredJmi": 187,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gemini.yaml",
+      "filetype": "gemini",
+      "coloredMicro": 119,
+      "coloredJmi": 119,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gentoo-ebuild.yaml",
+      "filetype": "ebuild",
+      "coloredMicro": 146,
+      "coloredJmi": 146,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gentoo-etc-portage.yaml",
+      "filetype": "etc-portage",
+      "coloredMicro": 103,
+      "coloredJmi": 103,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "git-commit.yaml",
+      "filetype": "git-commit",
+      "coloredMicro": 146,
+      "coloredJmi": 146,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "git-config.yaml",
+      "filetype": "git-config",
+      "coloredMicro": 51,
+      "coloredJmi": 51,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "git-rebase-todo.yaml",
+      "filetype": "git-rebase-todo",
+      "coloredMicro": 29,
+      "coloredJmi": 29,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gleam.yaml",
+      "filetype": "gleam",
+      "coloredMicro": 239,
+      "coloredJmi": 299,
+      "different": 63,
+      "examples": [
+        {
+          "line": 17,
+          "column": 3,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 4,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 5,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 6,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 7,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 8,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "identifier"
+        },
+        {
+          "line": 17,
+          "column": 10,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 17,
+          "column": 11,
+          "text": "#(sample 42)",
+          "micro": "default",
+          "jmi": "constant.number"
+        }
+      ]
+    },
+    {
+      "file": "glsl.yaml",
+      "filetype": "glsl",
+      "coloredMicro": 145,
+      "coloredJmi": 145,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gnuplot.yaml",
+      "filetype": "gnuplot",
+      "coloredMicro": 44,
+      "coloredJmi": 44,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "go.yaml",
+      "filetype": "go",
+      "coloredMicro": 213,
+      "coloredJmi": 213,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "godoc.yaml",
+      "filetype": "godoc",
+      "coloredMicro": 114,
+      "coloredJmi": 114,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "golo.yaml",
+      "filetype": "golo",
+      "coloredMicro": 336,
+      "coloredJmi": 336,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "gomod.yaml",
+      "filetype": "gomod",
+      "coloredMicro": 138,
+      "coloredJmi": 138,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "graphql.yaml",
+      "filetype": "graphql",
+      "coloredMicro": 87,
+      "coloredJmi": 87,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "groff.yaml",
+      "filetype": "groff",
+      "coloredMicro": 71,
+      "coloredJmi": 71,
+      "different": 1,
+      "examples": [
+        {
+          "line": 1,
+          "column": 3,
+          "text": ".ds a]",
+          "micro": "statement",
+          "jmi": "type"
+        }
+      ]
+    },
+    {
+      "file": "groovy.yaml",
+      "filetype": "groovy",
+      "coloredMicro": 333,
+      "coloredJmi": 333,
+      "different": 2,
+      "examples": [
+        {
+          "line": 22,
+          "column": 13,
+          "text": "\"\"\"${sample 42}\"\"\"",
+          "micro": "constant.number",
+          "jmi": "identifier"
+        },
+        {
+          "line": 22,
+          "column": 14,
+          "text": "\"\"\"${sample 42}\"\"\"",
+          "micro": "constant.number",
+          "jmi": "identifier"
+        }
+      ]
+    },
+    {
+      "file": "haml.yaml",
+      "filetype": "haml",
+      "coloredMicro": 43,
+      "coloredJmi": 43,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "hare.yaml",
+      "filetype": "hare",
+      "coloredMicro": 179,
+      "coloredJmi": 179,
+      "different": 1,
+      "examples": [
+        {
+          "line": 16,
+          "column": 2,
+          "text": "'a'",
+          "micro": "constant.string",
+          "jmi": "error"
+        }
+      ]
+    },
+    {
+      "file": "haskell.yaml",
+      "filetype": "haskell",
+      "coloredMicro": 135,
+      "coloredJmi": 135,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "hc.yaml",
+      "filetype": "hc",
+      "coloredMicro": 186,
+      "coloredJmi": 186,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "html.yaml",
+      "filetype": "html",
+      "coloredMicro": 170,
+      "coloredJmi": 181,
+      "different": 12,
+      "examples": [
+        {
+          "line": 11,
+          "column": 3,
+          "text": "<a=>",
+          "micro": "symbol.tag",
+          "jmi": "symbol"
+        },
+        {
+          "line": 15,
+          "column": 17,
+          "text": "<scriptx>sample 42</scriptx>",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 15,
+          "column": 18,
+          "text": "<scriptx>sample 42</scriptx>",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 16,
+          "column": 9,
+          "text": "<stylex>sample 42</stylex>",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 16,
+          "column": 10,
+          "text": "<stylex>sample 42</stylex>",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 16,
+          "column": 11,
+          "text": "<stylex>sample 42</stylex>",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 16,
+          "column": 12,
+          "text": "<stylex>sample 42</stylex>",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 16,
+          "column": 13,
+          "text": "<stylex>sample 42</stylex>",
+          "micro": "default",
+          "jmi": "statement"
+        }
+      ]
+    },
+    {
+      "file": "html4.yaml",
+      "filetype": "html4",
+      "coloredMicro": 11,
+      "coloredJmi": 19,
+      "different": 9,
+      "examples": [
+        {
+          "line": 1,
+          "column": 2,
+          "text": "<ax>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 1,
+          "column": 3,
+          "text": "<ax>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 13,
+          "column": 1,
+          "text": "<!--x-->",
+          "micro": "symbol.tag",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 2,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 3,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 4,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 6,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        }
+      ]
+    },
+    {
+      "file": "html5.yaml",
+      "filetype": "html5",
+      "coloredMicro": 11,
+      "coloredJmi": 19,
+      "different": 9,
+      "examples": [
+        {
+          "line": 1,
+          "column": 2,
+          "text": "<ax>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 1,
+          "column": 3,
+          "text": "<ax>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 13,
+          "column": 1,
+          "text": "<!--x-->",
+          "micro": "symbol.tag",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 2,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 3,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 4,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        },
+        {
+          "line": 13,
+          "column": 6,
+          "text": "<!--x-->",
+          "micro": "default",
+          "jmi": "comment"
+        }
+      ]
+    },
+    {
+      "file": "ini.yaml",
+      "filetype": "ini",
+      "coloredMicro": 86,
+      "coloredJmi": 86,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "inputrc.yaml",
+      "filetype": "inputrc",
+      "coloredMicro": 37,
+      "coloredJmi": 37,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "java.yaml",
+      "filetype": "java",
+      "coloredMicro": 150,
+      "coloredJmi": 150,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "javascript.yaml",
+      "filetype": "javascript",
+      "coloredMicro": 296,
+      "coloredJmi": 296,
+      "different": 2,
+      "examples": [
+        {
+          "line": 33,
+          "column": 3,
+          "text": "/*\\x*/",
+          "micro": "comment",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 33,
+          "column": 4,
+          "text": "/*\\x*/",
+          "micro": "comment",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "jinja2.yaml",
+      "filetype": "jinja2",
+      "coloredMicro": 42,
+      "coloredJmi": 79,
+      "different": 37,
+      "examples": [
+        {
+          "line": 2,
+          "column": 1,
+          "text": "{%-sample 42-%}",
+          "micro": "default",
+          "jmi": "symbol.brackets"
+        },
+        {
+          "line": 2,
+          "column": 2,
+          "text": "{%-sample 42-%}",
+          "micro": "default",
+          "jmi": "symbol.operator"
+        },
+        {
+          "line": 2,
+          "column": 3,
+          "text": "{%-sample 42-%}",
+          "micro": "default",
+          "jmi": "symbol.operator"
+        },
+        {
+          "line": 2,
+          "column": 11,
+          "text": "{%-sample 42-%}",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 2,
+          "column": 12,
+          "text": "{%-sample 42-%}",
+          "micro": "default",
+          "jmi": "constant.number"
+        },
+        {
+          "line": 3,
+          "column": 4,
+          "text": "{%-ignore missing-%}",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 3,
+          "column": 5,
+          "text": "{%-ignore missing-%}",
+          "micro": "default",
+          "jmi": "statement"
+        },
+        {
+          "line": 3,
+          "column": 6,
+          "text": "{%-ignore missing-%}",
+          "micro": "default",
+          "jmi": "statement"
+        }
+      ]
+    },
+    {
+      "file": "json.yaml",
+      "filetype": "json",
+      "coloredMicro": 178,
+      "coloredJmi": 178,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "jsonnet.yaml",
+      "filetype": "jsonnet",
+      "coloredMicro": 249,
+      "coloredJmi": 249,
+      "different": 4,
+      "examples": [
+        {
+          "line": 15,
+          "column": 3,
+          "text": "@\"\\\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 15,
+          "column": 4,
+          "text": "@\"\\\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 17,
+          "column": 3,
+          "text": "@'\\''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 17,
+          "column": 4,
+          "text": "@'\\''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "julia.yaml",
+      "filetype": "julia",
+      "coloredMicro": 159,
+      "coloredJmi": 159,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "justfile.yaml",
+      "filetype": "justfile",
+      "coloredMicro": 146,
+      "coloredJmi": 146,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "keymap.yaml",
+      "filetype": "keymap",
+      "coloredMicro": 62,
+      "coloredJmi": 62,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "kickstart.yaml",
+      "filetype": "kickstart",
+      "coloredMicro": 53,
+      "coloredJmi": 53,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "kotlin.yaml",
+      "filetype": "kotlin",
+      "coloredMicro": 220,
+      "coloredJmi": 220,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "kvlang.yaml",
+      "filetype": "kvlang",
+      "coloredMicro": 256,
+      "coloredJmi": 256,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "ledger.yaml",
+      "filetype": "ledger",
+      "coloredMicro": 42,
+      "coloredJmi": 42,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "lfe.yaml",
+      "filetype": "lfe",
+      "coloredMicro": 51,
+      "coloredJmi": 51,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "lilypond.yaml",
+      "filetype": "lilypond",
+      "coloredMicro": 68,
+      "coloredJmi": 68,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "lisp.yaml",
+      "filetype": "lisp",
+      "coloredMicro": 32,
+      "coloredJmi": 32,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "log.yaml",
+      "filetype": "log",
+      "coloredMicro": 459,
+      "coloredJmi": 459,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "lua.yaml",
+      "filetype": "lua",
+      "coloredMicro": 490,
+      "coloredJmi": 490,
+      "different": 5,
+      "examples": [
+        {
+          "line": 34,
+          "column": 6,
+          "text": "--[=[TODO:]=]",
+          "micro": "comment.block",
+          "jmi": "todo"
+        },
+        {
+          "line": 34,
+          "column": 7,
+          "text": "--[=[TODO:]=]",
+          "micro": "comment.block",
+          "jmi": "todo"
+        },
+        {
+          "line": 34,
+          "column": 8,
+          "text": "--[=[TODO:]=]",
+          "micro": "comment.block",
+          "jmi": "todo"
+        },
+        {
+          "line": 34,
+          "column": 9,
+          "text": "--[=[TODO:]=]",
+          "micro": "comment.block",
+          "jmi": "todo"
+        },
+        {
+          "line": 34,
+          "column": 10,
+          "text": "--[=[TODO:]=]",
+          "micro": "comment.block",
+          "jmi": "todo"
+        }
+      ]
+    },
+    {
+      "file": "mail.yaml",
+      "filetype": "mail",
+      "coloredMicro": 70,
+      "coloredJmi": 70,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "makefile.yaml",
+      "filetype": "makefile",
+      "coloredMicro": 142,
+      "coloredJmi": 142,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "man.yaml",
+      "filetype": "man",
+      "coloredMicro": 20,
+      "coloredJmi": 20,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "markdown.yaml",
+      "filetype": "markdown",
+      "coloredMicro": 159,
+      "coloredJmi": 159,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "mc.yaml",
+      "filetype": "mc",
+      "coloredMicro": 62,
+      "coloredJmi": 62,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "meson.yaml",
+      "filetype": "meson",
+      "coloredMicro": 226,
+      "coloredJmi": 226,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "micro.yaml",
+      "filetype": "micro",
+      "coloredMicro": 200,
+      "coloredJmi": 200,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "mpdconf.yaml",
+      "filetype": "mpd",
+      "coloredMicro": 53,
+      "coloredJmi": 53,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "msbuild.yaml",
+      "filetype": "msbuild",
+      "coloredMicro": 164,
+      "coloredJmi": 164,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "nanorc.yaml",
+      "filetype": "nanorc",
+      "coloredMicro": 78,
+      "coloredJmi": 78,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "nftables.yaml",
+      "filetype": "nftables",
+      "coloredMicro": 96,
+      "coloredJmi": 96,
+      "different": 1,
+      "examples": [
+        {
+          "line": 18,
+          "column": 8,
+          "text": "\"hello\" # comment",
+          "micro": "indent-char.whitespace",
+          "jmi": "comment"
+        }
+      ]
+    },
+    {
+      "file": "nginx.yaml",
+      "filetype": "nginx",
+      "coloredMicro": 68,
+      "coloredJmi": 68,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "nim.yaml",
+      "filetype": "nim",
+      "coloredMicro": 113,
+      "coloredJmi": 113,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "nix.yaml",
+      "filetype": "nix",
+      "coloredMicro": 123,
+      "coloredJmi": 123,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "nu.yaml",
+      "filetype": "nu",
+      "coloredMicro": 773,
+      "coloredJmi": 773,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "objc.yaml",
+      "filetype": "objective-c",
+      "coloredMicro": 265,
+      "coloredJmi": 265,
+      "different": 12,
+      "examples": [
+        {
+          "line": 15,
+          "column": 1,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 2,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 3,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 4,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 5,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 6,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 7,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        },
+        {
+          "line": 15,
+          "column": 8,
+          "text": " # import \"x/\" ",
+          "micro": "preproc",
+          "jmi": "special"
+        }
+      ]
+    },
+    {
+      "file": "ocaml.yaml",
+      "filetype": "ocaml",
+      "coloredMicro": 104,
+      "coloredJmi": 104,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "octave.yaml",
+      "filetype": "octave",
+      "coloredMicro": 206,
+      "coloredJmi": 206,
+      "different": 2,
+      "examples": [
+        {
+          "line": 14,
+          "column": 2,
+          "text": "\"%\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 19,
+          "column": 2,
+          "text": "'%'",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "odin.yaml",
+      "filetype": "odin",
+      "coloredMicro": 217,
+      "coloredJmi": 217,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "pascal.yaml",
+      "filetype": "pascal",
+      "coloredMicro": 169,
+      "coloredJmi": 169,
+      "different": 2,
+      "examples": [
+        {
+          "line": 10,
+          "column": 3,
+          "text": "#0\\x",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 10,
+          "column": 4,
+          "text": "#0\\x",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "patch.yaml",
+      "filetype": "patch",
+      "coloredMicro": 22,
+      "coloredJmi": 22,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "peg.yaml",
+      "filetype": "peg",
+      "coloredMicro": 52,
+      "coloredJmi": 52,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "perl.yaml",
+      "filetype": "perl",
+      "coloredMicro": 239,
+      "coloredJmi": 239,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "php.yaml",
+      "filetype": "php",
+      "coloredMicro": 283,
+      "coloredJmi": 287,
+      "different": 16,
+      "examples": [
+        {
+          "line": 13,
+          "column": 1,
+          "text": "ftps://a",
+          "micro": "default",
+          "jmi": "constant.string.url"
+        },
+        {
+          "line": 13,
+          "column": 2,
+          "text": "ftps://a",
+          "micro": "default",
+          "jmi": "constant.string.url"
+        },
+        {
+          "line": 13,
+          "column": 3,
+          "text": "ftps://a",
+          "micro": "default",
+          "jmi": "constant.string.url"
+        },
+        {
+          "line": 13,
+          "column": 4,
+          "text": "ftps://a",
+          "micro": "default",
+          "jmi": "constant.string.url"
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "text": "ftps://a",
+          "micro": "symbol",
+          "jmi": "constant.string.url"
+        },
+        {
+          "line": 15,
+          "column": 1,
+          "text": "<?php\" end=\"?>",
+          "micro": "preproc",
+          "jmi": "default"
+        },
+        {
+          "line": 15,
+          "column": 2,
+          "text": "<?php\" end=\"?>",
+          "micro": "preproc",
+          "jmi": "default"
+        },
+        {
+          "line": 15,
+          "column": 3,
+          "text": "<?php\" end=\"?>",
+          "micro": "preproc",
+          "jmi": "default"
+        }
+      ]
+    },
+    {
+      "file": "pkg-config.yaml",
+      "filetype": "pc",
+      "coloredMicro": 32,
+      "coloredJmi": 32,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "po.yaml",
+      "filetype": "po",
+      "coloredMicro": 34,
+      "coloredJmi": 34,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "pony.yaml",
+      "filetype": "pony",
+      "coloredMicro": 156,
+      "coloredJmi": 156,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "pov.yaml",
+      "filetype": "pov",
+      "coloredMicro": 126,
+      "coloredJmi": 126,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "privoxy-action.yaml",
+      "filetype": "privoxy-action",
+      "coloredMicro": 56,
+      "coloredJmi": 56,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "privoxy-config.yaml",
+      "filetype": "privoxy-config",
+      "coloredMicro": 44,
+      "coloredJmi": 44,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "privoxy-filter.yaml",
+      "filetype": "privoxy-filter",
+      "coloredMicro": 34,
+      "coloredJmi": 34,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "proto.yaml",
+      "filetype": "proto",
+      "coloredMicro": 152,
+      "coloredJmi": 152,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "prql.yaml",
+      "filetype": "prql",
+      "coloredMicro": 293,
+      "coloredJmi": 293,
+      "different": 12,
+      "examples": [
+        {
+          "line": 24,
+          "column": 5,
+          "text": "f\"\"\"\\000\"\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 24,
+          "column": 6,
+          "text": "f\"\"\"\\000\"\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 24,
+          "column": 7,
+          "text": "f\"\"\"\\000\"\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 24,
+          "column": 8,
+          "text": "f\"\"\"\\000\"\"\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 27,
+          "column": 5,
+          "text": "f'''\\000'''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 27,
+          "column": 6,
+          "text": "f'''\\000'''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 27,
+          "column": 7,
+          "text": "f'''\\000'''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 27,
+          "column": 8,
+          "text": "f'''\\000'''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "puppet.yaml",
+      "filetype": "puppet",
+      "coloredMicro": 86,
+      "coloredJmi": 86,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "python2.yaml",
+      "filetype": "python2",
+      "coloredMicro": 148,
+      "coloredJmi": 148,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "python3.yaml",
+      "filetype": "python",
+      "coloredMicro": 174,
+      "coloredJmi": 174,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "r.yaml",
+      "filetype": "r",
+      "coloredMicro": 87,
+      "coloredJmi": 87,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "raku.yaml",
+      "filetype": "raku",
+      "coloredMicro": 120,
+      "coloredJmi": 120,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "reST.yaml",
+      "filetype": "rst",
+      "coloredMicro": 42,
+      "coloredJmi": 42,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "renpy.yaml",
+      "filetype": "renpy",
+      "coloredMicro": 56,
+      "coloredJmi": 56,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "rpmspec.yaml",
+      "filetype": "rpmspec",
+      "coloredMicro": 191,
+      "coloredJmi": 191,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "ruby.yaml",
+      "filetype": "ruby",
+      "coloredMicro": 285,
+      "coloredJmi": 285,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "rust.yaml",
+      "filetype": "rust",
+      "coloredMicro": 250,
+      "coloredJmi": 250,
+      "different": 2,
+      "examples": [
+        {
+          "line": 10,
+          "column": 3,
+          "text": "b\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 10,
+          "column": 4,
+          "text": "b\"\\x\"",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "sage.yaml",
+      "filetype": "sage",
+      "coloredMicro": 148,
+      "coloredJmi": 148,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "scad.yaml",
+      "filetype": "OpenSCAD",
+      "coloredMicro": 173,
+      "coloredJmi": 173,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "scala.yaml",
+      "filetype": "scala",
+      "coloredMicro": 152,
+      "coloredJmi": 152,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "sed.yaml",
+      "filetype": "sed",
+      "coloredMicro": 27,
+      "coloredJmi": 27,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "sh.yaml",
+      "filetype": "shell",
+      "coloredMicro": 99,
+      "coloredJmi": 99,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "sls.yaml",
+      "filetype": "salt",
+      "coloredMicro": 48,
+      "coloredJmi": 48,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "smalltalk.yaml",
+      "filetype": "smalltalk",
+      "coloredMicro": 239,
+      "coloredJmi": 239,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "solidity.yaml",
+      "filetype": "solidity",
+      "coloredMicro": 230,
+      "coloredJmi": 230,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "sql.yaml",
+      "filetype": "sql",
+      "coloredMicro": 169,
+      "coloredJmi": 169,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "stata.yaml",
+      "filetype": "stata",
+      "coloredMicro": 244,
+      "coloredJmi": 246,
+      "different": 10,
+      "examples": [
+        {
+          "line": 2,
+          "column": 10,
+          "text": "`\"`sample 42'\"'",
+          "micro": "default",
+          "jmi": "identifier.macro"
+        },
+        {
+          "line": 2,
+          "column": 11,
+          "text": "`\"`sample 42'\"'",
+          "micro": "constant.number",
+          "jmi": "identifier.macro"
+        },
+        {
+          "line": 2,
+          "column": 12,
+          "text": "`\"`sample 42'\"'",
+          "micro": "constant.number",
+          "jmi": "identifier.macro"
+        },
+        {
+          "line": 3,
+          "column": 3,
+          "text": "`\"$a\"'",
+          "micro": "constant.string",
+          "jmi": "identifier.macro"
+        },
+        {
+          "line": 3,
+          "column": 4,
+          "text": "`\"$a\"'",
+          "micro": "constant.string",
+          "jmi": "identifier.macro"
+        },
+        {
+          "line": 4,
+          "column": 3,
+          "text": "`\"\\x\"'",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 4,
+          "column": 4,
+          "text": "`\"\\x\"'",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 6,
+          "column": 9,
+          "text": "\"`sample 42'\"",
+          "micro": "default",
+          "jmi": "identifier.macro"
+        }
+      ]
+    },
+    {
+      "file": "svelte.yaml",
+      "filetype": "svelte",
+      "coloredMicro": 46,
+      "coloredJmi": 46,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "swift.yaml",
+      "filetype": "swift",
+      "coloredMicro": 467,
+      "coloredJmi": 467,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "systemd.yaml",
+      "filetype": "systemd",
+      "coloredMicro": 61,
+      "coloredJmi": 61,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "tcl.yaml",
+      "filetype": "tcl",
+      "coloredMicro": 71,
+      "coloredJmi": 71,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "terraform.yaml",
+      "filetype": "terraform",
+      "coloredMicro": 198,
+      "coloredJmi": 198,
+      "different": 4,
+      "examples": [
+        {
+          "line": 14,
+          "column": 3,
+          "text": "''%x''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 14,
+          "column": 4,
+          "text": "''%x''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 15,
+          "column": 3,
+          "text": "''\\a''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        },
+        {
+          "line": 15,
+          "column": 4,
+          "text": "''\\a''",
+          "micro": "constant.string",
+          "jmi": "constant.specialChar"
+        }
+      ]
+    },
+    {
+      "file": "tex.yaml",
+      "filetype": "tex",
+      "coloredMicro": 177,
+      "coloredJmi": 177,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "toml.yaml",
+      "filetype": "toml",
+      "coloredMicro": 286,
+      "coloredJmi": 286,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "twig.yaml",
+      "filetype": "twig",
+      "coloredMicro": 259,
+      "coloredJmi": 259,
+      "different": 12,
+      "examples": [
+        {
+          "line": 2,
+          "column": 4,
+          "text": "{{ abs }}",
+          "micro": "symbol.tag",
+          "jmi": "identifier"
+        },
+        {
+          "line": 2,
+          "column": 5,
+          "text": "{{ abs }}",
+          "micro": "symbol.tag",
+          "jmi": "identifier"
+        },
+        {
+          "line": 2,
+          "column": 6,
+          "text": "{{ abs }}",
+          "micro": "symbol.tag",
+          "jmi": "identifier"
+        },
+        {
+          "line": 4,
+          "column": 4,
+          "text": "{{ and }}",
+          "micro": "symbol.tag",
+          "jmi": "type.keyword"
+        },
+        {
+          "line": 4,
+          "column": 5,
+          "text": "{{ and }}",
+          "micro": "symbol.tag",
+          "jmi": "type.keyword"
+        },
+        {
+          "line": 4,
+          "column": 6,
+          "text": "{{ and }}",
+          "micro": "symbol.tag",
+          "jmi": "type.keyword"
+        },
+        {
+          "line": 13,
+          "column": 4,
+          "text": "{% abs %}",
+          "micro": "symbol.tag",
+          "jmi": "identifier"
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "text": "{% abs %}",
+          "micro": "symbol.tag",
+          "jmi": "identifier"
+        }
+      ]
+    },
+    {
+      "file": "typescript.yaml",
+      "filetype": "typescript",
+      "coloredMicro": 237,
+      "coloredJmi": 237,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "v.yaml",
+      "filetype": "v",
+      "coloredMicro": 90,
+      "coloredJmi": 89,
+      "different": 1,
+      "examples": [
+        {
+          "line": 15,
+          "column": 2,
+          "text": "[x]",
+          "micro": "symbol.attribute",
+          "jmi": "default"
+        }
+      ]
+    },
+    {
+      "file": "vala.yaml",
+      "filetype": "vala",
+      "coloredMicro": 123,
+      "coloredJmi": 123,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "verilog.yaml",
+      "filetype": "verilog",
+      "coloredMicro": 269,
+      "coloredJmi": 269,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "vhdl.yaml",
+      "filetype": "vhdl",
+      "coloredMicro": 253,
+      "coloredJmi": 253,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "vi.yaml",
+      "filetype": "vi",
+      "coloredMicro": 80,
+      "coloredJmi": 80,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "vue.yaml",
+      "filetype": "vue",
+      "coloredMicro": 533,
+      "coloredJmi": 640,
+      "different": 109,
+      "examples": [
+        {
+          "line": 2,
+          "column": 13,
+          "text": "<templatex><ax></templatex>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 2,
+          "column": 14,
+          "text": "<templatex><ax></templatex>",
+          "micro": "default",
+          "jmi": "error"
+        },
+        {
+          "line": 4,
+          "column": 13,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        },
+        {
+          "line": 4,
+          "column": 14,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        },
+        {
+          "line": 4,
+          "column": 15,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        },
+        {
+          "line": 4,
+          "column": 16,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        },
+        {
+          "line": 4,
+          "column": 17,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        },
+        {
+          "line": 4,
+          "column": 18,
+          "text": "<templatex></BODY x></templatex>",
+          "micro": "default",
+          "jmi": "symbol.tag.extended"
+        }
+      ]
+    },
+    {
+      "file": "xml.yaml",
+      "filetype": "xml",
+      "coloredMicro": 110,
+      "coloredJmi": 110,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "xresources.yaml",
+      "filetype": "xresources",
+      "coloredMicro": 33,
+      "coloredJmi": 33,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "yaml.yaml",
+      "filetype": "yaml",
+      "coloredMicro": 106,
+      "coloredJmi": 106,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "yum.yaml",
+      "filetype": "yum",
+      "coloredMicro": 42,
+      "coloredJmi": 42,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "zig.yaml",
+      "filetype": "zig",
+      "coloredMicro": 153,
+      "coloredJmi": 153,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "zscript.yaml",
+      "filetype": "zscript",
+      "coloredMicro": 229,
+      "coloredJmi": 229,
+      "different": 0,
+      "examples": []
+    },
+    {
+      "file": "zsh.yaml",
+      "filetype": "zsh",
+      "coloredMicro": 125,
+      "coloredJmi": 125,
+      "different": 0,
+      "examples": []
+    }
+  ]
+}

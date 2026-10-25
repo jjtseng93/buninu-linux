@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { escapesSlashTags } from "./markdown-behavior.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,7 +40,7 @@ test("--check exits 0 and reports unique IDs", async () => {
 });
 
 test("--check fails closed when browser heading parsing is ambiguous", async () => {
-  const result = await runCheck('<div/a< x=">TAIL\n\n# 中文\n');
+  const result = await runCheck('<div x=">TAIL\n\n# 中文\n');
   expect(result.exitCode).toBe(2);
   expect(result.stderr.toString()).toContain(
     "Markdown headings could not be classified safely",
@@ -359,15 +360,37 @@ test("--check ignores heading-looking text inside raw attributes", async () => {
   expect(output).toContain("FAILED");
 });
 
-test("--check preserves slash-separated raw heading attributes", async () => {
+test("--check follows Bun's slash-separated raw heading behavior", async () => {
   const result = await runCheck("<h1/id=中文>Raw</h1>\n\n# 中文\n");
   const output = Bun.stripANSI(result.stdout.toString());
-  expect(result.exitCode).toBe(1);
-  expect(output).toContain("ID #中文");
-  expect(output).toContain("Type: raw HTML heading");
-  expect(output).toContain("Type: heading");
-  expect(output).toContain("FAILED");
+  expect(result.exitCode).toBe(escapesSlashTags ? 0 : 1);
+  if (escapesSlashTags) {
+    expect(output).toContain("Selectable IDs: 1");
+    expect(output).toContain("PASSED");
+    expect(output).not.toContain("Type: raw HTML heading");
+  } else {
+    expect(output).toContain("ID #中文");
+    expect(output).toContain("Type: raw HTML heading");
+    expect(output).toContain("Type: heading");
+    expect(output).toContain("FAILED");
+  }
 });
+
+for (const [command, run] of [["--check", runCheck], ["--outline", runOutline]]) {
+  test(`${command} follows Bun's slash-tag ambiguity behavior`, async () => {
+    const result = await run('<div/a< x=">TAIL\n\n# 中文\n');
+    expect(result.exitCode).toBe(escapesSlashTags ? 0 : 2);
+    if (escapesSlashTags) {
+      expect(result.stderr.toString()).toBe("");
+      if (command === "--check") expect(result.stdout.toString()).toContain("PASSED");
+      else expect(result.stdout.toString()).toContain("中文");
+    } else {
+      expect(result.stderr.toString()).toContain("Markdown headings could not be classified safely");
+      expect(result.stdout.toString()).not.toContain("PASSED");
+      if (command === "--outline") expect(result.stdout.toString()).toBe("");
+    }
+  });
+}
 
 test("--check ignores heading-like custom tag names", async () => {
   const result = await runCheck(
@@ -494,7 +517,7 @@ value
 });
 
 test("--outline fails closed when browser heading parsing is ambiguous", async () => {
-  const result = await runOutline('<div/a< x=">TAIL\n\n# 中文\n');
+  const result = await runOutline('<div x=">TAIL\n\n# 中文\n');
   expect(result.exitCode).toBe(2);
   expect(result.stderr.toString()).toContain(
     "Markdown headings could not be classified safely",

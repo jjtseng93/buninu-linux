@@ -1,0 +1,92 @@
+/
+agg-groups
+ansi strip
+arg-min
+as-datetime
+char
+concatenate
+count
+date list-timezone
+date to-timezone
+db describe
+db open
+db select
+def-env
+df-not
+drop-nulls
+enter
+export alias
+export extern
+fill-null
+fmt
+from ics
+from toml
+from yaml
+get-month
+get-weekday
+group
+headers
+inc
+into duration
+is-admin
+is-null
+keep while
+keybindings
+lines
+math avg
+math median
+math sqrt
+mean
+min
+nth
+overlay add
+par-each
+path expand
+path type
+quantile
+random chars
+random uuid
+replace
+roll left
+run-external
+seq date
+size
+sort-by
+split-by
+str collect
+str index-of
+str replace
+str snake-case
+str to-datetime
+str-lengths
+take until
+to html
+to url
+to-lowercase
+transpose
+upsert
+use
+when
+false
++10
++0x[a]
++0BiB
++0ms
++0sec
+0-0-0T0:0:0+0:0
+0..0
+..0
+0..
+#sample 42
+/*sample 42*/
+/*FIXME:*/
+"sample 42"
+"\x"
+'sample 42'
+'\x'
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

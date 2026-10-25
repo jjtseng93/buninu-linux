@@ -1,0 +1,31 @@
+AA
+bool
+f32
+case
+continue
+as
+abort
+use x;
+@aa
+false
+0xai8
+0o0i8
+0b0i8
+"x"
+`x`
+'a'
+/
+(
+"sample 42"
+"\a"
+'sample 42'
+'xx'
+'\a'
+//sample 42
+//TODO:
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path

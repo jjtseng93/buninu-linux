@@ -2,6 +2,50 @@
 
 All notable user-visible changes to jsmdcui are documented here.
 
+## [0.19.4] - 2026-10-26
+
+### Fixed
+
+- Catch failures during Go regexp conversion as well as compilation, and
+  bound the converter's nested-group recursion. An excessively nested rule
+  is disabled individually instead of throwing from `SyntaxDefinition` or
+  causing the loader to silently discard the entire syntax definition.
+  Other rules remain usable; this does not limit input line length.
+
+## [0.19.3] - 2026-10-26
+
+### Fixed
+
+- Restore Dockerfile highlighting and improve compatibility with Micro's
+  syntax definitions by translating Go regular-expression flags and POSIX
+  character classes into JavaScript equivalents. Scoped flags retain their
+  scope rather than changing the entire expression.
+- Fix nested highlighting regions, especially HTML and XML attributes:
+  closing a quoted attribute now returns to the surrounding tag, and closing
+  the tag returns to normal text. Unfinished attributes still carry their
+  highlighting state across lines.
+- Replace recursive region scanning with an iterative scanner so long,
+  minified lines can be highlighted through their final token without stack
+  exhaustion or truncation.
+- Prevent zero-width region cycles and cyclic syntax/state trees from looping
+  indefinitely. Zero-width matches advance safely over Unicode characters,
+  and NUL characters or isolated surrogate units do not leak region state.
+  These guards do not impose a timeout on an individual JavaScript RegExp.
+
+### Added
+
+- Add syntax samples and a reproducible comparison against Micro's Go
+  highlighter, including JavaScript, Python and Markdown with upstream syntax
+  definitions. See [the comparison guide](tests/syntax-parity/README.md) for
+  generating the HTML comparison locally; generated HTML is not bundled.
+
+### Changed
+
+- Markdown heading tests detect Bun's actual raw-HTML parsing behavior instead
+  of relying on version checks, accommodating the slash-tag behavior change
+  while preserving fail-closed coverage. The heading suites were verified on
+  Bun 1.4.0 through 1.4.4.
+
 ## [0.19.2] - 2026-09-21
 
 ### Added

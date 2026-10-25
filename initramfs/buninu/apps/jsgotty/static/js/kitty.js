@@ -561,6 +561,26 @@
     state.renderBound = state.renderDisposables.length > 0;
   }
 
+  // Touch gestures report mouse input without DOM mousedown: xterm's DOM
+  // handler focuses its hidden textarea, which can zoom Android WebView.
+  function reportTouchMouse(type, point, button = 0) {
+    const core = terminal?.__gottyXterm?._core;
+    if (!core?.coreMouseService?.areMouseEventsActive) return;
+    const screen = core.screenElement;
+    if (!screen) return;
+    const rect = screen.getBoundingClientRect();
+    const coords = core._mouseService.getMouseReportCoords({
+      clientX: Math.max(rect.left, Math.min(rect.right - 1, point.clientX)),
+      clientY: Math.max(rect.top, Math.min(rect.bottom - 1, point.clientY)),
+    }, screen);
+    if (!coords) return;
+    core.coreMouseService.triggerMouseEvent({
+      ...coords, button,
+      action: type === "mousedown" ? 1 : type === "mousemove" ? 32 : 0,
+      ctrl: false, alt: false, shift: false,
+    });
+  }
+
   function dispatchSyntheticWheel(target, touch, deltaX, deltaY) {
     if (!target) {
       return;
@@ -597,22 +617,69 @@
       return screen || viewport || xterm || terminal;
     };
 
+    let lastTap = null;
+    let drag = null;
+    const mouse = (type, point) => reportTouchMouse(type, point);
+    const releaseDrag = () => {
+      if (drag) {
+        const point = drag;
+        drag = null;
+        mouse("mouseup", point);
+      }
+    };
+    const cancelGesture = () => {
+      releaseDrag();
+      lastTap = null;
+      state.touchScroll = null;
+    };
+    state.cancelTouchGesture = cancelGesture;
+    bindTarget.addEventListener("contextmenu", (event) => {
+      if (drag) { event.preventDefault(); event.stopImmediatePropagation(); }
+    }, true);
+    window.addEventListener("blur", cancelGesture);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) cancelGesture();
+    });
+
     bindTarget.addEventListener("touchstart", (event) => {
       if (event.touches.length !== 1) {
-        state.touchScroll = null;
+        cancelGesture();
         return;
       }
       const touch = event.touches[0];
+      const reporting = terminal.__gottyXterm?._core?.coreMouseService?.areMouseEventsActive;
+      if (reporting && window.touchDoubleTapDrag !== false && lastTap &&
+          performance.now() - lastTap.time < 350 &&
+          Math.hypot(touch.clientX - lastTap.x, touch.clientY - lastTap.y) < 24) {
+        lastTap = null;
+        state.touchScroll = null;
+        drag = { identifier: touch.identifier, clientX: touch.clientX, clientY: touch.clientY };
+        // Cancel compatibility mouse events: this is the second press, not a third click.
+        event.preventDefault();
+        mouse("mousedown", drag);
+        return;
+      }
+      lastTap = null;
       state.touchScroll = {
+        startX: touch.clientX, startY: touch.clientY, startTime: performance.now(), moved: false,
         identifier: touch.identifier,
         lastX: touch.clientX,
         lastY: touch.clientY,
         residualX: 0,
         residualY: 0
       };
-    }, { passive: true });
+    }, { passive: false });
 
     bindTarget.addEventListener("touchmove", (event) => {
+      if (drag) {
+        const touch = Array.from(event.touches).find(t => t.identifier === drag.identifier);
+        if (!touch || event.touches.length !== 1) { cancelGesture(); return; }
+        event.preventDefault();
+        drag.clientX = touch.clientX;
+        drag.clientY = touch.clientY;
+        mouse("mousemove", drag);
+        return;
+      }
       if (!state.touchScroll) {
         return;
       }
@@ -621,6 +688,8 @@
         return;
       }
 
+      if (Math.hypot(touch.clientX - state.touchScroll.startX,
+          touch.clientY - state.touchScroll.startY) > 8) state.touchScroll.moved = true;
       const deltaX = state.touchScroll.lastX - touch.clientX;
       const deltaY = state.touchScroll.lastY - touch.clientY;
       state.touchScroll.lastX = touch.clientX;
@@ -653,11 +722,20 @@
       state.touchScroll.residualY -= ticksY * threshold * stepY;
     }, { passive: false });
 
-    const clearTouchScroll = () => {
+    bindTarget.addEventListener("touchend", (event) => {
+      if (drag) {
+        event.preventDefault();
+        releaseDrag();
+      } else {
+        const scroll = state.touchScroll;
+        if (scroll && !scroll.moved && event.touches.length === 0 &&
+            performance.now() - scroll.startTime < 350) {
+          lastTap = { x: scroll.lastX, y: scroll.lastY, time: performance.now() };
+        }
+      }
       state.touchScroll = null;
-    };
-    bindTarget.addEventListener("touchend", clearTouchScroll, { passive: true });
-    bindTarget.addEventListener("touchcancel", clearTouchScroll, { passive: true });
+    }, { passive: false });
+    bindTarget.addEventListener("touchcancel", cancelGesture, { passive: true });
     state.touchBound = true;
   }
 
@@ -676,9 +754,25 @@
     removeButton.textContent = "Remove image";
     menu.appendChild(removeButton);
 
+    const separator = document.createElement("hr");
+    const rightButton = document.createElement("button");
+    rightButton.type = "button";
+    rightButton.className = "kitty-context-menu__item";
+    rightButton.textContent = "Right click";
+    menu.append(separator, rightButton);
+    rightButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const point = state.contextMenu?.point;
+      hideContextMenu();
+      if (!point || !terminal.__gottyXterm?._core?.coreMouseService?.areMouseEventsActive) return;
+      reportTouchMouse("mousedown", { clientX: point.x, clientY: point.y }, 2);
+      reportTouchMouse("mouseup", { clientX: point.x, clientY: point.y }, 2);
+    });
+
     state.contextMenu = {
       root: menu,
-      removeButton,
+      removeButton, rightButton, separator,
       targetKey: null
     };
 
@@ -722,6 +816,9 @@
   function showContextMenu(x, y, key) {
     const menu = ensureContextMenu();
     menu.targetKey = key;
+    menu.point = { x, y };
+    const reporting = !!terminal.__gottyXterm?._core?.coreMouseService?.areMouseEventsActive;
+    menu.rightButton.hidden = menu.separator.hidden = !reporting;
     menu.root.hidden = false;
 
     const margin = 10;
@@ -1004,6 +1101,15 @@
     return false;
   }
 
+  const watchedSockets = new WeakSet();
+  function watchTouchSocket(socket) {
+    if (watchedSockets.has(socket)) return;
+    watchedSockets.add(socket);
+    socket.addEventListener("close", () => {
+      if (state.socket === socket) state.cancelTouchGesture?.();
+    });
+  }
+
   const nativeSend = WebSocket.prototype.send;
   const nativeOnOpen = WebSocket.prototype.addEventListener;
   WebSocket.prototype.addEventListener = function (type, listener, options) {
@@ -1012,6 +1118,7 @@
     }
       const wrapped = function (event) {
         state.socket = this;
+        watchTouchSocket(this);
         inspectTerminalOutput(event.data);
         if (typeof event.data === "string" && event.data[0] === MSG_KITTY) {
           if (handleKittyMessage(event.data.slice(1))) {
@@ -1058,6 +1165,7 @@
       }
       const wrapped = function (event) {
         state.socket = this;
+        watchTouchSocket(this);
         inspectTerminalOutput(event.data);
         if (typeof event.data === "string" && event.data[0] === MSG_KITTY) {
           if (handleKittyMessage(event.data.slice(1))) {

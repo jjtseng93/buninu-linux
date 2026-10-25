@@ -1,0 +1,35 @@
+ALL
+BETWEEN
+CHANGE
+DATABASES
+ENCLOSED
+FIELDS
+GROUP
+IGNORE
+JOIN
+LEADING
+MODIFY
+OPTIMIZE
+PROCEDURE
+READ
+SHOW
+TABLES
+UNIQUE
+WITH
+VARCHAR
+.DATABASES
+.IMPORT
+.SCHEMA
+ON
+0
+"\x"
+`\x`
+--x
+ 
+	 
+sample = 42
+"hello" # comment
+// TODO: sample
+/* sample */
+true false null
+https://example.com/path
