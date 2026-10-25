@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 - 2026-10-25
+
+- Sync jsgotty to 1.3.0:
+  * Add OSC 52 clipboard reads and writes for browser terminals using the
+    server host's clipboard. Try xclip first on every platform, then available
+    platform tools, with an in-memory fallback when all tools fail. Only the
+    session writer performs clipboard operations; CLI clients pass OSC 52
+    through to their terminal emulator.
+  * Restore mouse reporting, mouse encoding, Kitty keyboard state and other
+    terminal modes when reconnecting to an existing session, including from
+    a fresh terminal and through nested CLI clients. Preserve keyboard mode
+    stacks without unnecessarily switching screens.
+  * Probe and restore the CLI client's original terminal modes on exit;
+    handle unsupported mode replies and independently enabled mouse modes
+    without leaving stale mouse reporting behind.
+  * Fix read-only CLI viewer exit shortcuts (Ctrl-C, Ctrl-D and Ctrl-Q) when
+    the enclosing terminal uses Kitty keyboard encoding.
+  * Fix Android WebView double-tap handling at non-default viewport zoom so
+    terminal clicks reach applications instead of triggering browser zoom,
+    while retaining two-finger pinch zoom.
+
 ## 0.5.0 - 2026-10-21
 
 - Sync jsgotty to 1.2.0:

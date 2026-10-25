@@ -4,6 +4,10 @@ import process from "node:process";
 import { Buffer } from "node:buffer";
 import WebSocket from "ws";
 import { encodeKittyGraphics, syntheticKittyCursorMotion } from "./client-kitty.mjs";
+import terminalModes from "./terminal-modes.js";
+
+const { TerminalModeTracker, modeTransition, validateSnapshot } = terminalModes;
+import { captureTerminalModes } from "./client-modes.mjs";
 
 const MSG_INPUT = "1";
 const MSG_PING = "2";
@@ -19,6 +23,7 @@ const MSG_SET_BUFFER_SIZE = "6";
 const MSG_KITTY_GRAPHICS = "7";
 const MSG_SET_ROLE = "a";
 const MSG_CONTROL_RESULT = "b";
+const MSG_RESTORE_MODES = "m";
 
 const DEFAULT_URL = "ws://127.0.0.1:8080/ws";
 
@@ -409,6 +414,40 @@ async function main() {
     return;
   }
   const args = buildArguments(options, initArguments);
+  const originalRawMode = !!process.stdin.isRaw;
+  const localModes = new TerminalModeTracker();
+  // A closed terminal surfaces as an async EIO/EPIPE, not a throw. Nobody is
+  // left to read anything, and the PTY keeps its modes, so just exit.
+  for (const stream of [process.stdin, process.stdout, process.stderr]) {
+    stream.on("error", (error) => {
+      if (error.code !== "EIO" && error.code !== "EPIPE") {
+        throw error;
+      }
+      process.exit(process.exitCode ?? 1);
+    });
+  }
+  const writeTerminal = (data) => {
+    process.stdout.write(data);
+    localModes.consume(Buffer.from(data));
+  };
+  const captured = await captureTerminalModes(process.stdin, process.stdout);
+  const originalModes = captured.state;
+  Object.assign(localModes, validateSnapshot(originalModes));
+  let bufferedInput = captured.buffered;
+  let probeFlushTimer, replayingProbe = false;
+  const terminalInput = chunk => {
+    if (replayingProbe) return Buffer.from(chunk);
+    const input = captured.probe.consume(chunk);
+    clearTimeout(probeFlushTimer);
+    // A lone Escape is user input too. Never hold it indefinitely while
+    // filtering a split or late response to our startup queries.
+    if (captured.probe.pending.length) probeFlushTimer = setTimeout(() => {
+      const pending = captured.probe.flush();
+      replayingProbe = true;
+      try { process.stdin.emit("data", pending); } finally { replayingProbe = false; }
+    }, 30);
+    return input;
+  };
   writeStatus(`[gotty] connecting to\n  ${wsUrl}`);
   const ws = new WebSocket(wsUrl, "webtty");
   let pingTimer = null;
@@ -432,7 +471,8 @@ async function main() {
     if (!writable || ws.readyState !== WebSocket.OPEN) {
       return;
     }
-    ws.send(MSG_INPUT + Buffer.from(chunk).toString("base64"));
+    const input = terminalInput(chunk);
+    if (input.length) ws.send(MSG_INPUT + input.toString("base64"));
   };
 
   const handleResize = () => {
@@ -441,21 +481,52 @@ async function main() {
     }
   };
 
+  let exiting = false;
   const exitClient = (code = 0) => {
+    if (exiting) return;
+    exiting = true;
     cleanup();
     reportDisconnected();
     ws.close();
-    process.exit(code);
+    process.stdout.write("", () => process.exit(code));
   };
 
+  // Restoring the viewed session also restores Kitty keyboard modes. Exit
+  // keys can therefore arrive as CSI u rather than legacy control bytes.
+  // Keep CSI packets across chunks; never treat a key-release as a press.
+  let viewerSequence = "";
   const handleViewerInput = (chunk) => {
-    for (const byte of Buffer.from(chunk)) {
-      if (byte === 0x03) {
-        exitClient(130);
+    for (const byte of terminalInput(chunk)) {
+      if (viewerSequence) {
+        viewerSequence += String.fromCharCode(byte);
+        if (viewerSequence === "\x1b[") continue;
+        if (viewerSequence.length === 2 && byte !== 0x5b) {
+          viewerSequence = "";
+          continue;
+        }
+        if (viewerSequence.length > 2 && byte >= 0x40 && byte <= 0x7e) {
+          const sequence = viewerSequence;
+          viewerSequence = "";
+          const kitty = /^\x1b\[(\d+)(?::[0-9:]*)?(?:;(\d+)(?::([123]))?)?(?:;[0-9:]+)?u$/.exec(sequence);
+          const modified = /^\x1b\[27;(\d+);(\d+)~$/.exec(sequence);
+          const key = kitty ? +kitty[1] : modified ? +modified[2] : 0;
+          const modifiers = (kitty ? +(kitty[2] || 1) : modified ? +modified[1] : 1) - 1;
+          // Ignore Caps/Num Lock, but require Ctrl without Alt/Shift/Super.
+          if ((modifiers & ~192) === 4 && (!kitty || kitty[3] !== "3")) {
+            if (key === 99) return exitClient(130);
+            if (key === 100 || key === 113) return exitClient(0);
+          }
+        } else if (viewerSequence.length > 128) {
+          viewerSequence = "";
+        }
+        continue;
       }
-      if (byte === 0x04 || byte === 0x11) {
-        exitClient(0);
+      if (byte === 0x1b) {
+        viewerSequence = "\x1b";
+        continue;
       }
+      if (byte === 0x03) return exitClient(130);
+      if (byte === 0x04 || byte === 0x11) return exitClient(0);
     }
   };
 
@@ -498,7 +569,8 @@ async function main() {
       return;
     }
 
-    const input = Buffer.from(chunk);
+    const input = terminalInput(chunk);
+    if (!input.length) return;
     fallbackProbe = normalizeEcho(input.toString("utf8"));
     ws.send(MSG_INPUT + input.toString("base64"));
     stopFallbackInput();
@@ -532,6 +604,10 @@ async function main() {
       setRawMode(true);
       rawEnabled = process.stdin.isTTY;
       sendResize(ws, options);
+      if (bufferedInput.length) {
+        ws.send(MSG_INPUT + bufferedInput.toString("base64"));
+        bufferedInput = Buffer.alloc(0);
+      }
       return;
     }
 
@@ -558,6 +634,7 @@ pid:
       return;
     }
     closed = true;
+    clearTimeout(probeFlushTimer);
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
@@ -565,8 +642,13 @@ pid:
     setWritable(false);
     stopFallbackInput();
     stopViewerInput();
+    if (process.stdout.isTTY) {
+      try {
+        writeTerminal(modeTransition(localModes.snapshot(), originalModes, { normalizeMouse: true, kittyRestore: captured.probe.kittyRestore }));
+      } catch {}
+    }
     if (rawEnabled) {
-      setRawMode(false);
+      setRawMode(originalRawMode);
       rawEnabled = false;
     }
     process.stdin.pause();
@@ -611,7 +693,7 @@ pid:
             break;
           }
           pendingKittyCursorMotion = "";
-          process.stdout.write(output);
+          writeTerminal(output);
           if (fallbackProbe && accessRole === "") {
             fallbackOutputTail = normalizeEcho(
               `${fallbackOutputTail}${output.toString("utf8")}`
@@ -640,6 +722,14 @@ pid:
           pendingKittyCursorMotion = syntheticKittyCursorMotion(message);
           if (encoded) process.stdout.write(encoded);
         } catch {}
+        break;
+      case MSG_RESTORE_MODES:
+        // Only local terminal state; the PTY keeps its modes for the next resume.
+        if (process.stdout.isTTY) {
+          try {
+            writeTerminal(modeTransition(localModes.snapshot(), validateSnapshot(JSON.parse(payload)), { normalizeMouse: true, kittyRestore: captured.probe.kittyRestore }));
+          } catch {}
+        }
         break;
       case MSG_SET_RECONNECT: {
         try {

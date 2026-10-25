@@ -332,3 +332,20 @@ bun sz.js file.txt
 - Bun is the primary runtime.
 - On Linux / macOS, PTY support will not work unless the program is launched with Bun.
 - GoTTY config file loading is not implemented yet.
+
+## OSC 52 clipboard
+
+The browser frontend supports OSC 52 writes and `?` queries against the **server host's clipboard**, not the browser device's clipboard. Only the session writer can request access; viewers do not duplicate operations. Query replies are sent directly back to the originating PTY as OSC 52 sequences.
+
+Each operation tries `xclip` first, including on Windows and Android. Missing or failing commands fall through to applicable `termux-clipboard-*`, `wl-copy`/`wl-paste`, `xsel`, macOS `pbcopy`/`pbpaste`, then Windows PowerShell. The PowerShell function is copied verbatim from jsmdcui. If all tools fail, the server uses its in-memory cache. A successful empty read remains empty, rather than returning stale cached text. There is no polling; external commands run in a worker.
+
+Supported selections: `c` (clipboard), `p` (primary), `q` (secondary); `s` maps to clipboard, and `0`–`7` are in-memory buffers. An empty selector uses `s0`. Tools without primary/secondary support do not substitute the clipboard. Requests are limited to 1 MiB.
+
+```sh
+# Write to the server clipboard
+printf '\033]52;c;%s\007' "$(printf 'Hello' | base64 | tr -d '\n')"
+```
+
+Applications can send `ESC ] 52 ; c ; ? ST` to read and receive a base64-encoded OSC 52 reply on stdin.
+
+`jsgotty --client` **does not intercept OSC 52**: it forwards reads and writes unchanged for the outer terminal emulator to handle.

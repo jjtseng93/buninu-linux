@@ -334,3 +334,20 @@ bun sz.js file.txt
 - 以 Bun 為主要執行方式。
 - Linux / macOS 如果不是用 Bun 執行，PTY 會無法使用。
 - 目前未實作 Go 版的 config 檔載入
+
+## OSC 52 剪貼板
+
+瀏覽器版 jsgotty 支援 OSC 52 寫入與 `?` 查詢。操作的是 **server 所在主機**的剪貼板，不是瀏覽器裝置的剪貼板。只有 session 的 writer 可以執行；viewer 不會重複操作。查詢結果以 OSC 52 回覆直接送回原本的 PTY。
+
+每次操作都先嘗試 `xclip`（包括 Windows／Android），不存在或執行失敗才依序嘗試適用的 `termux-clipboard-*`、`wl-copy`／`wl-paste`、`xsel`、macOS 的 `pbcopy`／`pbpaste`、Windows 的 PowerShell。PowerShell 函式原封不動取自 jsmdcui。所有工具都失敗時使用 server 記憶體快取；成功讀到空字串就是空剪貼板，不會被舊快取取代。沒有輪詢，外部工具在 worker 中執行。
+
+支援 `c`（clipboard）、`p`（primary）、`q`（secondary）；`s` 對應 clipboard，`0`～`7` 為記憶體暫存。空選擇使用 `s0`。不提供 primary／secondary 的工具不會拿 clipboard 冒充。單次 OSC 52 請求上限 1 MiB。
+
+```sh
+# 寫入 server 剪貼板
+printf '\033]52;c;%s\007' "$(printf 'Hello' | base64 | tr -d '\n')"
+```
+
+程式可送出 `ESC ] 52 ; c ; ? ST` 讀取，並從 stdin 接收 base64 編碼的 OSC 52 回覆。
+
+`jsgotty --client` **不攔截 OSC 52**，讀寫控制碼都原樣轉送，交給最外層真正的終端模擬器決定。

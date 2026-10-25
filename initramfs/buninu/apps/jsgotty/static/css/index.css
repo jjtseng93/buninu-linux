@@ -11,3 +11,9 @@ html, body, #terminal {
   transition-duration: 0.1s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Keep touch taps available to xterm even with a widened WebView viewport.
+   Include the viewport (a scroll container); preserve panning and pinch zoom. */
+#terminal, #terminal .xterm, #terminal .xterm-viewport, #terminal .xterm-screen {
+    touch-action: manipulation;
+}

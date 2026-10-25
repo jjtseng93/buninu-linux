@@ -12,7 +12,10 @@ const crypto = require("crypto");
 const zlib = require("zlib");
 const { constants: fsConstants } = require("fs");
 const WebSocket = require("ws");
+const { TerminalModeTracker } = require("./terminal-modes.js");
 const { WebSocketServer } = WebSocket;
+const { ClipboardHost, handleOSC52 } = require("./clipboard.js");
+const clipboardHost = new ClipboardHost();
 
 const MSG_INPUT = "1";
 const MSG_PING = "2";
@@ -34,6 +37,7 @@ const MSG_ZMODEM_MODE = "z";
 const MSG_ZMODEM_OUTPUT = "y";
 const MSG_ZMODEM_ACK = "Y";
 const MSG_KITTY_DEBUG = "K";
+const MSG_RESTORE_MODES = "m";
 const KITTY_TRACE = /^(1|true|yes|on)$/i.test(String(process.env.JSGOTTY_KITTY_DEBUG || ""));
 const WINDOWS_BRIDGE_TRACE = process.env.WINDOWS_BRIDGE_TRACE === "1";
 const WINDOWS_BRIDGE_PREFIX = Buffer.from("@@GOTTYCTL:", "ascii");
@@ -1680,6 +1684,7 @@ class PtySession {
     this.supportsWindowsBridge = process.platform === "win32";
     this.cursorTracker = new CursorStateTracker();
     this.cursorTracker.setDimensions(this.columns || 80);
+    this.modeTracker = new TerminalModeTracker();
     this.kittyParser = new KittyGraphicsParser();
     this.windowsBridgeParser = this.supportsWindowsBridge ? new WindowsBridgeParser("incoming") : null;
     this.outgoingWindowsBridgeParser = this.supportsWindowsBridge ? new WindowsBridgeParser("outgoing") : null;
@@ -1759,6 +1764,7 @@ class PtySession {
         if (!this.supportsWindowsBridge) {
           const cursorBefore = this.cursorTracker.snapshot();
           this.cursorTracker.consume(filteredChunk);
+          this.modeTracker.consume(filteredChunk);
           const cursorAfter = this.cursorTracker.snapshot();
           const controls = cursorControls(filteredChunk);
           if (controls.length > 0) {
@@ -1776,6 +1782,7 @@ class PtySession {
         if (bridged.plain.length > 0) {
           const cursorBefore = this.cursorTracker.snapshot();
           this.cursorTracker.consume(bridged.plain);
+          this.modeTracker.consume(bridged.plain);
           const cursorAfter = this.cursorTracker.snapshot();
           const controls = cursorControls(bridged.plain);
           if (controls.length > 0) {
@@ -1855,6 +1862,9 @@ class PtySession {
       this.writerWs = ws;
     }
     this.sendSessionMetadata(ws, remoteAddr);
+    // Queued ahead of live output; the client applies only modes that differ,
+    // which also clears modes a program turned off while the socket was down.
+    this.send(MSG_RESTORE_MODES, JSON.stringify(this.modeTracker.snapshot()), ws);
     this.startWebSocketHandlers(ws);
     this.notifyRoles();
     return true;
@@ -2442,6 +2452,9 @@ class PtySession {
     }
 
     switch (type) {
+      case "C":
+        handleOSC52(this, ws, payload, clipboardHost);
+        break;
       case MSG_INPUT:
         if (!this.isWriter(ws) || payload.length === 0) {
           return;

@@ -119,3 +119,8 @@ such an executable must also follow Bun's license terms, including the LGPL
 relinking provisions described at
 https://github.com/oven-sh/bun/blob/main/LICENSE.md. The executables carry
 LICENSE, NOTICE and LICENSES/ as embedded assets.
+
+Clipboard backend helpers reference jsmdcui (MIT).
+clipboard-powershell.js retains its powershellClipboard function verbatim from
+jsmdcui/src/platform/clipboard.js, Copyright (c) 2026 Dr. John (醫者小智).
+Full source license: LICENSES/MIT-jsmdcui.txt.
