@@ -147,6 +147,15 @@ test('raw images bypass Skia allocation/readback; covered text, removal, crops a
   await new Promise(resolve=>term.write('\rChanged underlying text',resolve));
   check(raw,[0,0,320,200],[0,0,320,200],{x:100,y:100});
   check(null,undefined,undefined,null,false);expect(draws).toBeGreaterThan(0);
+  // Casty leaves one column free. Hidden glyphs may be skipped, but the
+  // visible edge, wide/italic glyphs and exposed text must match full repaint.
+  await new Promise(resolve=>term.write('\x1b[H\x1b[3m'+('abc中W '.repeat(60))+'\x1b[0m',resolve));
+  let cells=0;const drawCell=r.drawCell.bind(r);r.drawCell=(...args)=>{cells++;return drawCell(...args);};
+  const width=(r.columns-1)*r.cellWidth,height=(r.rows-1)*r.cellHeight;
+  check(raw,[r.offsetX,r.offsetY,r.offsetX+width,r.offsetY+height],[0,0,width,height]);
+  expect(cells).toBeLessThan(r.columns*r.rows);
+  check(raw,[r.offsetX+r.cellWidth,r.offsetY,r.offsetX+width,r.offsetY+height],[0,0,width-r.cellWidth,height]);
+  check(null,undefined,undefined,null,false);
   check(raw,[-5,11,310,171],[5,20,320,180]);
   check(raw,[0,0,160,100]); // scaling materializes lazily
   check(await create(32)); // channel mismatch falls back

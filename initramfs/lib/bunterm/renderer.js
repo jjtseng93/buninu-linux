@@ -348,15 +348,24 @@ export class Renderer {
     }
   }
 
-  drawRow(line, row) {
-    const { canvas } = this;
-    canvas.drawRect(this.cellRect(0, row, this.columns, 1), this.paintFor(this.background));
-    if (!line) return;
-    for (let column = 0; column < this.columns; column++) {
-      const cell = line.getCell(column);
-      if (!cell) break;
-      this.drawCell(cell, column, row);
+  drawRow(line, row, hidden = []) {
+    const draw = (first, end) => {
+      if(end<=first)return;
+      this.canvas.drawRect(this.cellRect(first,row,end-first,1),this.paintFor(this.background));
+      if(!line)return;
+      for(let column=first;column<end;column++){
+        const cell=line.getCell(column);if(!cell)break;
+        this.drawCell(cell,column,row);
+      }
+    };
+    // Retain two boundary cells for wide glyphs and italic overhang. Interior
+    // pixels will be replaced by the opaque image; omit their background too.
+    let column=0;
+    for(const [first,end] of hidden.map(([a,b])=>[a+2,b-2]).sort((a,b)=>a[0]-b[0])){
+      draw(column,Math.min(this.columns,first));
+      column=Math.max(column,end);
     }
+    draw(column,this.columns);
   }
 
   drawCursor(line, x, y) {
@@ -425,28 +434,38 @@ export class Renderer {
     const buffer = term.buffer.active;
     const top = buffer.viewportY;
     const dirty = [];
-    // Only proven opaque, exact raw copies may hide text work. Partial rows,
-    // scaling, transparency and unsupported framebuffer layouts remain unchanged.
-    const coveredRows = new Set();
+    // Only proven opaque, exact raw copies may hide text work. Partial-height
+    // rows, scaling, transparency and unsupported layouts remain unchanged.
+    const coveredRows = new Set(), coveredSpans = new Map();
+    const previousSpans = this.rawCoveredSpans ?? new Map();
     const previouslyCovered = this.rawCoveredRows ?? new Set();
     for (const {image, rect, source} of images) {
       const bounds = source || [0, 0, image.width(), image.height()];
-      if (rect[0] > this.offsetX || rect[2] < this.offsetX + this.columns * this.cellWidth
-          || !this.screen.canDrawRawImage?.(image, rect, bounds)) continue;
+      if (!this.screen.canDrawRawImage?.(image, rect, bounds)) continue;
+      const left=Math.max(0,Math.ceil((rect[0]-this.offsetX)/this.cellWidth));
+      const right=Math.min(this.columns,Math.floor((rect[2]-this.offsetX)/this.cellWidth));
       const first = Math.max(0, Math.ceil((rect[1] - this.offsetY) / this.cellHeight));
       const end = Math.min(this.rows, Math.floor((rect[3] - this.offsetY) / this.cellHeight));
-      for (let row = first; row < end; row++) coveredRows.add(row);
+      for (let row = first; row < end; row++) {
+        if(left===0 && right===this.columns)coveredRows.add(row);
+        else if(right-left>4){
+          const spans=coveredSpans.get(row)??[];spans.push([left,right]);coveredSpans.set(row,spans);
+        }
+      }
     }
     for (let row = 0; row < this.rows; row++) {
       const line = buffer.getLine(top + row);
       const hash = coveredRows.has(row) ? this.rowHashes[row] : line ? this.rowHash(line, this.columns) : 0;
       if (this.dirtyAll || hash !== this.rowHashes[row] || this.forcedRows.has(row)
-          || coveredRows.has(row) !== previouslyCovered.has(row)) {
+          || coveredRows.has(row) !== previouslyCovered.has(row)
+          || (coveredSpans.get(row)?.length??0)!==(previousSpans.get(row)?.length??0)
+          || coveredSpans.get(row)?.some(([a,b],i)=>a!==previousSpans.get(row)?.[i]?.[0]||b!==previousSpans.get(row)?.[i]?.[1])) {
         dirty.push(row);
         this.rowHashes[row] = hash;
       }
     }
     this.rawCoveredRows = coveredRows;
+    this.rawCoveredSpans = coveredSpans;
     this.forcedRows.clear();
     const localPointer = Boolean(this.screen.saveRegion && this.screen.restoreRegion);
     const pointerChanged = this.lastPointer?.x !== pointer?.x || this.lastPointer?.y !== pointer?.y;
@@ -477,7 +496,7 @@ export class Renderer {
     this.dirtyAll = false;
     dirty.sort((a, b) => a - b);
     for (const row of dirty) {
-      if (!coveredRows.has(row)) this.drawRow(buffer.getLine(top + row), row);
+      if (!coveredRows.has(row)) this.drawRow(buffer.getLine(top + row), row, coveredSpans.get(row));
     }
     if (cursor?.visible && !coveredRows.has(cursor.y) && dirty.includes(cursor.y)) {
       this.drawCursor(buffer.getLine(top + cursor.y), cursor.x, cursor.y);
