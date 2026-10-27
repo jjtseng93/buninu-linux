@@ -31,3 +31,12 @@ test("pixel writes continue on unsupported sync and respect framebuffer offsets 
   expect([...fb.memory]).toEqual([0,0,0,0,0,1,2,0,0,3,4,0,0,0,0,0]);
   fb.pixels[0] = 9; flush(fb); expect(fb.memory[5]).toBe(9);
 });
+test("contiguous framebuffer writes preserve surrounding virtual rows", () => {
+  const fb = {...display(), msyncUnsupported: true, width: 3, height: 2, bytesPerPixel: 4,
+    stride: 12, xOffset: 0, yOffset: 1, pixels: Uint8Array.from({length:24},(_,i)=>i+1), memory: new Uint8Array(48).fill(90)};
+  flush(fb);
+  expect([...fb.memory]).toEqual([...new Uint8Array(12).fill(90),...fb.pixels,...new Uint8Array(12).fill(90)]);
+  fb.yOffset=0;fb.pixels.fill(7);flush(fb);
+  expect(fb.memory.subarray(0,24)).toEqual(fb.pixels);
+  expect(fb.memory.subarray(36)).toEqual(new Uint8Array(12).fill(90));
+});

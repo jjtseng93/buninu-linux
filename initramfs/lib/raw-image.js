@@ -1,6 +1,7 @@
 // Retain immutable raw pixels until an operation actually needs a Skia Image.
 // The native image store owns these handles; encoded images remain ordinary Skia images.
 const rawImages = new WeakMap();
+const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 export const rawImageData = image => rawImages.get(image);
 export const skiaImage = image => rawImages.get(image)?.materialize() ?? image;
 
@@ -39,8 +40,15 @@ export function rawImageOpaque(data) {
   if (data.opaque === undefined) {
     const pixels = data.pixels;
     data.opaque = true;
-    for (let i = 3; i < pixels.length; i += 4) {
-      if (pixels[i] !== 255) { data.opaque = false; break; }
+    if (littleEndian && pixels.byteOffset % 4 === 0 && pixels.byteLength % 4 === 0) {
+      const words = new Uint32Array(pixels.buffer, pixels.byteOffset, pixels.byteLength / 4);
+      for (let i = 0; i < words.length; i++) {
+        if ((words[i] >>> 24) !== 255) { data.opaque = false; break; }
+      }
+    } else {
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] !== 255) { data.opaque = false; break; }
+      }
     }
   }
   return data.opaque;

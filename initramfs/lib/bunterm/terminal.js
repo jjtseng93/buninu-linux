@@ -93,6 +93,7 @@ export const createSession = ({
   });
 
   let frameTimer = null;
+  let lastPaintTime = -Infinity;
   let active = true;
   let blinkOn = true;
   const cursorHidden = () => Boolean(term._core?.coreService?.isCursorHidden);
@@ -108,6 +109,7 @@ export const createSession = ({
     if (frameTimer) clearTimeout(frameTimer);
     frameTimer = null;
     if (!active) return false;
+    lastPaintTime = performance.now();
     const buffer = term.buffer.active;
     // cursorY counts from the buffer's base, so a scrolled-back viewport
     // moves the cursor down the screen and eventually off it.
@@ -129,7 +131,9 @@ export const createSession = ({
   };
   const requestFrame = () => {
     if (!active) return;
-    frameTimer ??= setTimeout(paint, 16);
+    // Limit paint starts, rather than adding 16 ms after every arriving frame.
+    // Slow rendering already consumes the interval; keep one pending paint.
+    frameTimer ??= setTimeout(paint, Math.max(0, 16 - (performance.now() - lastPaintTime)));
   };
   const changed = () => { renderer.invalidate(); requestFrame(); };
   const selection = createSelection(term, renderer, changed);

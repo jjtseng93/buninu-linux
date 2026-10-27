@@ -283,11 +283,17 @@ export const syncFramebuffer = (display, native = {
 
 export const flush = (display) => {
   const visibleBytes = display.width * display.bytesPerPixel;
-  for (let y = 0; y < display.height; y++) {
-    const row = display.pixels.subarray(y * display.stride, y * display.stride + visibleBytes);
-    const position = (y + display.yOffset) * display.stride
-      + display.xOffset * display.bytesPerPixel;
-    display.memory.set(row, position);
+  if (display.xOffset === 0 && display.stride === visibleBytes) {
+    // Contiguous visible rows need one bulk copy, not one JS call per row.
+    display.memory.set(display.pixels.subarray(0, display.height * display.stride),
+      display.yOffset * display.stride);
+  } else {
+    for (let y = 0; y < display.height; y++) {
+      const row = display.pixels.subarray(y * display.stride, y * display.stride + visibleBytes);
+      const position = (y + display.yOffset) * display.stride
+        + display.xOffset * display.bytesPerPixel;
+      display.memory.set(row, position);
+    }
   }
   syncFramebuffer(display);
 };
