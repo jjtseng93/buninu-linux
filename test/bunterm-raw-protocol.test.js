@@ -17,3 +17,23 @@ test('native preference follows framebuffer bitfields; browser parser remains un
  const bad=fb();bad.fields.red.msbRight=1;
  expect(preferredPixelFormat(bad)).toBe('png');expect(preferredPixelFormat(fb(),false)).toBe('png');
 });
+
+import fs from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+test('raw temporary mappings survive unlink; regular and partial files retain copying behavior',()=>{
+ const dir=fs.mkdtempSync(join(tmpdir(),'tty-graphics-protocol-mmap-'));
+ const parser=new (bgraParser(KittyGraphicsParser,fb()))({binaryData:true});
+ const bytes=Buffer.from([1,2,3,255,4,5,6,255]);
+ try{
+  for(const format of [32,BGRA_FORMAT]){
+   const path=join(dir,'frame');fs.writeFileSync(path,bytes);
+   const got=parser._readImageFile({f:String(format),s:'2',v:'1'},Buffer.from(path).toString('base64'),true);
+   expect(fs.existsSync(path)).toBe(false);expect(got).toEqual(bytes);
+  }
+  const path=join(dir,'regular');fs.writeFileSync(path,bytes);
+  const payload=Buffer.from(path).toString('base64'),control={f:String(BGRA_FORMAT),s:'2',v:'1'};
+  expect(parser._readImageFile(control,payload,false)).toEqual(bytes);expect(fs.existsSync(path)).toBe(true);
+  expect(parser._readImageFile({...control,O:'4',S:'4'},payload,true)).toEqual(bytes.subarray(4));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 // Buninu private extension; not a registered Kitty pixel format.
 export const BGRA_FORMAT = 0x42475241;
 export function preferredPixelFormat(display, littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1) {
@@ -14,6 +15,25 @@ export function preferredPixelFormat(display, littleEndian = new Uint8Array(new 
 // Only the native renderer advertises these formats; browser jsgotty is unchanged.
 export function bgraParser(Base,display) {
   return class extends Base {
+    _readImageFile(control,payloadText,deleteAfterRead) {
+      // Only complete raw temporary frames are immutable producer handoffs.
+      // Ordinary files, compressed/partial transfers keep the copying reader.
+      const format=Number(control.f);
+      if(!deleteAfterRead || ![32,BGRA_FORMAT].includes(format) || control.O || control.S || control.o || typeof Bun.mmap!=="function")
+        return super._readImageFile(control,payloadText,deleteAfterRead);
+      const path=fs.realpathSync(Buffer.from(payloadText,"base64").toString("utf8"));
+      const stat=fs.statSync(path),w=Number(control.s),h=Number(control.v);
+      if(!this._isSafeTempGraphicsPath(path)||!stat.isFile()||!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w*h>16777216||stat.size!==w*h*4)
+        return super._readImageFile(control,payloadText,deleteAfterRead);
+      let bytes;
+      try { bytes=Bun.mmap(path,{shared:false}); }
+      catch { return super._readImageFile(control,payloadText,deleteAfterRead); }
+      // Unlink removes the name; the mapping owns the pages until the last raw
+      // image/parser reference is collected. Never truncate/reuse these files.
+      try { fs.unlinkSync(path); } catch {}
+      return Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    }
+
     _resolveImageData(control,payload) {
       const bytes=super._resolveImageData(control,payload);
       if(Number(control.f)===BGRA_FORMAT){
