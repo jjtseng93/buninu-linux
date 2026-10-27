@@ -432,17 +432,6 @@ mount -fv /dev/sda1 /mnt
 
 ### 使用終端機
 
-點擊 bunterm 選單標題右側的 FPS 按鈕，可開啟／關閉終端右上角的青藍色計數器。它每秒取樣一次，統計實際呈現的新 Kitty 圖片幀（例如 Casty／Land 輸出），不計滑鼠與選單重畫。靜態圖片與純文字工作階段顯示 0 FPS。設定僅作用於目前 bunterm，預設關閉。
-
-原生 bunterm 依 framebuffer 的位元欄位宣告偏好的原始像素格式：支援的 32 位元排列採用 BGRA 或 RGBA，其餘回報 PNG。新版 Casty、buninu-browser 與 Land 透過 Kitty 共用檔案傳輸自動協商；BGRA 使用私有格式 `f=1111970369`，RGBA 使用標準 `f=32`。其他終端機與 jsgotty 維持既有協議。
-
-若要查看 Casty 目前的畫面傳輸路徑，按 `Ctrl-E`，輸入 `kitty`，
-再按 Enter。在 Land 中則點擊 **@** 開啟命令列。
-例如 `Kitty: file · format=bgra` 表示透過共用檔案傳送原始像素；
-`rgba` 也是原始像素，PNG／JPEG 則表示已編碼圖片。支援的本機兩端
-會自動協商 raw，不需要額外啟動旗標。
-bunterm 的 FPS 計數器統計實際呈現的圖片，不是客戶端本身的渲染 FPS。
-
 `bunterm` 是 Linux framebuffer 上的圖形終端機，不必啟動
 X11 或 Wayland 即可顯示中日韓文字、彩色 emoji 與 Kitty
 圖形。在真機映像中，於 `bun-repl>` 提示用 `start()` 進入
@@ -496,6 +485,17 @@ HTTP／HTTPS 與 `about:` URL 直接開啟；本機路徑與 `file://` URL
 或 bunterm 退出時會還原原始鍵盤模式。VT 切換快捷鍵仍保留。
 Kitty 模式尚未實作 dead key／Compose 序列。完整
 選項與鍵盤細節見 `bunterm --help`。
+
+Casty 是 [buninu-browser](#內建瀏覽器的早期實驗支援) 和 [buninu-land](#內建合成器的早期實驗支援) 的預設終端前端，負責將畫面顯示在 bunterm 裡，並轉送鍵盤與滑鼠輸入。使用方式請見連結指向的後續章節。
+
+點擊 bunterm 選單標題右側的 FPS 按鈕，可開啟／關閉終端右上角的青藍色計數器。它每秒取樣一次，統計實際呈現的新 Kitty 圖片幀（例如 Casty／Land 輸出），不計滑鼠與選單重畫。靜態圖片與純文字工作階段顯示 0 FPS。設定僅作用於目前 bunterm，預設關閉。
+
+若要查看 Casty 目前的畫面傳輸路徑，按 `Ctrl-E`，輸入 `kitty`，
+再按 Enter。在 Land 中則點擊 **@** 開啟命令列。
+例如 `Kitty: file · format=bgra` 表示透過共用檔案傳送原始像素；
+`rgba` 也是原始像素，PNG／JPEG 則表示已編碼圖片。支援的本機兩端
+會自動協商 raw，不需要額外啟動旗標。
+bunterm 的 FPS 計數器統計實際呈現的圖片，不是客戶端本身的渲染 FPS。
 
 ### 使用命令殼層
 
@@ -1712,6 +1712,12 @@ Bun 腳本。`--help` 使用 `Bun.markdown.ansi`
 驅動及 ACPI 電源驅動。Alpine 核心將這些都建成模組；自行建置核心並將它們
 設為 `=y` 也能以相同方式運作，只是載入器找不到需要載入的項目。
 
+#### 終端機影像傳輸
+
+原生 bunterm 依 framebuffer 的位元欄位宣告偏好的原始像素格式：支援的 32 位元排列採用 BGRA 或 RGBA，其餘回報 PNG。新版 Casty、buninu-browser 與 Land 透過 Kitty 共用檔案傳輸自動協商；BGRA 使用私有格式 `f=1111970369`，RGBA 使用標準 `f=32`。其他終端機與 jsgotty 維持既有協議。
+
+原始像素暫存影格在可用時採用 mmap。bunterm 會在 parser、renderer 與處理中的封包全部使用完畢後立即釋放映射，避免累積舊影格到之後的 GC 才整批回收而停頓。共用的 placement 仍會保留影像；不支援立即釋放時則退回垃圾回收。
+
 #### 尚未掛載時進入腳本環境
 
 預設 `--real` 映像內嵌以下核心命令列（此處為目前
@@ -1961,6 +1967,7 @@ KGSL 或特定 ARM 板子的 GPU／DT／韌體啟用支援。
     + [虛擬機開發](#虛擬機開發)
       - [虛擬機網路](#虛擬機網路)
     + [命令實作](#命令實作)
+    + [終端機影像傳輸](#終端機影像傳輸)
     + [尚未掛載時進入腳本環境](#尚未掛載時進入腳本環境)
     + [初始化腳本的工作](#初始化腳本的工作)
   * [可選的客戶端圖形加速](#可選的客戶端圖形加速)

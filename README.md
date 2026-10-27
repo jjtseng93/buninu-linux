@@ -432,17 +432,6 @@ Run `poweroff` for a synced shutdown.
 
 ### Using bunterm
 
-Click the FPS button on the right of the bunterm menu title to toggle a cyan counter at the top-right of the terminal. It reports newly presented Kitty image frames per second (such as Casty/Land output), sampled once per second; mouse/menu redraws are excluded. Static images and text-only sessions show 0 FPS. The setting is local to this bunterm session and defaults off.
-
-Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty, buninu-browser and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
-
-To inspect the current picture path in Casty, press `Ctrl-E`, type `kitty`,
-and press Enter. In Land, click **@** instead to open the command line.
-For example, `Kitty: file · format=bgra` reports shared-file raw frames;
-`rgba` is also raw, while PNG/JPEG indicate encoded images. Raw is negotiated
-automatically with supported local peers; no extra launch flag is needed.
-The bunterm FPS counter measures presented images, not a client's rendering FPS.
-
 `bunterm` is the graphical terminal on the Linux framebuffer. It displays CJK
 text, colour emoji and Kitty graphics without starting X11 or Wayland. On the
 real-hardware image, enter the shell with `start()` at the `bun-repl>` prompt,
@@ -496,6 +485,17 @@ applications retain the console's translated input; the original keyboard mode i
 when the application disables Kitty or bunterm exits. VT-switching shortcuts stay
 reserved. Dead-key/Compose sequences are not yet implemented in Kitty mode.
 Use `bunterm --help` for full options and keyboard details.
+
+Casty is the default terminal frontend for [buninu-browser](#buninu-browser-early-stage-experimental) and [buninu-land](#buninu-land-early-stage-experimental): it displays their graphics inside bunterm and forwards keyboard and mouse input. See the linked sections below for usage.
+
+Click the FPS button on the right of the bunterm menu title to toggle a cyan counter at the top-right of the terminal. It reports newly presented Kitty image frames per second (such as Casty/Land output), sampled once per second; mouse/menu redraws are excluded. Static images and text-only sessions show 0 FPS. The setting is local to this bunterm session and defaults off.
+
+To inspect the current picture path in Casty, press `Ctrl-E`, type `kitty`,
+and press Enter. In Land, click **@** instead to open the command line.
+For example, `Kitty: file · format=bgra` reports shared-file raw frames;
+`rgba` is also raw, while PNG/JPEG indicate encoded images. Raw is negotiated
+automatically with supported local peers; no extra launch flag is needed.
+The bunterm FPS counter measures presented images, not a client's rendering FPS.
 
 ### Using Bun Modern Shell
 
@@ -1712,6 +1712,12 @@ the wired NICs, Android USB-tethering drivers and the ACPI power drivers. Alpine
 kernels build all of these as modules; a self-built kernel with them `=y`
 works the same way, the loaders just find nothing to load.
 
+#### Bunterm image transport
+
+Native bunterm advertises its preferred raw pixel format from the framebuffer bitfields: BGRA or RGBA for supported 32-bit layouts, otherwise PNG. Updated Casty, buninu-browser and Land negotiate this automatically over shared-file Kitty transport; BGRA uses the private format `f=1111970369`, RGBA uses standard `f=32`. Other terminals and jsgotty retain their existing protocol.
+
+Raw temporary frames use mmap when available. bunterm releases each mapping as soon as the parser, renderer and in-flight packet handler have all finished with it, avoiding batches of old frames being reclaimed in a later GC pause. Shared placements retain their image; unsupported immediate release falls back to garbage collection.
+
 #### Reaching JavaScript with nothing mounted
 
 The default `--real` image embeds this kernel command line (shown for the
@@ -1961,6 +1967,7 @@ driver, Android KGSL, or board-specific ARM GPU/DT/firmware enablement.
     + [QEMU development](#qemu-development)
       - [QEMU networking](#qemu-networking)
     + [Command implementation](#command-implementation)
+    + [Bunterm image transport](#bunterm-image-transport)
     + [Reaching JavaScript with nothing mounted](#reaching-javascript-with-nothing-mounted)
     + [What init.js does](#what-initjs-does)
   * [Optional client GPU acceleration (`cfg.gpu`)](#optional-client-gpu-acceleration-cfggpu)
