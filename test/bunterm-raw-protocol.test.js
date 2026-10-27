@@ -35,5 +35,5 @@ test('raw temporary mappings survive unlink; regular and partial files retain co
   const payload=Buffer.from(path).toString('base64'),control={f:String(BGRA_FORMAT),s:'2',v:'1'};
   expect(parser._readImageFile(control,payload,false)).toEqual(bytes);expect(fs.existsSync(path)).toBe(true);
   expect(parser._readImageFile({...control,O:'4',S:'4'},payload,true)).toEqual(bytes.subarray(4));
- }finally{fs.rmSync(dir,{recursive:true,force:true});}
+ }finally{parser.dispose();fs.rmSync(dir,{recursive:true,force:true});}
 });

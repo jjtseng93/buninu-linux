@@ -1,3 +1,4 @@
+import {retainMapping} from "./mapped-frame.js";
 // Retain immutable raw pixels until an operation actually needs a Skia Image.
 // The native image store owns these handles; encoded images remain ordinary Skia images.
 const rawImages = new WeakMap();
@@ -7,6 +8,7 @@ export const skiaImage = image => rawImages.get(image)?.materialize() ?? image;
 
 export function createRawImage(CanvasKit, pixels, width, height, colorType) {
   let decoded = null, closed = false;
+  const release = retainMapping(pixels);
   const data = {
     pixels, width, height, colorType,
     opaque: undefined,
@@ -26,9 +28,13 @@ export function createRawImage(CanvasKit, pixels, width, height, colorType) {
     delete() {
       if (closed) return;
       closed = true;
-      decoded?.delete(); decoded = null;
-      data.pixels = pixels = null;
-      rawImages.delete(image);
+      try { decoded?.delete(); }
+      finally {
+        decoded = null;
+        data.pixels = pixels = null;
+        rawImages.delete(image);
+        release?.();
+      }
     },
   };
   rawImages.set(image, data);

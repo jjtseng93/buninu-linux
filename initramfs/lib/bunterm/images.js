@@ -61,6 +61,7 @@ export class ImageStore {
     this.imageSources = new Map(); // image id → parser image object
     this.placements = new Map();  // placement key → placement
     this.counter = 0;
+    this.closed = false;
     this.coveredKey = "";
     this.coveredRows = new Set();
   }
@@ -68,7 +69,7 @@ export class ImageStore {
   // Handles one parsed graphic. Returns the control sequence that moves the
   // cursor past a placement (to be written to the terminal), or "".
   async handle(graphic) {
-    if (!graphic) return "";
+    if (this.closed || !graphic) return "";
     if (graphic.kind === "delete") {
       this.remove(graphic.delete);
       return "";
@@ -80,6 +81,7 @@ export class ImageStore {
     if (!decoded || replacesImage) {
       try {
         const replacement = await decodeImage(this.CanvasKit, image, {deferRaw: true});
+        if (this.closed) { replacement.delete(); return ""; }
         if (replacesImage) {
           // Kitty requires retransmitting a non-zero image id to delete the
           // old image and all its placements.  Screen-streaming clients such
@@ -236,6 +238,8 @@ export class ImageStore {
   }
 
   delete() {
+    if (this.closed) return;
+    this.closed = true;
     for (const placement of [...this.placements.values()]) placement.marker?.dispose();
     this.placements.clear();
     for (const image of this.images.values()) image.delete();

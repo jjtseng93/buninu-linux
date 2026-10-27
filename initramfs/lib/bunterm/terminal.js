@@ -202,8 +202,10 @@ export const createSession = ({
   let queue = Promise.resolve();
   const pump = (chunk) => {
     queue = queue.then(async () => {
+      if (closed) return;
       const { events } = kitty.consume(chunk);
       for (const event of events) {
+        if (closed) return;
         if (event.kind === "plain") {
           // A selection is a snapshot of the displayed cells. Drop it before
           // output scrolls/replaces those cells, rather than copying stale rows.
@@ -214,8 +216,11 @@ export const createSession = ({
         const buffer = term.buffer.active;
         const graphic = kitty.parsePacket(event.packet, { row: buffer.cursorY + 1, col: buffer.cursorX + 1 });
         if (!graphic) continue;
+        using frame = graphic[Symbol.dispose] ? graphic : null;
         const motion = await images.handle(graphic);
+        if (closed) return;
         if (motion) await writeTerminal(term, motion);
+        if (closed) return;
         const ack = kitty.acknowledge(graphic);
         if (ack) backend.write(Buffer.from(ack, "utf8"));
       }
@@ -390,6 +395,7 @@ export const createSession = ({
     keyboardProtocol = null;
     pointerDevice?.close();
     pointerDevice = null;
+    kitty.dispose();
     images.delete();
     renderer.delete();
     term.dispose();
