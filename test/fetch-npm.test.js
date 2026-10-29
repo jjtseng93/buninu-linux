@@ -23,8 +23,8 @@ const url = `http://127.0.0.1:${server.port}/archive`;
 
 test("five exact registry pins share an architecture-independent cache", () => {
   expect(npmPackages.map(({ name, version }) => `${name}@${version}`)).toEqual([
-    "buninu-browser@0.2.4", "buninu-land@0.1.4", "@drxiaozhi/casty@1.3.7",
-    "@drxiaozhi/jspulse@0.2.1", "@drxiaozhi/jspinyin@0.1.1",
+    "buninu-browser@0.6.0", "buninu-land@0.3.1", "@drxiaozhi/casty@1.5.1",
+    "@drxiaozhi/jspulse@0.2.3", "@drxiaozhi/jspinyin@0.2.0",
   ]);
   expect(basename(npmDownloadsDir)).toBe("npm");
   for (const pkg of npmPackages) {
