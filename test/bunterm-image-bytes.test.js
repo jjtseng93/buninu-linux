@@ -56,8 +56,8 @@ test('raw RGBA bytes pass directly to CanvasKit', async () => {
 
 import {rawImageOpaque} from '../initramfs/lib/raw-image.js';
 test('raw opacity checks every pixel in aligned and unaligned byte views', () => {
-  for (const offset of [0, 1, 4]) {
-    const storage = new Uint8Array(32 + offset);
+  for (const length of [0, 1, 7, 8, 9, 15, 16, 17, 33]) for (const offset of [0, 1, 4]) {
+    const storage = new Uint8Array(length * 4 + offset);
     const pixels = storage.subarray(offset);
     for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
     expect(rawImageOpaque({pixels})).toBe(true);

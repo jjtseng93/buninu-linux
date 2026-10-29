@@ -48,7 +48,17 @@ export function rawImageOpaque(data) {
     data.opaque = true;
     if (littleEndian && pixels.byteOffset % 4 === 0 && pixels.byteLength % 4 === 0) {
       const words = new Uint32Array(pixels.buffer, pixels.byteOffset, pixels.byteLength / 4);
-      for (let i = 0; i < words.length; i++) {
+      let i = 0;
+      // All eight alpha bytes must be 255 for their AND to stay 255. Group
+      // the common opaque case without skipping any pixel or reading a tail.
+      for (; i + 7 < words.length; i += 8) {
+        if (((words[i] & words[i + 1] & words[i + 2] & words[i + 3]
+          & words[i + 4] & words[i + 5] & words[i + 6] & words[i + 7]) >>> 24) !== 255) {
+          data.opaque = false;
+          break;
+        }
+      }
+      for (; data.opaque && i < words.length; i++) {
         if ((words[i] >>> 24) !== 255) { data.opaque = false; break; }
       }
     } else {
