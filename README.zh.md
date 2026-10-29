@@ -1415,7 +1415,7 @@ initramfs/                init.js, commands, userspace: the same for every archi
 native/<arch>/            musl and the GCC runtime (committed); bun and modules (fetched)
 ```
 
-`--real` 的輸入為 Alpine v3.24 `linux-lts-6.18.58-r0`、musl
+`--real` 的輸入為 Alpine v3.24 `linux-lts-6.18.59-r0`、musl
 `1.2.6-r2`、`systemd-efistub-260.2-r0`、`libstdc++`／`libgcc`
 `15.2.0-r5`，以及 Bun 1.4.2 `linux-x64-musl-baseline`。aarch64
 客體使用 Alpine aarch64 儲存庫的相同版本與 Bun 的 `linux-aarch64-musl`。
@@ -1577,7 +1577,7 @@ MiB 對齊，尾端保留 34 個磁區
 包含 xHCI 與 USB HID 模組鏈，目前鎖定核心使用以下完整命令列：
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.58-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.59-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 保留序列核心日誌，最後指定的主控台則讓
@@ -1601,7 +1601,7 @@ pkg install qemu-system-x86-64
 機模組集，並將 `ttyS0` 放最後，讓序列標準輸入輸出擁有 `/dev/console`：
 
 ```text
-console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.58-0-virt rdinit=/bin/bun -- -e import('/init.js')
+console=tty0 console=ttyS0,115200 panic=0 PATH=/bin KERNEL_RELEASE=6.18.59-0-virt rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 使用以下命令建置並開機：
@@ -1724,7 +1724,7 @@ Bun 腳本。`--help` 使用 `Bun.markdown.ansi`
 鎖定的 LTS 版本）：
 
 ```text
-console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.58-0-lts rdinit=/bin/bun -- -e import('/init.js')
+console=ttyS0,115200 console=tty0 REAL_MACHINE=1 panic=0 PATH=/bin KERNEL_RELEASE=6.18.59-0-lts rdinit=/bin/bun -- -e import('/init.js')
 ```
 
 實體螢幕（`tty0`）是最後指定的主控台，因此擁有 PID 1 的
