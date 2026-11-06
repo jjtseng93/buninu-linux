@@ -151,16 +151,17 @@ const checksumMatches = (block) => {
   return sum === octal(block, 148, 8);
 };
 
+// Each record's length counts bytes, so the records are cut from the bytes and decoded one by one;
+// cutting a decoded string by that length breaks on any multi-byte name.
 const paxRecords = (data) => {
   const records = {};
   let offset = 0;
-  const content = decoder.decode(data);
-  while (offset < content.length) {
-    const space = content.indexOf(" ", offset);
+  while (offset < data.length) {
+    const space = data.indexOf(0x20, offset);
     if (space === -1) break;
-    const length = Number.parseInt(content.slice(offset, space), 10);
-    if (!Number.isFinite(length) || length <= 0) break;
-    const record = content.slice(space + 1, offset + length).replace(/\n$/, "");
+    const length = Number.parseInt(decoder.decode(data.subarray(offset, space)), 10);
+    if (!Number.isFinite(length) || length <= 0 || offset + length > data.length) break;
+    const record = decoder.decode(data.subarray(space + 1, offset + length)).replace(/\n$/, "");
     const equals = record.indexOf("=");
     if (equals > 0) records[record.slice(0, equals)] = record.slice(equals + 1);
     offset += length;

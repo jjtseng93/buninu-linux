@@ -95,6 +95,14 @@ if (eocd >= 20 && tail.readUInt32LE(eocd - 20) === 0x07064b50) {
   directoryOffset = Number(record.readBigUInt64LE(48));
 }
 
+// Info-ZIP writes UTF-8 names without the 0x800 flag, so a name that decodes as UTF-8 is read as
+// UTF-8 and only the rest as the old code page's stand-in, latin1.
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+const memberName = (raw, flags) => {
+  if (flags & 0x800) return raw.toString("utf8");
+  try { return strictUtf8.decode(raw); } catch { return raw.toString("latin1"); }
+};
+
 const entries = [];
 const central = read(directoryOffset, directorySize);
 for (let offset = 0, index = 0; index < entryCount; index++) {
@@ -114,7 +122,7 @@ for (let offset = 0, index = 0; index < entryCount; index++) {
     size: central.readUInt32LE(offset + 24),
     external: central.readUInt32LE(offset + 38),
     localOffset: central.readUInt32LE(offset + 42),
-    name: central.toString(flags & 0x800 ? "utf8" : "latin1", offset + 46, offset + 46 + nameLength),
+    name: memberName(central.subarray(offset + 46, offset + 46 + nameLength), flags),
   };
   // zip64 extra field: the 0xFFFFFFFF fields follow, in this order.
   const extra = central.subarray(offset + 46 + nameLength, offset + 46 + nameLength + extraLength);
