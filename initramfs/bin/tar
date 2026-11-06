@@ -142,7 +142,7 @@ const octal = (block, offset, length) => {
 };
 
 // The header checksum is computed with its own field read as spaces. A
-// mismatch means this is not a tar header, so scanning stops there.
+// mismatch rejects the archive instead of reporting a partial listing.
 const checksumMatches = (block) => {
   let sum = 0;
   for (let index = 0; index < BLOCK; index++) {
@@ -154,13 +154,15 @@ const checksumMatches = (block) => {
 // Each record's length counts bytes, so the records are cut from the bytes and decoded one by one;
 // cutting a decoded string by that length breaks on any multi-byte name.
 const paxRecords = (data) => {
-  const records = {};
+  const records = Object.create(null);
   let offset = 0;
   while (offset < data.length) {
     const space = data.indexOf(0x20, offset);
-    if (space === -1) break;
-    const length = Number.parseInt(decoder.decode(data.subarray(offset, space)), 10);
-    if (!Number.isFinite(length) || length <= 0 || offset + length > data.length) break;
+    if (space === -1) throw new Error("invalid pax record length");
+    const digits = decoder.decode(data.subarray(offset, space));
+    const length = /^[0-9]+$/.test(digits) ? Number(digits) : NaN;
+    if (!Number.isSafeInteger(length) || length <= space - offset + 1 || length > data.length - offset
+        || data[offset + length - 1] !== 10) throw new Error("invalid pax record length");
     const record = decoder.decode(data.subarray(space + 1, offset + length)).replace(/\n$/, "");
     const equals = record.indexOf("=");
     if (equals > 0) records[record.slice(0, equals)] = record.slice(equals + 1);
@@ -175,13 +177,14 @@ const entryKinds = {
 };
 
 // Every member of the archive, in order, as { name, kind, target, size, mode,
-// mtime }. Returns null when the bytes do not parse as tar.
+// mtime }. Reject malformed input before listing or extracting any members.
 const scanEntries = (bytes) => {
   const entries = [];
   let offset = 0;
   let longName = null;
   let longTarget = null;
   let extended = {};
+  let global = {};
   let ended = false;
   entries.concatenated = false;
   while (offset + BLOCK <= bytes.length) {
@@ -192,13 +195,24 @@ const scanEntries = (bytes) => {
       ended = true;
       longName = longTarget = null;
       extended = {};
+      global = {};
       continue;
     }
-    if (!checksumMatches(block)) return entries.length ? entries : null;
+    if (!checksumMatches(block)) throw new Error("invalid tar header checksum");
     if (ended) { entries.concatenated = true; ended = false; }
     const flag = String.fromCharCode(block[156] || 0x30);
-    const size = extended.size !== undefined ? Number(extended.size) : octal(block, 124, 12);
+    // Extension records use their own header size, never the preceding pax size.
+    const metadata = ["L", "K", "x", "X", "g"].includes(flag);
+    const attrs = { ...global, ...extended };
+    const digits = text(block, 124, 12).trim();
+    if (!(block[124] & 0x80) && digits && !/^[0-7]+$/.test(digits))
+      throw new Error("invalid tar member size");
+    if (!metadata && attrs.size !== undefined && !/^[0-9]+$/.test(attrs.size))
+      throw new Error("invalid pax member size");
+    const size = !metadata && attrs.size !== undefined ? Number(attrs.size) : octal(block, 124, 12);
     const dataBlocks = Math.ceil(size / BLOCK) * BLOCK;
+    if (!Number.isSafeInteger(size) || size < 0 || !Number.isSafeInteger(dataBlocks)
+        || dataBlocks > bytes.length - offset) throw new Error("invalid or truncated tar member size");
     const data = bytes.subarray(offset, offset + size);
     if (flag === "L" || flag === "K") {
       const value = decoder.decode(data).replace(/\0+$/, "");
@@ -212,13 +226,14 @@ const scanEntries = (bytes) => {
       continue;
     }
     if (flag === "g") {
+      global = { ...global, ...paxRecords(data) };
       offset += dataBlocks;
       continue;
     }
-    const prefix = text(block, 345, 155);
+    const prefix = text(block, 257, 5) === "ustar" ? text(block, 345, 155) : "";
     const stored = text(block, 0, 100);
-    const name = extended.path ?? longName ?? (prefix ? `${prefix}/${stored}` : stored);
-    const target = extended.linkpath ?? longTarget ?? text(block, 157, 100);
+    const name = attrs.path ?? longName ?? (prefix ? `${prefix}/${stored}` : stored);
+    const target = attrs.linkpath ?? longTarget ?? text(block, 157, 100);
     entries.push({
       name: name.replace(/^\.\//, ""),
       archiveName: name,
@@ -234,6 +249,7 @@ const scanEntries = (bytes) => {
     extended = {};
     offset += dataBlocks;
   }
+  if (offset !== bytes.length) throw new Error("truncated tar header");
   return entries;
 };
 

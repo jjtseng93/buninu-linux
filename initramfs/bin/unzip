@@ -7,7 +7,7 @@
 // MEMBER operands may be wildcards. Unix modes and symlinks are restored.
 // Runs under node as well as bun.
 
-import { chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
+import { constants, chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, join, normalize, resolve } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { crc32 } from "../lib/crc32.js";
@@ -61,11 +61,23 @@ if (operands.length === 0) usage();
 const [archive, ...patterns] = operands;
 
 const fd = (() => {
-  try { return openSync(archive, "r"); } catch (error) { return fail(`cannot open ${archive}: ${error.message}`, 9); }
+  try { return openSync(archive, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0)); } catch (error) { return fail(`cannot open ${archive}: ${error.message}`, 9); }
 })();
-const size = fstatSync(fd).size;
+const info = fstatSync(fd);
+if (!info.isFile()) fail(`${archive}: not a regular file`, 3);
+const size = info.size;
+const validSize = (value) => Number.isSafeInteger(value) && value >= 0;
+const uint64 = (buffer, offset) => {
+  const value = buffer.readBigUInt64LE(offset);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) fail(`${archive}: ZIP64 value exceeds safe integer range`, 3);
+  return Number(value);
+};
 const read = (position, length) => {
-  const buffer = Buffer.alloc(length);
+  if (!validSize(position) || !validSize(length) || position > size || length > size - position)
+    fail(`${archive}: invalid or truncated archive range`, 3);
+  let buffer;
+  try { buffer = Buffer.alloc(length); }
+  catch { fail(`${archive}: cannot allocate member buffer`, 3); }
   let done = 0;
   while (done < length) {
     const count = readSync(fd, buffer, done, length - done, position + done);
@@ -80,19 +92,33 @@ const tailLength = Math.min(size, 65557);
 const tail = read(size - tailLength, tailLength);
 let eocd = -1;
 for (let offset = tailLength - 22; offset >= 0; offset--) {
-  if (tail.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
+  if (tail.readUInt32LE(offset) === 0x06054b50 && offset + 22 + tail.readUInt16LE(offset + 20) === tail.length) { eocd = offset; break; }
 }
 if (eocd < 0) fail(`${archive}: not a zip archive (no end of central directory)`, 9);
+if (tail.readUInt16LE(eocd + 4) !== 0 || tail.readUInt16LE(eocd + 6) !== 0
+    || tail.readUInt16LE(eocd + 8) !== tail.readUInt16LE(eocd + 10))
+  fail(`${archive}: split archives are not supported`, 3);
 let entryCount = tail.readUInt16LE(eocd + 10);
 let directorySize = tail.readUInt32LE(eocd + 12);
 let directoryOffset = tail.readUInt32LE(eocd + 16);
+let directoryLimit = size - tailLength + eocd;
 // zip64: the locator sits just before the end of central directory record.
 if (eocd >= 20 && tail.readUInt32LE(eocd - 20) === 0x07064b50) {
-  const record = read(Number(tail.readBigUInt64LE(eocd - 20 + 8)), 56);
+  if (tail.readUInt32LE(eocd - 16) !== 0 || tail.readUInt32LE(eocd - 4) !== 1)
+    fail(`${archive}: split ZIP64 archives are not supported`, 3);
+  const recordOffset = uint64(tail, eocd - 20 + 8);
+  if (recordOffset > directoryLimit - 20 - 56) fail(`${archive}: invalid ZIP64 record range`, 3);
+  const record = read(recordOffset, 56);
   if (record.readUInt32LE(0) !== 0x06064b50) fail(`${archive}: bad zip64 end of central directory`, 3);
-  entryCount = Number(record.readBigUInt64LE(32));
-  directorySize = Number(record.readBigUInt64LE(40));
-  directoryOffset = Number(record.readBigUInt64LE(48));
+  if (record.readUInt32LE(16) !== 0 || record.readUInt32LE(20) !== 0
+      || uint64(record, 24) !== uint64(record, 32) || uint64(record, 4) < 44)
+    fail(`${archive}: invalid or split ZIP64 directory`, 3);
+  if (uint64(record, 4) > directoryLimit - 20 - recordOffset - 12)
+    fail(`${archive}: truncated ZIP64 record`, 3);
+  directoryLimit = recordOffset;
+  entryCount = uint64(record, 32);
+  directorySize = uint64(record, 40);
+  directoryOffset = uint64(record, 48);
 }
 
 // Info-ZIP writes UTF-8 names without the 0x800 flag, so a name that decodes as UTF-8 is read as
@@ -104,12 +130,21 @@ const memberName = (raw, flags) => {
 };
 
 const entries = [];
-const central = read(directoryOffset, directorySize);
-for (let offset = 0, index = 0; index < entryCount; index++) {
+if (!validSize(entryCount) || !validSize(directorySize) || !validSize(directoryOffset)
+    || directoryOffset > directoryLimit || directorySize > directoryLimit - directoryOffset
+    || entryCount > Math.floor(directorySize / 46)) fail(`${archive}: invalid central directory bounds`, 3);
+let directoryPosition = 0;
+for (let index = 0; index < entryCount; index++) {
+  if (directorySize - directoryPosition < 46) fail(`${archive}: truncated central directory`, 3);
+  const header = read(directoryOffset + directoryPosition, 46);
+  const entryLength = 46 + header.readUInt16LE(28) + header.readUInt16LE(30) + header.readUInt16LE(32);
+  if (entryLength > directorySize - directoryPosition) fail(`${archive}: truncated central entry`, 3);
+  // Read one bounded entry instead of allocating the untrusted whole-directory size.
+  const central = read(directoryOffset + directoryPosition, entryLength), offset = 0;
+  if (central.readUInt16LE(34) !== 0) fail(`${archive}: split members are not supported`, 3);
   if (central.readUInt32LE(offset) !== 0x02014b50) fail(`${archive}: bad central directory entry ${index}`, 3);
   const nameLength = central.readUInt16LE(offset + 28);
   const extraLength = central.readUInt16LE(offset + 30);
-  const commentLength = central.readUInt16LE(offset + 32);
   const flags = central.readUInt16LE(offset + 8);
   const entry = {
     madeBy: central.readUInt16LE(offset + 4) >> 8,
@@ -126,19 +161,29 @@ for (let offset = 0, index = 0; index < entryCount; index++) {
   };
   // zip64 extra field: the 0xFFFFFFFF fields follow, in this order.
   const extra = central.subarray(offset + 46 + nameLength, offset + 46 + nameLength + extraLength);
-  for (let position = 0; position + 4 <= extra.length;) {
+  const required64 = ["size", "compressedSize", "localOffset"].filter(key => entry[key] === 0xffffffff);
+  let found64 = false;
+  for (let position = 0; position < extra.length;) {
+    if (extra.length - position < 4) fail(`${archive}: truncated extra field`, 3);
     const id = extra.readUInt16LE(position);
     const length = extra.readUInt16LE(position + 2);
-    if (id === 0x0001) {
+    if (length > extra.length - position - 4) fail(`${archive}: truncated extra field`, 3);
+    if (id === 0x0001 && !found64) {
+      found64 = true;
       let field = position + 4;
-      for (const key of ["size", "compressedSize", "localOffset"]) {
-        if (entry[key] === 0xffffffff) { entry[key] = Number(extra.readBigUInt64LE(field)); field += 8; }
+      for (const key of required64) {
+        if (field + 8 > position + 4 + length) fail(`${archive}: truncated ZIP64 extra field`, 3);
+        entry[key] = uint64(extra, field); field += 8;
       }
     }
     position += 4 + length;
   }
+  if (required64.length && !found64) fail(`${archive}: missing ZIP64 extra field`, 3);
+  if (entry.localOffset > directoryOffset || directoryOffset - entry.localOffset < 30
+      || entry.compressedSize > directoryOffset - entry.localOffset - 30)
+    fail(`${archive}: invalid member range`, 3);
   entries.push(entry);
-  offset += 46 + nameLength + extraLength + commentLength;
+  directoryPosition += entryLength;
 }
 
 // Bun.Glob when running under Bun; elsewhere the wildcards become a RegExp:
@@ -173,10 +218,12 @@ const data = (entry) => {
   const local = read(entry.localOffset, 30);
   if (local.readUInt32LE(0) !== 0x04034b50) throw new Error("bad local header");
   const start = entry.localOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
+  if (!validSize(start) || start > directoryOffset || entry.compressedSize > directoryOffset - start)
+    throw new Error("invalid member data range");
   const raw = read(start, entry.compressedSize);
   let bytes;
   if (entry.method === 0) bytes = raw;
-  else if (entry.method === 8) bytes = inflateRawSync(raw);
+  else if (entry.method === 8) bytes = inflateRawSync(raw, { maxOutputLength: Math.max(1, entry.size) });
   else throw new Error(`compression method ${entry.method} is not supported`);
   if (bytes.length !== entry.size) throw new Error(`size mismatch (${bytes.length} != ${entry.size})`);
   if (crc32(bytes) !== entry.crc) throw new Error("CRC error");

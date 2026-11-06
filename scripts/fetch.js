@@ -76,34 +76,69 @@ export const readTar = (path) => {
   const links = new Map();
   let longName = null;
   let longLink = null;
-  for (let offset = 0; offset + 512 <= data.length;) {
+  let extended = {}, global = {};
+  const invalid = (reason) => { throw new Error(`${path}: ${reason}`); };
+  const number = (header, start, length) => {
+    if (header[start] & 0x80) {
+      let value = BigInt(header[start] & 0x7f);
+      for (let i = start + 1; i < start + length; i++) value = value * 256n + BigInt(header[i]);
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) invalid("unsafe tar numeric field");
+      return Number(value);
+    }
+    const digits = header.toString("ascii", start, start + length).replace(/\0.*$/s, "").trim();
+    if (digits && !/^[0-7]+$/.test(digits)) invalid("invalid tar numeric field");
+    return digits ? Number.parseInt(digits, 8) : 0;
+  };
+  let offset = 0;
+  for (; offset + 512 <= data.length;) {
     const header = data.subarray(offset, offset + 512);
-    if (header.every((byte) => byte === 0)) { offset += 512; continue; }
+    if (header.every((byte) => byte === 0)) {
+      offset += 512; longName = longLink = null; extended = {}; global = {}; continue;
+    }
+    let checksum = 0;
+    for (let i = 0; i < 512; i++) checksum += i >= 148 && i < 156 ? 32 : header[i];
+    if (checksum !== number(header, 148, 8)) invalid("invalid tar header checksum");
     const field = (start, length) => header.toString("utf8", start, start + length).replace(/\0.*$/s, "");
-    const size = Number.parseInt(field(124, 12).trim() || "0", 8);
     const type = String.fromCharCode(header[156] || 0x30);
+    const metadata = ["x", "X", "g", "L", "K"].includes(type);
+    const attrs = { ...global, ...extended };
+    if (!metadata && attrs.size !== undefined && !/^[0-9]+$/.test(attrs.size)) invalid("invalid pax size");
+    const size = !metadata && attrs.size !== undefined ? Number(attrs.size) : number(header, 124, 12);
+    const padded = Math.ceil(size / 512) * 512;
+    if (!Number.isSafeInteger(size) || size < 0 || !Number.isSafeInteger(padded)
+        || padded > data.length - offset - 512) invalid("invalid or truncated tar member size");
     const body = data.subarray(offset + 512, offset + 512 + size);
-    offset += 512 + Math.ceil(size / 512) * 512;
-    if (type === "x") {
-      // pax records: "LENGTH key=value\n"
-      for (const record of body.toString("utf8").split("\n")) {
-        const match = /^\d+ path=(.*)$/.exec(record);
-        if (match) longName = match[1];
-        const link = /^\d+ linkpath=(.*)$/.exec(record);
-        if (link) longLink = link[1];
+    offset += 512 + padded;
+    if (type === "x" || type === "X" || type === "g") {
+      // PAX lengths count bytes, not UTF-16 characters. Reject malformed records.
+      const attrs = type === "g" ? global : extended;
+      for (let at = 0; at < body.length;) {
+        const space = body.indexOf(32, at);
+        if (space < 0) invalid("invalid pax record length");
+        const digits = body.toString("ascii", at, space);
+        const length = /^[0-9]+$/.test(digits) ? Number(digits) : NaN;
+        if (!Number.isSafeInteger(length) || length <= space - at + 1
+            || length > body.length - at || body[at + length - 1] !== 10) invalid("invalid pax record length");
+        const record = body.toString("utf8", space + 1, at + length - 1);
+        const equals = record.indexOf("=");
+        if (equals > 0) Object.defineProperty(attrs, record.slice(0, equals), {
+          value: record.slice(equals + 1), writable: true, enumerable: true, configurable: true,
+        });
+        at += length;
       }
       continue;
     }
     if (type === "L") { longName = body.toString("utf8").replace(/\0.*$/s, ""); continue; }
     if (type === "K") { longLink = body.toString("utf8").replace(/\0.*$/s, ""); continue; }
-    if (type === "g") continue;
-    const prefix = field(345, 155);
-    const name = longName ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
+    const prefix = field(257, 5) === "ustar" ? field(345, 155) : "";
+    const name = attrs.path ?? longName ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
     longName = null;
     if (type === "0" || type === "\0") files.set(name.replace(/^\.\//, ""), body);
-    if (type === "1" || type === "2") links.set(name.replace(/^\.\//, ""), { target: longLink ?? field(157, 100), hard: type === "1" });
+    if (type === "1" || type === "2") links.set(name.replace(/^\.\//, ""), { target: attrs.linkpath ?? longLink ?? field(157, 100), hard: type === "1" });
     longLink = null;
+    extended = {};
   }
+  if (offset !== data.length) invalid("truncated tar header");
   return {
     // Enumerate regular files without exposing the Map's mutation methods.
     entries() { return files.entries(); },
