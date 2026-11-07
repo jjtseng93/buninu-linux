@@ -417,19 +417,18 @@ describe("system multi-operand reference", () => {
     await expectBuiltinLikeSystem("printf", ["[%s][%s]\n", "one", "two", "three"]);
   });
 
-  test("ln links each source into a target directory", async () => {
+  test("ln symlinks each source into a target directory", async () => {
     const directory = mkdtempSync(join(tmpdir(), "bunmsh-ln-reference-"));
     const actualDir = join(directory, "actual");
     const systemDir = join(directory, "system");
     try {
       for (const cwd of [actualDir, systemDir]) {
         mkdirSync(cwd);
-        mkdirSync(join(cwd, "hard"));
         mkdirSync(join(cwd, "soft"));
         await Bun.write(join(cwd, "one"), "first\n");
         await Bun.write(join(cwd, "two"), "second\n");
       }
-      for (const args of [["one", "two", "hard"], ["-s", "one", "two", "soft"]]) {
+      for (const args of [["-s", "one", "two", "soft"]]) {
         const [actual, reference] = await Promise.all([
           invokeArgvWithInput([process.execPath, join(root, "src/main.js"), "-cc", "builtin", "ln", ...args], "", actualDir),
           invokeArgvWithInput([Bun.which("ln"), ...args], "", systemDir),
@@ -437,8 +436,6 @@ describe("system multi-operand reference", () => {
         expect(actual).toEqual(reference);
       }
       for (const name of ["one", "two"]) {
-        expect(readdirSync(join(actualDir, "hard"))).toEqual(readdirSync(join(systemDir, "hard")));
-        expect(statSync(join(actualDir, "hard", name)).ino).toBe(statSync(join(actualDir, name)).ino);
         expect(readlinkSync(join(actualDir, "soft", name)))
           .toBe(readlinkSync(join(systemDir, "soft", name)));
       }

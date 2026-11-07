@@ -1079,7 +1079,31 @@
     state.outputTail = text.slice(-64);
   }
 
-  function handleKittyMessage(payload) {
+  // Only a server advertising this capability receives the private control.
+  const frameFlowSockets = new WeakSet();
+  function sendFrameControl(socket, fields) {
+    if (socket?.readyState === 1 && frameFlowSockets.has(socket))
+      socket.send("G" + JSON.stringify({version: 1, ...fields}));
+  }
+  function inspectFrameCapability(socket, data) {
+    if (typeof data !== "string" || data[0] !== "a") return;
+    try {
+      if (JSON.parse(data.slice(1)).kittyFrameFlow !== 1 || frameFlowSockets.has(socket)) return;
+      frameFlowSockets.add(socket);
+      sendFrameControl(socket, {visible: !document.hidden});
+    } catch {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    sendFrameControl(state.socket, {visible: !document.hidden});
+  });
+  function acknowledgeFrame(socket, sequence) {
+    if (!Number.isSafeInteger(sequence)) return;
+    // rAF stops while hidden and also bounds delivery if WebView is suspended
+    // without a visibility event. Credits belong to their original connection.
+    requestAnimationFrame(() => sendFrameControl(socket, {ack: sequence}));
+  }
+
+  function handleKittyMessage(payload, socket) {
     const message = JSON.parse(payload);
     sendBrowserDebug("kitty-message", {
       kind: message.kind,
@@ -1091,7 +1115,9 @@
       // The server records this cursor exactly where the Kitty APC occurred.
       // Do not replace it with xterm's later cursor, which may already have
       // moved because of redraw or scrolling output queued after the APC.
-      placeImage(message);
+      Promise.resolve(placeImage(message)).catch(error => {
+        console.warn("Kitty image decode failed", error);
+      }).finally(() => acknowledgeFrame(socket, message.frameSequence));
       return true;
     }
     if (message.kind === "delete") {
@@ -1119,9 +1145,10 @@
       const wrapped = function (event) {
         state.socket = this;
         watchTouchSocket(this);
+        inspectFrameCapability(this, event.data);
         inspectTerminalOutput(event.data);
         if (typeof event.data === "string" && event.data[0] === MSG_KITTY) {
-          if (handleKittyMessage(event.data.slice(1))) {
+          if (handleKittyMessage(event.data.slice(1), this)) {
             return;
           }
         }
@@ -1166,9 +1193,10 @@
       const wrapped = function (event) {
         state.socket = this;
         watchTouchSocket(this);
+        inspectFrameCapability(this, event.data);
         inspectTerminalOutput(event.data);
         if (typeof event.data === "string" && event.data[0] === MSG_KITTY) {
-          if (handleKittyMessage(event.data.slice(1))) {
+          if (handleKittyMessage(event.data.slice(1), this)) {
             return;
           }
         }

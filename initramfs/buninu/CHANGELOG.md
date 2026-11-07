@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.1 - 2026-11-08
+
+- Sync jsgotty to 1.4.2-rc0:
+  * Add browser Kitty-frame flow control: limit unacknowledged replaceable
+    image placements to two, coalesce pending updates for the same placement,
+    and pause delivery while the page is hidden. Ordinary terminal output and
+    CLI clients keep their existing ordered path.
+  * Negotiate the capability per WebSocket and acknowledge image placement
+    after decoding, preventing a suspended browser from accumulating stale
+    frames that replay when it returns to the foreground.
+  * Add automated server/browser flow tests and manual FPS diagnostic helpers.
+- Sync bunmsh to 0.4.2:
+  * Extend `find` with grouped expressions, negation, AND/OR precedence,
+    short-circuit actions, `-prune` and `-exec` with bounded `+` batches.
+  * Stream uncaptured results during traversal while preserving command
+    substitution, pipeline capture and redirection behavior.
+  * Retain submitted interactive lines received while waiting for terminal
+    cursor-position replies, and allow slow terminals up to 400 ms to reply.
+
 ## 0.7.0 - 2026-10-26
 
 - Sync jsgotty to 1.4.0:

@@ -1920,9 +1920,15 @@ const builtins = {
   },
 };
 
-const runFindBuiltin = async (argv, state) => {
+// Stream only an uncaptured stdout endpoint. Pipeline children can themselves
+// capture output (for example in command substitutions), so their flag is not enough.
+const runFindBuiltin = async (argv, state, input, context = {}) => {
+  const endpoint = state.fdBindings?.[1] ?? { channel: 1 };
+  const streamStdout = !context.captureStdout && !context.options?.stdoutSink &&
+    endpoint.channel === 1 && endpoint.fd === undefined && !endpoint.closed;
   const output = await runFind(argv, state, process.platform, (command) =>
-    runCommandArgv(command, state, null, true, true));
+    runCommandArgv(command, state, null, true, true),
+    streamStdout ? (text) => writeStream(process.stdout, bytes(text)) : null);
   return result(output.status, output.stdout, output.stderr);
 };
 

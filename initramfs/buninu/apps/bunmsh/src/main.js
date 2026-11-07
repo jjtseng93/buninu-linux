@@ -228,6 +228,10 @@ async function interactive(state) {
   let savedHead = "";
   let savedTail = "";
   let promptAbort = null;
+  // question() consumes one line only. Resuming a paused terminal can deliver
+  // several buffered lines before the next question is installed; readline
+  // emits the remaining lines as events. Retain them in submission order.
+  const queuedLines = [];
   // Set by onPaste (below) when a bracketed paste contains a newline, and
   // consumed by the main loop's readline.question() catch block right after
   // promptAbort.abort() rejects it -- see the comment there.
@@ -447,6 +451,7 @@ async function interactive(state) {
     }
     state.lastStatus = 130;
     if (foregroundCommand || promptAbort?.signal.aborted) return;
+    queuedLines.length = 0;
     process.stdout.write("\n");
     promptAbort?.abort();
   };
@@ -500,6 +505,7 @@ async function interactive(state) {
           (listener) => !resizeListenersBeforeReadline.has(listener))
       : [];
     readline.on("SIGINT", interrupt);
+    readline.on("line", line => queuedLines.push(line));
     closed = new Promise((resolve) => readline.once("close", () => resolve(null)));
   };
   setupReadline();
@@ -629,7 +635,12 @@ async function interactive(state) {
       promptAbort = new AbortController();
       let line;
       try {
-        line = await Promise.race([
+        if (queuedLines.length) {
+          // Already echoed by readline when submitted; do not paint a prompt
+          // in front of the queued command's output.
+          if (!terminal) process.stdout.write(rendered.text);
+          line = queuedLines.shift();
+        } else line = await Promise.race([
           readline.question(rendered.text, { signal: promptAbort.signal }),
           closed,
         ]);

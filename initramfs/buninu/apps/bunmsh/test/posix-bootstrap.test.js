@@ -72,9 +72,13 @@ test("redirect order snapshots the original stdout and truncates null commands",
   const dir = mkdtempSync(join(tmpdir(),'bunmsh-io-order-'));
   try {
     const path = join(dir,'out');
-    const cmd = `'${process.execPath}' -e 'console.log("out");console.error("err")'`;
+    // Test descriptor routing, not console formatting: FORCE_COLOR can make
+    // console.error emit ANSI codes even when its output is captured in a pipe.
+    const cmd = `'${process.execPath}' -e 'const {writeSync}=require("node:fs");writeSync(1,"out\\n");writeSync(2,"err\\n")'`;
     let r = await run(`${cmd} 2>&1 >'${path}'`);
-    expect(r.stdout).toBe('err\n'); expect(r.stderr).toBe('');
+    // Escape control characters in failures: terminal-rendered string diffs
+    // can hide CR, ANSI sequences, or NUL bytes behind an apparent newline.
+    expect(JSON.stringify(r.stdout)).toBe(JSON.stringify('err\n')); expect(r.stderr).toBe('');
     expect(readFileSync(path,'utf8')).toBe('out\n');
     r = await run(`${cmd} >'${path}' 2>&1`);
     expect(r.stdout).toBe(''); expect(r.stderr).toBe('');
@@ -219,7 +223,7 @@ test("only posix mode removes ls icons and survives pipeline state transfer", as
   const dir=mkdtempSync(join(tmpdir(),'bunmsh-posix-ls-'));
   try {
     const path=join(dir,'file'); writeFileSync(path,'x');
-    const r=await run(`ls '${path}'\nset -o posix\nls '${path}' | cat\nlsfancy '${path}'\nset +o posix\nls '${path}'`);
+    const r=await run(`builtin ls '${path}'\nset -o posix\nbuiltin ls '${path}' | cat\nlsfancy '${path}'\nset +o posix\nbuiltin ls '${path}'`);
     expect(r.stdout).toBe(`📄 ${path}\n${path}\n📄 ${path}\n📄 ${path}\n`); expect(r.stderr).toBe('');
     const options=await run('set -o\nset -o posix\necho "flags=$-"\nset +o');
     expect(options.stdout).toContain('posix off\n'); expect(options.stdout).toContain('flags=\n'); expect(options.stdout).toContain('set -o posix\n');
@@ -508,10 +512,10 @@ test("uniq supports output files and rejects unsupported options", async () => {
   const dir = mkdtempSync(join(tmpdir(),'bunmsh-uniq-'));
   try {
     writeFileSync(join(dir,'input'),'a\na\nb');
-    const r=await run(`uniq '${dir}/input' '${dir}/output'`);
+    const r=await run(`builtin uniq '${dir}/input' '${dir}/output'`);
     expect(r.status).toBe(0); expect(r.stdout).toBe('');
     expect(readFileSync(join(dir,'output'),'utf8')).toBe('a\nb\n');
-    expect((await run('uniq -z')).status).toBe(1);
+    expect((await run('builtin uniq -z')).status).toBe(1);
   } finally { rmSync(dir,{recursive:true,force:true}); }
 });
 test("rm force ignores empty filenames while still deleting real operands", async () => {

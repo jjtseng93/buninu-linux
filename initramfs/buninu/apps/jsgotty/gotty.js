@@ -16,6 +16,7 @@ const { TerminalModeTracker } = require("./terminal-modes.js");
 const { WebSocketServer } = WebSocket;
 const { ClipboardHost, handleOSC52 } = require("./clipboard.js");
 const clipboardHost = new ClipboardHost();
+const { KittyFrameFlow } = require("./kitty-flow.js");
 
 const MSG_INPUT = "1";
 const MSG_PING = "2";
@@ -1856,7 +1857,8 @@ class PtySession {
       remoteAddr,
       encoding: "null",
       readOnly,
-      sendQueue: Promise.resolve()
+      sendQueue: Promise.resolve(),
+      kittyFlow: new KittyFrameFlow(graphic => this.queueSend(ws, MSG_KITTY_GRAPHICS + JSON.stringify(graphic)))
     });
     if (this.permitWrite && !readOnly && !this.writerWs) {
       this.writerWs = ws;
@@ -1919,6 +1921,7 @@ class PtySession {
       const writable = this.isWriter(ws);
       this.send(MSG_SET_ROLE, JSON.stringify({
         role: writable ? "writer" : "viewer",
+        kittyFrameFlow: 1,
         writable
       }), ws);
     }
@@ -2452,6 +2455,9 @@ class PtySession {
     }
 
     switch (type) {
+      case "G":
+        try { client.kittyFlow.control(JSON.parse(payload)); } catch {}
+        break;
       case "C":
         handleOSC52(this, ws, payload, clipboardHost);
         break;
@@ -2579,6 +2585,13 @@ class PtySession {
     if (!client || ws.readyState !== WebSocket.OPEN) {
       return;
     }
+
+    // Negotiate browser-only image credits; never throttle terminal byte output.
+    if (!binary && client.kittyFlow.enabled && payload[0] === MSG_KITTY_GRAPHICS) {
+      const graphic = JSON.parse(payload.slice(1));
+      if (!graphic.frameSequence && client.kittyFlow.graphic(graphic)) return;
+    }
+    if (!binary && payload[0] === MSG_OUTPUT) client.kittyFlow.output(payload.slice(1));
 
     const sendOne = async () => {
       await new Promise((resolve, reject) => {

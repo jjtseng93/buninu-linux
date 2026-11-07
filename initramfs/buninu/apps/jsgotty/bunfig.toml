@@ -1,0 +1,3 @@
+[test]
+# Test jsgotty, not the vendored node-pty development suites.
+root = "./tests"

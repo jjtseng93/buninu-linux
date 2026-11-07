@@ -1,3 +1,4 @@
+import { answerCursorQueries } from "./support/terminal.js";
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, statSync, symlinkSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -156,7 +157,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [process.execPath, "src/main.js", "-i"],
@@ -182,7 +183,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [process.execPath, "src/main.js", "-i"],
@@ -218,7 +219,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [process.execPath, "src/main.js", "-i"],
@@ -249,7 +250,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [process.execPath, "src/main.js", "-i"],
@@ -283,7 +284,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [process.execPath, "src/main.js", "-i"],

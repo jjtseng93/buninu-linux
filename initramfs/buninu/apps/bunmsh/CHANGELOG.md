@@ -2,6 +2,27 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.4.2] - 2026-11-08
+
+### Added and fixed
+
+- Extend builtin `find` with grouped expressions, negation, AND/OR precedence,
+  short-circuit actions and `-prune`. Support `-exec` with `;` and bounded `+`
+  batches, and report invalid expressions as command errors.
+- Stream uncaptured `find` results during traversal while preserving command
+  substitutions, pipeline captures and stdout/stderr redirection order.
+- Increase the interactive cursor-position query timeout from 60 ms to 400 ms
+  for slow terminals when checking output without a trailing newline.
+- Preserve commands submitted while waiting for cursor-position replies instead
+  of losing buffered input lines.
+
+### Tests
+
+- Isolate builtin assertions from host utilities and descriptor-redirection
+  assertions from inherited console-color settings.
+- Expand coverage for `find` expressions, execution, streaming and capture
+  isolation, plus immediate, delayed and missing terminal cursor replies.
+
 ## [0.4.1] - 2026-10-13
 
 - Fixed awk bypassing linker protection

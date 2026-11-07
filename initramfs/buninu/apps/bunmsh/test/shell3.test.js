@@ -1,3 +1,4 @@
+import { answerCursorQueries } from "./support/terminal.js";
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, statSync, symlinkSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -130,7 +131,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 100,
       rows: 30,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     try {
       const historyPath = join(home, ".local", "share", "bunmsh", "history");
@@ -164,7 +165,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [Bun.which("bun") || process.argv0, "src/main.js", "-i"],
@@ -186,7 +187,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const env = { ...process.env, PS1: "> " };
     delete env.BUNMSH_MOUSE;
@@ -228,7 +229,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 80,
       rows: 24,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const env = { ...process.env, PS1: "> " };
     delete env.BUNMSH_MOUSE;
@@ -256,7 +257,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 100,
       rows: 30,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const env = { ...process.env };
     delete env.PS1;
@@ -363,7 +364,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 100,
       rows: 30,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [Bun.which("bun") || process.argv0, "src/main.js", "-i"],
@@ -400,7 +401,7 @@ describe("CLI", () => {
     const terminal = new Bun.Terminal({
       cols: 100,
       rows: 30,
-      data(_terminal, data) { transcript += data.toString(); },
+      data(_terminal, data) { transcript += data.toString(); answerCursorQueries(_terminal, data); },
     });
     const proc = Bun.spawn({
       cmd: [Bun.which("bun") || process.argv0, "src/main.js", "-i"],
