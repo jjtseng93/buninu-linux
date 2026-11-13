@@ -1,0 +1,363 @@
+#!/bin/bun
+// zip — write a zip archive (deflated or stored members, UTF-8 names, zip64
+// past 4 GiB or 65535 entries) over node:zlib. The writer comes from
+// flea-qml's src/archiveops.js (MIT, Dr. John).
+//
+// Supported: -r (recurse into directories), -j (junk paths), -y (store
+// symbolic links as links instead of what they point to), -D (no directory
+// entries), -0 (store) and -1 to -9 (deflate level), -q, -X (accepted; no
+// extra attributes are written beyond the timestamp), and "-" as the archive
+// name to write to standard output. Like Info-ZIP, a missing ".zip" suffix is
+// added, leading "/" and "../" are taken off the stored names, and Unix modes
+// are kept. Updating an existing archive is not supported: the archive must
+// not exist yet. Runs under node as well as bun.
+
+import { closeSync, constants, createReadStream, fstatSync, lstatSync, openSync, readdirSync, readlinkSync, readSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { createDeflateRaw, deflateRawSync } from "node:zlib";
+import * as zlib from "node:zlib";
+import { crc32 as crc32js } from "../lib/crc32.js";
+
+// node:zlib's crc32 is native where the runtime has it, /lib/crc32.js elsewhere.
+const crc32 = typeof zlib.crc32 === "function" ? (bytes, previous = 0) => zlib.crc32(bytes, previous) >>> 0 : crc32js;
+
+const fail = (message, status = 1) => {
+  console.error(`zip: ${message}`);
+  process.exit(status);
+};
+
+const usage = (status = 16) => {
+  console.error(`Usage:
+  zip [-r] [-j] [-y] [-D] [-0..-9] [-q] ZIPFILE FILE...
+  zip [-r] ... - FILE...          (the archive goes to standard output)`);
+  process.exit(status);
+};
+
+let recurse = false, junkPaths = false, keepLinks = false, noDirs = false, quiet = false, level = 6;
+const operands = [];
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (argument === "-h" || argument === "--help") usage(0);
+  if (argument === "--") { operands.push(...argv.slice(index + 1)); break; }
+  if (argument.startsWith("-") && argument.length > 1) {
+    for (const letter of argument.slice(1)) {
+      if (letter === "r") recurse = true;
+      else if (letter === "j") junkPaths = true;
+      else if (letter === "y") keepLinks = true;
+      else if (letter === "D") noDirs = true;
+      else if (letter === "q") quiet = true;
+      else if (letter === "X") {}
+      else if (letter >= "0" && letter <= "9") level = Number(letter);
+      else fail(`unknown option -${letter}`, 16);
+    }
+    continue;
+  }
+  operands.push(argument);
+}
+if (operands.length === 0) usage();
+let [archive, ...inputs] = operands;
+if (inputs.length === 0) fail("nothing to do!", 12);
+const toStdout = archive === "-";
+if (!toStdout && !/\.[^./]*$/.test(basename(archive))) archive += ".zip";
+if (!toStdout) {
+  try {
+    lstatSync(archive);
+    fail(`${archive} already exists; updating an existing archive is not supported`, 16);
+  } catch (error) {
+    if (error.code !== "ENOENT") fail(`${archive}: ${error.message}`, 15);
+  }
+}
+const say = toStdout ? (text) => process.stderr.write(text) : (text) => process.stdout.write(text);
+
+// ---- what goes in ----
+
+// The stored name of an operand path: "/" and "./" and "../" taken off the front, as Info-ZIP does.
+const storedName = (path) => {
+  let name = path.replaceAll("\\", "/");
+  for (;;) {
+    const next = name.replace(/^\/+/, "").replace(/^(\.\.?\/)+/, "");
+    if (next === name) break;
+    name = next;
+  }
+  name = name.split("/").filter((part) => part !== "" && part !== "." && part !== "..").join("/");
+  return junkPaths ? basename(name) : name;
+};
+
+const entries = [];
+const seen = new Set();
+let warnings = 0;
+const skip = (path, why) => {
+  console.error(`zip warning: ${path}: ${why}`);
+  warnings++;
+};
+const add = (path, top) => {
+  let st;
+  try {
+    st = keepLinks ? lstatSync(path) : statSync(path);
+  } catch (error) {
+    // A dangling link is stored as a link even without -y, rather than lost.
+    try {
+      st = lstatSync(path);
+      if (!st.isSymbolicLink()) throw error;
+    } catch {
+      return skip(path, top ? "name not matched" : error.code ?? error.message);
+    }
+  }
+  const name = storedName(path);
+  if (!name) return;
+  if (st.isDirectory()) {
+    if (!noDirs && !junkPaths && !seen.has(`${name}/`)) {
+      seen.add(`${name}/`);
+      entries.push({ name: `${name}/`, st, kind: "dir" });
+    }
+    if (!recurse) return;
+    let names;
+    try {
+      names = readdirSync(path).sort();
+    } catch (error) {
+      return skip(path, error.code ?? error.message);
+    }
+    for (const child of names) add(join(path, child), false);
+    return;
+  }
+  if (seen.has(name)) return;
+  if (st.isSymbolicLink()) {
+    seen.add(name);
+    return entries.push({ name, st, kind: "link", link: readlinkSync(path) });
+  }
+  if (!st.isFile()) return skip(path, "not a regular file; skipped");
+  seen.add(name);
+  entries.push({ name, st, kind: "file", path });
+};
+for (const input of inputs) add(input, true);
+if (entries.length === 0) fail("nothing to do!", 12);
+
+// ---- the writer ----
+
+const out = toStdout ? 1 : (() => {
+  const temporary = join(dirname(archive), `.zi${process.pid}-${Date.now().toString(36)}`);
+  try {
+    return { fd: openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o666), temporary };
+  } catch (error) {
+    return fail(`cannot create ${archive}: ${error.message}`, 15);
+  }
+})();
+const fd = toStdout ? 1 : out.fd;
+let offset = 0;
+const emit = (buffer) => {
+  for (let done = 0; done < buffer.length; ) {
+    try {
+      done += writeSync(fd, buffer, done, buffer.length - done);
+    } catch (error) {
+      if (error.code === "EAGAIN") continue;
+      throw error;
+    }
+  }
+  offset += buffer.length;
+};
+const abandon = (message, status) => {
+  if (!toStdout) {
+    closeSync(fd);
+    rmSync(out.temporary, { force: true });
+  }
+  fail(message, status);
+};
+
+const U32 = 0xffffffff;
+// Info-ZIP's DOS stamp, in local time; before 1980 is 1980-01-01.
+const dosStamp = (ms) => {
+  const date = new Date(ms);
+  if (date.getFullYear() < 1980) return { time: 0, date: (1 << 5) | 1 };
+  return {
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1),
+    date: ((Math.min(date.getFullYear(), 2107) - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+  };
+};
+// The "UT" extra field: the modification time in whole Unix seconds, which a DOS stamp rounds to two.
+const timeExtra = (ms) => {
+  const extra = Buffer.alloc(9);
+  extra.writeUInt16LE(0x5455, 0);
+  extra.writeUInt16LE(5, 2);
+  extra[4] = 1;
+  extra.writeInt32LE(Math.max(-0x80000000, Math.min(0x7fffffff, Math.floor(ms / 1000))), 5);
+  return extra;
+};
+
+// Up to this size a file is read whole and stored when deflate would not shrink it; larger
+// files are deflated as a stream with their sizes in a data descriptor.
+const WHOLE = 8 << 20;
+
+const readWhole = (path, size) => {
+  const input = openSync(path, constants.O_RDONLY);
+  try {
+    const buffer = Buffer.alloc(size);
+    let done = 0;
+    while (done < size) {
+      const count = readSync(input, buffer, done, size - done, done);
+      if (count === 0) break;
+      done += count;
+    }
+    if (done !== size || fstatSync(input).size !== size) throw new Error("file changed while zipping");
+    return buffer;
+  } finally {
+    closeSync(input);
+  }
+};
+
+const localHeader = (entry, fields) => {
+  const header = Buffer.alloc(30);
+  header.writeUInt32LE(0x04034b50, 0);
+  header.writeUInt16LE(fields.zip64 ? 45 : fields.method === 8 ? 20 : 10, 4);
+  header.writeUInt16LE(fields.flags, 6);
+  header.writeUInt16LE(fields.method, 8);
+  header.writeUInt16LE(entry.stamp.time, 10);
+  header.writeUInt16LE(entry.stamp.date, 12);
+  header.writeUInt32LE(fields.crc, 14);
+  header.writeUInt32LE(fields.zip64 ? U32 : fields.packed, 18);
+  header.writeUInt32LE(fields.zip64 ? U32 : fields.size, 22);
+  const extras = [timeExtra(entry.st.mtimeMs)];
+  if (fields.zip64) {
+    const wide = Buffer.alloc(20);
+    wide.writeUInt16LE(1, 0);
+    wide.writeUInt16LE(16, 2);
+    wide.writeBigUInt64LE(BigInt(fields.size), 4);
+    wide.writeBigUInt64LE(BigInt(fields.packed), 12);
+    extras.push(wide);
+  }
+  const extra = Buffer.concat(extras);
+  header.writeUInt16LE(entry.nameBytes.length, 26);
+  header.writeUInt16LE(extra.length, 28);
+  emit(Buffer.concat([header, entry.nameBytes, extra]));
+};
+
+const percent = (size, packed) => (size === 0 ? 0 : Math.max(0, Math.round((1 - packed / size) * 100)));
+
+async function writeEntry(entry) {
+  entry.stamp = dosStamp(entry.st.mtimeMs);
+  entry.nameBytes = Buffer.from(entry.name);
+  entry.start = offset;
+  const flags = 0x0800; // UTF-8 name
+  if (entry.kind !== "file" || entry.st.size <= WHOLE) {
+    const raw = entry.kind === "dir" ? Buffer.alloc(0)
+      : entry.kind === "link" ? Buffer.from(entry.link)
+      : readWhole(entry.path, entry.st.size);
+    const deflated = level > 0 && entry.kind === "file" && raw.length > 0 ? deflateRawSync(raw, { level }) : null;
+    const method = deflated && deflated.length < raw.length ? 8 : 0,
+      data = method === 8 ? deflated : raw;
+    Object.assign(entry, { method, flags, crc: crc32(raw), size: raw.length, packed: data.length, zip64: false });
+    localHeader(entry, entry);
+    emit(data);
+  } else {
+    // A large file: sizes and CRC follow its data, so it streams through deflate once.
+    const zip64 = entry.st.size >= 0xffff0000;
+    Object.assign(entry, { method: level > 0 ? 8 : 0, flags: flags | 0x0008, crc: 0, size: 0, packed: 0, zip64 });
+    localHeader(entry, { ...entry, size: 0, packed: 0 });
+    const source = createReadStream(entry.path);
+    source.on("data", (chunk) => {
+      entry.crc = crc32(chunk, entry.crc);
+      entry.size += chunk.length;
+    });
+    const stream = entry.method === 8 ? source.pipe(createDeflateRaw({ level })) : source;
+    source.on("error", (error) => stream.destroy(error));
+    for await (const chunk of stream) {
+      entry.packed += chunk.length;
+      emit(chunk);
+    }
+    if (entry.size !== entry.st.size) throw new Error("file changed while zipping");
+    const descriptor = Buffer.alloc(zip64 ? 24 : 16);
+    descriptor.writeUInt32LE(0x08074b50, 0);
+    descriptor.writeUInt32LE(entry.crc, 4);
+    if (zip64) {
+      descriptor.writeBigUInt64LE(BigInt(entry.packed), 8);
+      descriptor.writeBigUInt64LE(BigInt(entry.size), 16);
+    } else {
+      descriptor.writeUInt32LE(entry.packed, 8);
+      descriptor.writeUInt32LE(entry.size, 12);
+    }
+    emit(descriptor);
+  }
+  if (!quiet) say(`  adding: ${entry.name} (${entry.method === 8 ? `deflated ${percent(entry.size, entry.packed)}%` : "stored 0%"})\n`);
+}
+
+function writeDirectory() {
+  const directoryStart = offset;
+  for (const entry of entries) {
+    const wide = [];
+    if (entry.size >= U32) wide.push(entry.size);
+    if (entry.packed >= U32) wide.push(entry.packed);
+    if (entry.start >= U32) wide.push(entry.start);
+    const extras = [timeExtra(entry.st.mtimeMs)];
+    if (wide.length) {
+      const field = Buffer.alloc(4 + 8 * wide.length);
+      field.writeUInt16LE(1, 0);
+      field.writeUInt16LE(8 * wide.length, 2);
+      wide.forEach((value, index) => field.writeBigUInt64LE(BigInt(value), 4 + 8 * index));
+      extras.push(field);
+    }
+    const extra = Buffer.concat(extras);
+    const type = entry.kind === "dir" ? 0o040000 : entry.kind === "link" ? 0o120000 : 0o100000;
+    const record = Buffer.alloc(46);
+    record.writeUInt32LE(0x02014b50, 0);
+    record.writeUInt16LE((3 << 8) | 30, 4); // made by Unix, so the mode below is read
+    record.writeUInt16LE(entry.zip64 || wide.length ? 45 : entry.method === 8 ? 20 : 10, 6);
+    record.writeUInt16LE(entry.flags, 8);
+    record.writeUInt16LE(entry.method, 10);
+    record.writeUInt16LE(entry.stamp.time, 12);
+    record.writeUInt16LE(entry.stamp.date, 14);
+    record.writeUInt32LE(entry.crc, 16);
+    record.writeUInt32LE(Math.min(entry.packed, U32), 20);
+    record.writeUInt32LE(Math.min(entry.size, U32), 24);
+    record.writeUInt16LE(entry.nameBytes.length, 28);
+    record.writeUInt16LE(extra.length, 30);
+    record.writeUInt32LE((((type | (entry.st.mode & 0o7777)) << 16) | (entry.kind === "dir" ? 0x10 : 0)) >>> 0, 38);
+    record.writeUInt32LE(Math.min(entry.start, U32), 42);
+    emit(Buffer.concat([record, entry.nameBytes, extra]));
+  }
+  const directorySize = offset - directoryStart,
+    count = entries.length;
+  if (count > 0xffff || directoryStart >= U32 || directorySize >= U32) {
+    const record = Buffer.alloc(56),
+      at = offset;
+    record.writeUInt32LE(0x06064b50, 0);
+    record.writeBigUInt64LE(44n, 4);
+    record.writeUInt16LE((3 << 8) | 30, 12);
+    record.writeUInt16LE(45, 14);
+    record.writeBigUInt64LE(BigInt(count), 24);
+    record.writeBigUInt64LE(BigInt(count), 32);
+    record.writeBigUInt64LE(BigInt(directorySize), 40);
+    record.writeBigUInt64LE(BigInt(directoryStart), 48);
+    const locator = Buffer.alloc(20);
+    locator.writeUInt32LE(0x07064b50, 0);
+    locator.writeBigUInt64LE(BigInt(at), 8);
+    locator.writeUInt32LE(1, 16);
+    emit(Buffer.concat([record, locator]));
+  }
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Math.min(count, 0xffff), 8);
+  end.writeUInt16LE(Math.min(count, 0xffff), 10);
+  end.writeUInt32LE(Math.min(directorySize, U32), 12);
+  end.writeUInt32LE(Math.min(directoryStart, U32), 16);
+  emit(end);
+}
+
+try {
+  for (const entry of entries) await writeEntry(entry);
+  writeDirectory();
+} catch (error) {
+  abandon(`${error.message}`, 15);
+}
+if (!toStdout) {
+  closeSync(fd);
+  // The name was free when zip started; one that appeared since is not replaced.
+  try {
+    lstatSync(archive);
+    rmSync(out.temporary, { force: true });
+    fail(`${archive} appeared while zipping; nothing was replaced`, 15);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  renameSync(out.temporary, archive);
+}
+process.exit(warnings ? 18 : 0);

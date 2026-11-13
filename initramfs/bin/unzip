@@ -4,13 +4,23 @@
 //
 // Supported: -p (members to standard output), -l (list), -t (test),
 // -d DIR, -o (overwrite), -n (never overwrite), -j (junk paths), -q/-qq;
-// MEMBER operands may be wildcards. Unix modes and symlinks are restored.
-// Runs under node as well as bun.
+// MEMBER operands may be wildcards. Unix modes (without setuid, setgid and
+// sticky, as Info-ZIP leaves them off without -K), symlinks and modification
+// times are restored. Member data streams through inflate, so a member is
+// never held in memory whole, and nothing is ever written through a symlink:
+// a member whose path runs through a link the archive (or anyone) made is
+// skipped. Runs under node as well as bun.
 
-import { constants, chmodSync, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
-import { basename, dirname, join, normalize, resolve } from "node:path";
-import { inflateRawSync } from "node:zlib";
-import { crc32 } from "../lib/crc32.js";
+import { constants, chmodSync, closeSync, fstatSync, lstatSync, lutimesSync, mkdirSync, openSync, readSync, rmSync, symlinkSync, utimesSync, writeSync } from "node:fs";
+import { basename, join, normalize, resolve } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { createInflateRaw } from "node:zlib";
+import * as zlib from "node:zlib";
+import { crc32 as crc32js } from "../lib/crc32.js";
+
+// node:zlib's crc32 is native where the runtime has it, /lib/crc32.js elsewhere.
+const crc32 = typeof zlib.crc32 === "function" ? (bytes, previous = 0) => zlib.crc32(bytes, previous) >>> 0 : crc32js;
 
 const fail = (message, status = 1) => {
   console.error(`unzip: ${message}`);
@@ -168,6 +178,8 @@ for (let index = 0; index < entryCount; index++) {
     const id = extra.readUInt16LE(position);
     const length = extra.readUInt16LE(position + 2);
     if (length > extra.length - position - 4) fail(`${archive}: truncated extra field`, 3);
+    // "UT": the modification time in whole Unix seconds, which the DOS stamp rounds to two.
+    if (id === 0x5455 && length >= 5 && extra[position + 4] & 1) entry.mtime = extra.readInt32LE(position + 5);
     if (id === 0x0001 && !found64) {
       found64 = true;
       let field = position + 4;
@@ -213,25 +225,59 @@ const dosDate = (entry) => {
   return `${year}-${pad(month)}-${pad(day)} ${pad(entry.time >> 11)}:${pad((entry.time >> 5) & 63)}`;
 };
 
-const data = (entry) => {
+// A member's bytes as they inflate, in chunks of at most 1 MiB; its size and CRC are checked as
+// they pass, so a member that inflates past its stated size stops there.
+const CHUNK = 1 << 20;
+async function* data(entry) {
   if (entry.flags & 1) throw new Error("encrypted members are not supported");
+  if (entry.method !== 0 && entry.method !== 8) throw new Error(`compression method ${entry.method} is not supported`);
   const local = read(entry.localOffset, 30);
   if (local.readUInt32LE(0) !== 0x04034b50) throw new Error("bad local header");
   const start = entry.localOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
   if (!validSize(start) || start > directoryOffset || entry.compressedSize > directoryOffset - start)
     throw new Error("invalid member data range");
-  const raw = read(start, entry.compressedSize);
-  let bytes;
-  if (entry.method === 0) bytes = raw;
-  else if (entry.method === 8) bytes = inflateRawSync(raw, { maxOutputLength: Math.max(1, entry.size) });
-  else throw new Error(`compression method ${entry.method} is not supported`);
-  if (bytes.length !== entry.size) throw new Error(`size mismatch (${bytes.length} != ${entry.size})`);
-  if (crc32(bytes) !== entry.crc) throw new Error("CRC error");
-  return bytes;
-};
+  function* stored() {
+    for (let done = 0; done < entry.compressedSize; done += CHUNK) yield read(start + done, Math.min(CHUNK, entry.compressedSize - done));
+  }
+  let source = Readable.from(stored(), { objectMode: false });
+  if (entry.method === 8) {
+    const inflate = createInflateRaw({ chunkSize: 64 * 1024 });
+    pipeline(source, inflate).catch(() => {});
+    source = inflate;
+  }
+  let size = 0, crc = 0;
+  for await (const chunk of source) {
+    size += chunk.length;
+    if (size > entry.size) { source.destroy(); throw new Error(`size mismatch (more than ${entry.size})`); }
+    crc = crc32(chunk, crc);
+    yield chunk;
+  }
+  if (size !== entry.size) throw new Error(`size mismatch (${size} != ${entry.size})`);
+  if (crc !== entry.crc) throw new Error("CRC error");
+}
 
 const writeAll = (target, bytes) => {
-  for (let offset = 0; offset < bytes.length;) offset += writeSync(target, bytes, offset, bytes.length - offset);
+  for (let offset = 0; offset < bytes.length;) {
+    try { offset += writeSync(target, bytes, offset, bytes.length - offset); }
+    catch (error) { if (error.code !== "EAGAIN") throw error; }
+  }
+};
+
+// Unix seconds from the UT field, else the DOS stamp read in local time.
+const modified = (entry) => entry.mtime !== undefined ? entry.mtime
+  : new Date((entry.date >> 9) + 1980, ((entry.date >> 5) & 15) - 1, entry.date & 31, entry.time >> 11, (entry.time >> 5) & 63, (entry.time & 31) * 2).getTime() / 1000;
+
+// Makes the folders above `relative` under root, one at a time, and refuses any that is not a
+// real folder: a symlink there would carry the write outside root.
+const parents = (root, relative) => {
+  let at = root;
+  for (const part of relative.split("/").slice(0, -1)) {
+    at = join(at, part);
+    let st = null;
+    try { st = lstatSync(at); } catch {}
+    if (!st) mkdirSync(at);
+    else if (!st.isDirectory()) throw new Error(`path runs through ${at}, which is not a folder; skipped`);
+  }
 };
 
 let status = 0;
@@ -246,12 +292,12 @@ if (mode === "list") {
 } else if (mode === "pipe") {
   for (const entry of selected) {
     if (entry.name.endsWith("/")) continue;
-    try { writeAll(1, data(entry)); } catch (error) { console.error(`unzip: ${entry.name}: ${error.message}`); status = 2; }
+    try { for await (const chunk of data(entry)) writeAll(1, chunk); } catch (error) { console.error(`unzip: ${entry.name}: ${error.message}`); status = 2; }
   }
 } else if (mode === "test") {
   for (const entry of selected) {
     if (entry.name.endsWith("/")) continue;
-    try { data(entry); if (!quiet) console.log(`    testing: ${entry.name.padEnd(24)} OK`); }
+    try { for await (const _ of data(entry)); if (!quiet) console.log(`    testing: ${entry.name.padEnd(24)} OK`); }
     catch (error) { console.log(`    testing: ${entry.name.padEnd(24)} ${error.message}`); status = 2; }
   }
   if (status === 0 && quiet < 2) console.log(`No errors detected in compressed data of ${archive}.`);
@@ -259,6 +305,8 @@ if (mode === "list") {
   if (!quiet) console.log(`Archive:  ${archive}`);
   const root = resolve(directory);
   mkdirSync(root, { recursive: true });
+  // Folder modes and times go on last, deepest first, so a read-only folder still takes its members.
+  const folders = [];
   for (const entry of selected) {
     const name = junkPaths ? basename(entry.name) : entry.name;
     if (!name || (junkPaths && entry.name.endsWith("/"))) continue;
@@ -271,11 +319,16 @@ if (mode === "list") {
     }
     const target = join(root, relative);
     const unixMode = entry.madeBy === 3 ? entry.external >>> 16 : 0;
+    const mtime = modified(entry);
     try {
-      if (entry.name.endsWith("/")) {
-        mkdirSync(target, { recursive: true });
+      parents(root, relative);
+      if (entry.name.endsWith("/") || (unixMode & 0o170000) === 0o040000) {
+        let st = null;
+        try { st = lstatSync(target); } catch {}
+        if (st && !st.isDirectory()) throw new Error(`${join(directory, relative)} exists and is not a folder`);
+        if (!st) mkdirSync(target);
         if (!quiet) console.log(`   creating: ${join(directory, relative)}/`);
-        if (unixMode & 0o7777) chmodSync(target, unixMode & 0o7777);
+        folders.push({ target, mode: unixMode & 0o777, mtime });
         continue;
       }
       const exists = (() => { try { lstatSync(target); return true; } catch { return false; } })();
@@ -284,19 +337,34 @@ if (mode === "list") {
         if (overwrite === null) { console.error(`unzip: ${join(directory, relative)} exists; use -o to overwrite or -n to skip`); status = 1; continue; }
         rmSync(target, { force: true });
       }
-      mkdirSync(dirname(target), { recursive: true });
-      const bytes = data(entry);
       if ((unixMode & 0o170000) === 0o120000) {
-        symlinkSync(bytes.toString(), target);
+        if (entry.size > 4096) throw new Error("symlink target is too long");
+        const chunks = [];
+        for await (const chunk of data(entry)) chunks.push(chunk);
+        symlinkSync(Buffer.concat(chunks).toString(), target);
+        try { lutimesSync(target, mtime, mtime); } catch {}
       } else {
-        writeFileSync(target, bytes);
-        if (unixMode & 0o7777) chmodSync(target, unixMode & 0o7777);
+        // Created here, never opened through a link someone put at the name meanwhile.
+        const output = openSync(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
+        try {
+          for await (const chunk of data(entry)) writeAll(output, chunk);
+        } catch (error) {
+          closeSync(output);
+          rmSync(target, { force: true });
+          throw error;
+        }
+        closeSync(output);
+        chmodSync(target, unixMode & 0o777 || 0o666 & ~process.umask());
+        utimesSync(target, mtime, mtime);
       }
       if (!quiet) console.log(`  inflating: ${join(directory, relative)}`);
     } catch (error) {
       console.error(`unzip: ${entry.name}: ${error.message}`);
       status = 2;
     }
+  }
+  for (const { target, mode, mtime } of folders.reverse()) {
+    try { if (mode) chmodSync(target, mode); utimesSync(target, mtime, mtime); } catch {}
   }
 }
 closeSync(fd);

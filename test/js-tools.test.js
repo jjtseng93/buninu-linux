@@ -107,6 +107,54 @@ describe("unzip", () => {
     });
 });
 
+describe("zip", () => {
+  const tree = () => {
+    run("sh", ["-c", "rm -rf ztree && mkdir -p ztree/dir/deep ztree/empty && ln -s notes.txt ztree/link && chmod 750 ztree/dir"]);
+    writeFileSync(path("ztree/notes.txt"), "stored\n");
+    writeFileSync(path("ztree/dir/big.bin"), bytes(12_000_000, 3));
+    writeFileSync(path("ztree/dir/deep/small.bin"), bytes(5_000, 5));
+    run("chmod", ["755", path("ztree/dir/deep/small.bin")]);
+  };
+  const listing = (root) => run("sh", ["-c", `cd '${root}' && find . -printf '%p %y %m %s %l\\n' | sort`]).toString();
+  const sum = (root) => run("sh", ["-c", `cd '${root}' && find . -type f -exec cksum {} + | sort`]).toString();
+  test.skipIf(!have("unzip"))("zip -ry is read by Info-ZIP unzip as the same tree, modes and links included", () => {
+    tree();
+    js("zip", ["-qry", path("z.zip"), "ztree"]);
+    expect(gnu("unzip", ["-tq", path("z.zip")]).toString()).toContain("No errors detected");
+    gnu("unzip", ["-q", path("z.zip"), "-d", path("z-gnu")]);
+    expect(listing(path("z-gnu/ztree"))).toBe(listing(path("ztree")));
+    expect(sum(path("z-gnu/ztree"))).toBe(sum(path("ztree")));
+  });
+  test("zip and unzip round-trip UTF-8 names, links, modes and times", () => {
+    tree();
+    writeFileSync(path("ztree/說明 👋.txt"), "你好\n");
+    js("zip", ["-qry", path("z8.zip"), "ztree"]);
+    js("unzip", ["-q", path("z8.zip"), "-d", path("z8")]);
+    expect(listing(path("z8/ztree"))).toBe(listing(path("ztree")));
+    expect(sum(path("z8/ztree"))).toBe(sum(path("ztree")));
+    expect(Math.floor(statSync(path("z8/ztree/notes.txt")).mtimeMs / 1000)).toBe(Math.floor(statSync(path("ztree/notes.txt")).mtimeMs / 1000));
+  });
+  test("zip - writes the archive to standard output, and refuses an existing archive", () => {
+    tree();
+    writeFileSync(path("zout.zip"), js("zip", ["-qr", "-", "ztree"]));
+    expect(js("unzip", ["-tq", path("zout.zip")]).toString()).toContain("No errors detected");
+    expect(() => js("zip", ["-qr", path("zout.zip"), "ztree"])).toThrow();
+  });
+});
+
+describe("unzip safety", () => {
+  test("a member is never written through a symlink the archive made", () => {
+    run("sh", ["-c", "rm -rf evil victim && mkdir -p evil/a2 victim && ln -s \"$PWD/victim\" evil/a && echo pwned > evil/a2/passwd"]);
+    // The archive holds the link "a" and then "a/passwd", which would land in victim through it.
+    js("zip", ["-qry", path("evil.zip"), "evil/a", "evil/a2/passwd"]);
+    const zipBytes = readFileSync(path("evil.zip"));
+    // Same length, so every offset stays right; nothing checks a name against a CRC.
+    writeFileSync(path("evil.zip"), Buffer.from(zipBytes.toString("latin1").replaceAll("evil/a2/passwd", "evil/a//passwd"), "latin1"));
+    try { js("unzip", ["-qo", path("evil.zip"), "-d", path("evil-out")]); } catch {}
+    expect(run("sh", ["-c", "ls -A victim"]).toString()).toBe("");
+  });
+});
+
 describe("truncate and dd", () => {
   test.skipIf(!have("truncate"))("truncate -s SIZE creates the same sparse file as coreutils", () => {
     const size = String(260063 * 512);

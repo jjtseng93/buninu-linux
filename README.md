@@ -875,7 +875,8 @@ umount /mnt/data
 | `reboot` | sync pending writes and restart through the shared Linux reboot logic | `reboot --help` |
 | `tar` | create, extract, or list tar archives with gzip and zstd compression through `Bun.Archive` | `tar --help` |
 | `gzip`, `gunzip`, `zcat` | compress or decompress gzip files, including decompression to stdout | `gzip --help` |
-| `unzip` | list or extract ZIP archives, or write a member to stdout with `-p` | `unzip --help` |
+| `unzip` | list or extract ZIP archives, or write a member to stdout with `-p`; never writes through a symlink | `unzip --help` |
+| `zip` | create a ZIP archive (`-r` recursive, `-y` keep links, `-0`–`-9` level, `-` for stdout) | `zip --help` |
 | `truncate` | resize files, including sparse files | `truncate --help` |
 | `dd` | copy blocks between files with offsets, size limits and sparse-output support | `dd --help` |
 | `mkfs.fat` | format a FAT32 filesystem in a disk image | `mkfs.fat --help` |

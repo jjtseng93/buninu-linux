@@ -875,7 +875,8 @@ umount /mnt/data
 | `reboot` | 同步待寫入資料，透過共用的 Linux reboot 邏輯重新啟動 | `reboot --help` |
 | `tar` | 透過 `Bun.Archive` 建立、解開或列出 tar 封存檔，支援 gzip 與 zstd 壓縮 | `tar --help` |
 | `gzip`、`gunzip`、`zcat` | 壓縮或解壓縮 gzip 檔案，包含解壓縮到標準輸出 | `gzip --help` |
-| `unzip` | 列出或解開 ZIP 封存檔，或用 `-p` 將其中項目寫到標準輸出 | `unzip --help` |
+| `unzip` | 列出或解開 ZIP 封存檔，或用 `-p` 將其中項目寫到標準輸出；不會經由 symlink 寫到目的地之外 | `unzip --help` |
+| `zip` | 建立 ZIP 封存檔（`-r` 遞迴、`-y` 保留連結、`-0`～`-9` 壓縮等級、`-` 輸出到標準輸出） | `zip --help` |
 | `truncate` | 調整檔案大小，包含稀疏檔案 | `truncate --help` |
 | `dd` | 在檔案間複製區塊，支援偏移、大小限制與稀疏輸出 | `dd --help` |
 | `mkfs.fat` | 在磁碟映像內格式化 FAT32 檔案系統 | `mkfs.fat --help` |
