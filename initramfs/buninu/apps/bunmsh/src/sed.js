@@ -1,3 +1,10 @@
+// "u" makes "." and [...] take a whole emoji rather than half of its surrogate pair. A pattern
+// that "u" rejects (an identity escape such as \< or a bare "{") keeps the old reading.
+function unicodeRegExp(source, flags = "") {
+  try { return new RegExp(source, `${flags}u`); }
+  catch { return new RegExp(source, flags); }
+}
+
 // The fallback operates on pattern/hold spaces, with a program counter for
 // branches. Parsing delimiters before command separators preserves s/;/x/.
 export function compileSed(script, regexSource) {
@@ -24,7 +31,7 @@ export function compileSed(script, regexSource) {
   const address = () => {
     if (script[i] === "$") { i++; return {last:true}; }
     if (/\d/.test(script[i] ?? "")) { const match = /^\d+/.exec(script.slice(i))[0]; i += match.length; return {line:Number(match)}; }
-    if (script[i] === "/") { i++; return {regex:new RegExp(regex(field("/")))}; }
+    if (script[i] === "/") { i++; return {regex:unicodeRegExp(regex(field("/")))}; }
     return null;
   };
   while (i < script.length) {
@@ -49,7 +56,7 @@ export function compileSed(script, regexSource) {
         if (command.from.length !== command.to.length) throw new Error("unequal y strings");
       } else {
         const flags = /^[gp0-9]*/.exec(script.slice(i))[0]; i += flags.length;
-        command.regex = new RegExp(regex(pattern), "g");
+        command.regex = unicodeRegExp(regex(pattern), "g");
         command.replacement = replacement;
         command.global = flags.includes("g"); command.print = flags.includes("p");
         command.occurrence = Number(/\d+/.exec(flags)?.[0] ?? 1);

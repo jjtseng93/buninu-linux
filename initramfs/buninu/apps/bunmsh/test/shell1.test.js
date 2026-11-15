@@ -830,6 +830,35 @@ describe("execution", () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  // Matches reach stdout while grep is still searching: a directory's matches before it moves
+  // on to the standard input that follows it, and a line from that input before it ends.
+  test("fallback grep streams its output before the search ends", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-grep-stream-"));
+    mkdirSync(join(directory, "tree"));
+    await Bun.write(join(directory, "tree", "a.txt"), "needle in a file\n");
+    const child = Bun.spawn([process.execPath, new URL("../src/main.js", import.meta.url).pathname,
+      "-cc", "builtin", "grep", "-r", "needle", "tree", "-"], { cwd: directory, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+    try {
+      const reader = child.stdout.getReader();
+      const decoder = new TextDecoder();
+      let seen = "";
+      const until = async (text) => {
+        const deadline = Date.now() + 10000;
+        while (!seen.includes(text)) {
+          const chunk = await Promise.race([reader.read(), Bun.sleep(Math.max(0, deadline - Date.now())).then(() => null)]);
+          if (!chunk || chunk.done) throw new Error(`no "${text}" before the deadline: ${JSON.stringify(seen)}`);
+          seen += decoder.decode(chunk.value, { stream: true });
+        }
+      };
+      await until("tree/a.txt:needle in a file\n");
+      child.stdin.write("needle on stdin\n");
+      child.stdin.flush();
+      await until("(standard input):needle on stdin\n");
+      child.stdin.end();
+      expect(await child.exited).toBe(0);
+    } finally { child.kill(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   test("fallback head closes an infinite upstream and file utilities work", async () => {
     expect(await run("yes | builtin head -n 2")).toMatchObject({ status: 0, stdout: "y\ny\n" });
     const directory = mkdtempSync(join(tmpdir(), "bunmsh-utils-"));

@@ -882,6 +882,7 @@ hyperlinks, while `ls` uses the emoji and terminal-width-aware listing. Use
 | `date` | `+FORMAT`; `%Y`, `%m`, `%d`, `%H`, `%M`, `%S`, `%s`, `%F`, `%T`, `%%` |
 | `md5sum`, `sha256sum` | Files or stdin; no flags |
 | `grep` | `-E`, `-F`, `-i`, `-q`, `-v`, `-n`, `-o`, `-r`, `-x`, combinable; `--color[=always\|auto\|never]` (`--colour` also accepted) |
+| `du` | GNU du's options, combinable (`-shc`, `-sbhc`, `-d1`, `-BM`): `-s`, `-c`, `-h`, `--si`, `-b`, `-a`, `-d`, `-k`, `-m`, `-B`, `--apparent-size`, `--inodes`, `-l`, `-L`, `-H`, `-P`, `-S`, `-x`, `-0`, `-t`, `--exclude`, `-X`; streams each folder's line as it is finished |
 | `sed` | `-n`, `-e SCRIPT`, `-eSCRIPT`, `-E`, `-r`, `-i`; numeric `p`; `s///` with `g` and `p` |
 | `cut` | `-c LIST`, `-cLIST` |
 | `ln` | `-s`, `-f`, `-T`, combinable (including `-sfT`) |

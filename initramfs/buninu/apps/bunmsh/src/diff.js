@@ -220,3 +220,54 @@ export function normalFileDiff(left, right) {
   }
   return output;
 }
+
+// Unified hunks share the same line alignment as normal-format output.
+export function unifiedFileDiff(left, right, {context = 3, labels = ['a', 'b']} = {}) {
+  if (!Number.isSafeInteger(context) || context < 0) throw Error('Invalid diff context');
+  const lines = text => text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const rows = [];
+  let oldAt = 0, newAt = 0;
+  for (const {op, seq} of _diffMain(lines(left), lines(right))) {
+    for (const text of seq) {
+      rows.push({op, text, oldAt, newAt});
+      if (op !== _DIFF_INSERT) oldAt++;
+      if (op !== _DIFF_DELETE) newAt++;
+    }
+  }
+  const hunks = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].op === _DIFF_EQUAL) continue;
+    const start = Math.max(0, i - context), end = Math.min(rows.length, i + context + 1);
+    const last = hunks[hunks.length - 1];
+    if (last && start <= last.end) last.end = Math.max(last.end, end);
+    else hunks.push({start, end});
+  }
+  if (!hunks.length) return '';
+  const out = [`--- ${labels[0]}\n+++ ${labels[1]}\n`];
+  const range = (at, count) => count === 1 ? String(at + 1) : `${at + (count ? 1 : 0)},${count}`;
+  for (const {start, end} of hunks) {
+    let oldCount = 0, newCount = 0;
+    for (let i = start; i < end; i++) {
+      if (rows[i].op !== _DIFF_INSERT) oldCount++;
+      if (rows[i].op !== _DIFF_DELETE) newCount++;
+    }
+    out.push(`@@ -${range(rows[start].oldAt, oldCount)} +${range(rows[start].newAt, newCount)} @@\n`);
+    for (let i = start; i < end; i++) {
+      const {op, text} = rows[i];
+      out.push((op === _DIFF_INSERT ? '+' : op === _DIFF_DELETE ? '-' : ' ') + text);
+      if (!text.endsWith('\n')) out.push('\n\\ No newline at end of file\n');
+    }
+  }
+  return out.join('');
+}
+
+// A unified header's time, as GNU diff prints it: local time to the nanosecond, then the offset.
+export function diffTimestamp(mtimeNs) {
+  const nanos = ((mtimeNs % 1000000000n) + 1000000000n) % 1000000000n;
+  const date = new Date(Number((mtimeNs - nanos) / 1000000n));
+  const pad = (value, width = 2) => String(value).padStart(width, "0");
+  const offset = -date.getTimezoneOffset(), sign = offset < 0 ? "-" : "+";
+  const zone = `${sign}${pad(Math.floor(Math.abs(offset) / 60))}${pad(Math.abs(offset) % 60)}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(nanos, 9)} ${zone}`;
+}

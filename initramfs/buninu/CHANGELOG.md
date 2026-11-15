@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.2 - 2026-11-16
+
+- Sync bunmsh to 0.4.3:
+  * Add builtin `du`, stream builtin `grep`, and improve GNU-compatible
+    options. Keep `du -c` totals visible regardless of `--threshold`.
+  * Add unified `diff` output with `-u`, `-U` and `--label`; include local-time
+    timestamps with nanosecond precision in unified headers.
+  * Preserve non-UTF-8 bytes in `grep` and `diff` output, and stream `grep`
+    diagnostics in order with matching output.
+  * Handle emoji as whole characters in `grep`, `sed` and `awk` matching.
+    Make awk string operations and formatted widths count characters, and
+    pad `%05s` with spaces to match gawk.
+  * Add Chinese and emoji regression coverage and make system-tool reference
+    comparisons deterministic by running them in the C locale.
+
 ## 0.7.1 - 2026-11-08
 
 - Sync jsgotty to 1.4.2-rc0:

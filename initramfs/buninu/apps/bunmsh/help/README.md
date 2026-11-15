@@ -20,6 +20,44 @@ Output:
 ```text
 ll='builtin lsfancy -l'
 ```
+## awk
+
+Scan records and evaluate AWK programs using a JavaScript interpreter.
+
+### Usage
+
+```sh
+awk [-F SEPARATOR] [-v NAME=VALUE] [-f SCRIPT_FILE] [PROGRAM] [FILE ...]
+```
+
+### Options and forms
+
+- `-F`: Set the field separator; `-v`: assign a variable before BEGIN.
+- `-f`: Read program text from a file; `-e`: append program text.
+- BEGIN/END, pattern/action rules, fields, variables, associative arrays,
+  functions, conditionals, loops, next/nextfile, exit and delete.
+- print/printf, arithmetic, comparisons, regular expressions, concatenation,
+  split, substr, index, length, match, sub/gsub and common numeric functions.
+- getline from input or files; file output with `>` and `>>`; close.
+- Parenthesized print/printf lists and continued arguments after commas.
+- Output pipes run through bunmsh, buffering input until close or program end.
+  They do not provide streaming or interactive communication. close returns
+  the command status; closing and reopening starts a fresh command.
+- This is a subset, not full POSIX/GNU compatibility. Input command pipes and
+  system() are unsupported and report errors. Text processing uses JavaScript strings
+  and regular expressions; locale and floating-point edge cases may differ.
+
+### Example
+
+```sh
+printf 'apple 2\npear 3\n' | awk '{total += $2} END {print total}'
+```
+
+Output:
+
+```text
+5
+```
 ## basename
 
 Remove directory components and an optional suffix.
@@ -57,6 +95,27 @@ Output:
 
 ```text
 archive.tar
+```
+## break
+
+Leave N enclosing loops (default 1). N must be positive. Function calls establish their own loop boundary.
+
+### Usage
+
+```sh
+break [N]
+```
+
+### Example
+
+```sh
+for x in a b; do echo "$x"; break; done
+```
+
+Output:
+
+```text
+a
 ```
 ## builtin
 
@@ -247,7 +306,7 @@ Output:
 ```
 ## chmod
 
-Change modes using octal values, +x, or a+x.
+Change file modes using octal values or symbolic permission changes.
 
 ### Usage
 
@@ -258,7 +317,13 @@ chmod MODE FILE ...
 ### Options and forms
 
 - Octal modes such as `755` set all permission bits.
-- `+x` and `a+x` add executable bits.
+- `+x` retains its existing shorthand for adding executable bits for everyone.
+- Explicit classes `u`, `g`, `o`, or `a` support `+`, `-`, and `=` with `rwxX`.
+- `X` adds execution only for directories or files already executable.
+- Comma-separated clauses and multiple operations are applied in order.
+- Examples: `a-w`, `u+rw`, `go=rx`, `u=rw,g=r,o=`.
+- Recursive mode, permission copying, `s`/`t`, and omitted classes other than
+  the existing `+x` shorthand are not implemented.
 
 ### Example
 
@@ -292,6 +357,35 @@ Output:
 
 ```text
 (terminal screen is cleared)
+```
+## cmp
+
+Compare two files byte by byte. Return 0 for identical data, 1 for differences,
+and 2 for errors. `-` reads standard input.
+
+### Usage
+
+```sh
+cmp [-s] [--] FILE1 FILE2
+```
+
+`-s` (also `--silent` or `--quiet`) suppresses difference and file-error messages.
+Without it, report the first differing byte and line, or which file ends first.
+Byte offsets, `-l`, and other GNU extensions are not implemented.
+
+### Example
+
+```sh
+printf same > first
+printf same > second
+cmp -s first second
+echo $?
+```
+
+Output:
+
+```text
+0
 ```
 ## :
 
@@ -342,6 +436,28 @@ Output:
 ```text
 echo is a shell builtin
 ```
+## continue
+
+Continue the Nth enclosing loop (default 1). N must be positive.
+
+### Usage
+
+```sh
+continue [N]
+```
+
+### Example
+
+```sh
+for x in a b; do echo "$x"; continue; echo skipped; done
+```
+
+Output:
+
+```text
+a
+b
+```
 ## cp
 
 Copy files and directories.
@@ -350,12 +466,16 @@ Copy files and directories.
 
 ```sh
 cp [-rRv] SOURCE ... DESTINATION
+cp -p [-v] [--] FILE ... DESTINATION
 ```
 
 ### Options and forms
 
 - `-r`, `-R`: Copy directories recursively (`-r` is translated to Bun Shell's `-R`).
 - `-v`: Request verbose output.
+- `-p`: Preserve regular-file ownership, permissions and access/modification
+  times. Multiple sources require a directory destination; recursive `-p`
+  combinations are not yet supported and report an error.
 - `-n`: Accepted by Bun Shell but currently does not prevent overwriting.
 
 ### Example
@@ -601,6 +721,56 @@ Output:
 ```text
 2026-08-28
 ```
+## diff
+
+Compare two files. Return 0 when identical, 1 when different, or 2 on error.
+
+### Usage
+
+```sh
+diff [-q] [-u | -U N] [--label LABEL] [--label LABEL] [--] FILE1 FILE2
+```
+
+Print normal-format changes, or use `-q`/`--brief` for a difference notice.
+Binary differences produce a notice. Text differences use Myers line alignment, preserving unchanged lines
+between separate additions, deletions, and replacements. Missing final
+newlines are reported explicitly. Directory comparison and copied-context (`-c`/`-C`) formats are not supported.
+The default shell alias's `--color` option is accepted; output is plain text.
+
+### Example
+
+```sh
+printf 'first\nlast\n' > before
+printf 'first\nnew\nlast\n' > after
+diff before after
+```
+
+Output:
+
+```text
+1a2
+> new
+```
+
+### Unified format
+
+`-u` prints unified hunks with three surrounding lines. `-U N` (also `-UN`)
+selects a non-negative context count; `-U 0` prints only changed lines.
+`--unified` and `--unified=N` are supported GNU-style aliases.
+
+Headers normally include each path and its modification time. Use `--label LABEL`
+(or `--label=LABEL`, `-L LABEL`, `-LLABEL`) once per input to replace that header
+without a timestamp. Labels and paths are separate arguments, including spaces
+and non-ASCII characters. Identical files produce no output, even with `-u`.
+
+Flea's Compare invocation is supported unchanged:
+
+```sh
+bunmsh -cc builtin diff -u --label before.txt --label after.txt -- before.txt after.txt
+```
+
+The default normal format and `-q` behavior remain unchanged. `-u`/`-U` are
+POSIX options; the long options and labels are compatibility extensions.
 ## dirname
 
 Print a path's directory component.
@@ -626,6 +796,44 @@ Output:
 ```text
 /usr/local/bin
 ```
+## du
+
+Estimate disk usage, after GNU du: each folder's line streams out as soon as it is finished.
+
+### Usage
+
+```sh
+du [OPTIONS] [FILE ...]
+```
+
+### Options and forms
+
+Short options combine (`-shc`, `-sbhc`, `-d1`, `-BM`), long ones may be abbreviated, and options may follow the files.
+
+- `-s`, `--summarize`: One line per file operand.
+- `-c`, `--total`: Add a `total` line.
+- `-h`, `--human-readable`: Sizes such as `4.0K` and `12M`, rounded up; `--si` uses powers of 1000.
+- `-b`, `--bytes`: Apparent size in bytes (`--apparent-size --block-size=1`).
+- `-a`, `--all`: Lines for files as well as folders.
+- `-d N`, `--max-depth=N`: Lines only down to depth N.
+- `-k`, `-m`, `-B SIZE`, `--block-size=SIZE`: Units of 1K, 1M or SIZE (`-BM` prints `1M`).
+- `--apparent-size`, `--inodes`, `-l`, `-L`, `-H`, `-P`, `-S`, `-x`, `-0`, `-t SIZE`, `--exclude=PATTERN`, `-X FILE`: As in GNU du.
+
+A file with several hard links counts once; with several operands, as `du -shc *` gives, every item counts once. A folder that cannot be read is reported and the status is 1. `du -h` alone sizes the current folder; use `du --help` for this page.
+
+### Example
+
+```sh
+du -shc *
+```
+
+Output:
+
+```text
+4.0K	notes.txt
+1.2M	photos
+1.2M	total
+```
 ## echo
 
 Write space-separated arguments.
@@ -650,6 +858,32 @@ Output:
 
 ```text
 hello world
+```
+## egrep
+
+Search using extended regular expressions, equivalent to `grep -E`.
+
+### Usage
+
+```sh
+egrep [OPTIONS] PATTERN [FILE ...]
+```
+
+### Options and forms
+
+Accepts the same supported options as builtin `grep`.
+
+### Example
+
+```sh
+printf 'red\nblue\ngreen\n' | builtin egrep 'red|blue'
+```
+
+Output:
+
+```text
+red
+blue
 ```
 ## env
 
@@ -745,12 +979,12 @@ Output:
 ```
 ## export
 
-Set or list environment variables.
+Mark variables for export, or list them. In `set -o posix` mode, external programs receive only inherited/exported variables and command-prefix assignments. Shell pipelines and subshells retain all shell variables through internal state transfer. Outside POSIX mode, bunmsh preserves its default of passing all variables to external programs.
 
 ### Usage
 
 ```sh
-export [NAME[=VALUE] ...]
+export [-p] [NAME[=VALUE] ...]
 ```
 
 ### Example
@@ -764,6 +998,36 @@ Output:
 
 ```text
 NAME=value
+```
+## expr
+
+Evaluate integer, string, and basic regular-expression expressions.
+
+### Usage
+
+```sh
+expr [--] EXPRESSION
+```
+
+### Options and forms
+
+- Arithmetic: `+`, `-`, `*`, `/`, `%`, with parentheses and precedence.
+- Comparisons: `=`, `!=`, `<`, `<=`, `>`, `>=`.
+- `|` selects the first nonempty, nonzero operand; `&` requires both operands.
+- `STRING : BRE` returns the first capture, or the matched prefix length when there is no capture.
+- Status is 0 for a nonempty, nonzero result, 1 for empty or zero, and 2 for an error.
+- Quote operators that the shell would otherwise interpret.
+
+### Example
+
+```sh
+expr 2 + 3 '*' 4
+```
+
+Output:
+
+```text
+14
 ```
 ## false
 
@@ -786,6 +1050,31 @@ Output:
 
 ```text
 1
+```
+## fgrep
+
+Search for fixed strings, equivalent to `grep -F`.
+
+### Usage
+
+```sh
+fgrep [OPTIONS] PATTERN [FILE ...]
+```
+
+### Options and forms
+
+Accepts the same supported options as builtin `grep`.
+
+### Example
+
+```sh
+printf 'a.b\naxb\n' | builtin fgrep 'a.b'
+```
+
+Output:
+
+```text
+a.b
 ```
 ## find
 
@@ -882,6 +1171,10 @@ Output:
 ```text
 beta
 ```
+
+Repeated `-e PATTERN` options combine patterns with OR. `-c` prints the number of selected lines per input file.
+
+The fallback names `egrep` and `fgrep` select `grep -E` and `grep -F`.
 ## head
 
 Write the first lines or bytes of input.
@@ -984,12 +1277,12 @@ target.txt
 ```
 ## ls
 
-Use the lsfancy emoji and terminal-width-aware listing.
+Use the lsfancy emoji and terminal-width-aware listing. With `set -o posix`, fallback `ls` omits icons and automatic directory suffixes. Explicit `-F` suffixes still apply; `lsfancy` always retains its icons.
 
 ### Usage
 
 ```sh
-ls [-aAdlhRtrS1F] [PATH ...]
+ls [-aAdilhLRtrS1F] [PATH ...]
 ```
 
 Because `-h` means human-readable sizes, use `--help` to display this page.
@@ -1000,6 +1293,8 @@ Because `-h` means human-readable sizes, use `--help` to display this page.
 - `-A`: Include hidden entries except `.` and `..`.
 - `-d`: List directories themselves rather than their contents.
 - `-l`: Use long format.
+- `-i`: Print inode numbers.
+- `-L`: Follow symbolic links.
 - `-h`: Show human-readable sizes; use `--help` for this page.
 - `-R`: Recurse into directories.
 - `-t`: Sort by modification time.
@@ -1108,7 +1403,7 @@ Output:
 ```
 ## mkdir
 
-Create directories with Bun Shell's fallback.
+Create directories with Bun Shell's fallback, processing operands in order.
 
 ### Usage
 
@@ -1215,6 +1510,9 @@ Output:
 ```text
 hello world
 ```
+
+Short flags may be combined: `print -rn -- text` is equivalent to
+`print -r -n -- text`.
 ## printf
 
 Format and write arguments.
@@ -1431,6 +1729,29 @@ Output:
 ```text
 /data/data/com.termux/files/home/bunmsh
 ```
+## return
+
+Return from a function or sourced script. Without STATUS, preserve the previous status.
+
+### Usage
+
+```sh
+return [STATUS]
+```
+
+### Example
+
+```sh
+f () { return 7; }
+f
+echo "$?"
+```
+
+Output:
+
+```text
+7
+```
 ## rm
 
 Remove files and directories with Bun Shell's fallback.
@@ -1493,21 +1814,26 @@ Output:
 ```
 ## sed
 
-Apply supported print and substitution expressions.
+Apply editing commands to pattern and hold spaces.
 
 ### Usage
 
 ```sh
-sed [-nEr] [-e SCRIPT] [-i] [SCRIPT] [FILE ...]
+sed [-nEr] [-e SCRIPT | -f FILE] [-i] [SCRIPT] [FILE ...]
 ```
 
 ### Options and forms
 
 - `-n`: Suppress automatic output.
 - `-e SCRIPT`, `-eSCRIPT`: Add a script.
+- `-f FILE`, `-fFILE`: Read a script from a file.
 - `-E`, `-r`: Use extended regular expressions.
 - `-i`: Edit files in place.
-- Supported commands include numeric `p` and `s///` with `g` and `p` flags.
+- Numeric, last-line (`$`), and regular-expression addresses; ranges, inversion, and `{ ... }` groups.
+- `s///` with `g`, `p`, and occurrence-number flags; `y///` translation.
+- `p`, `P`, `d`, `D`, `q`, `=`, `n`, `N`; hold-space commands `h`, `H`, `g`, `G`, `x`.
+- Labels (`:`), unconditional branches (`b`), and substitution-test branches (`t`, `T`).
+- `a`, `i`, `c` text commands; `r FILE` appends file contents after the current cycle. Missing/unreadable files are skipped. This remains a subset: `w` is not implemented.
 
 ### Example
 
@@ -1601,17 +1927,26 @@ Serving /home/user/public
 ```
 ## set
 
-Print variables or replace positional parameters.
+Print variables, replace positional parameters, or change shell options.
 
 ### Usage
 
 ```sh
-set [-- [ARG ...]]
+set [-eufxv] [+eufxv] [-o NAME | +o NAME] [-- [ARG ...]]
 ```
 
 ### Options and forms
 
-- `--`: Replace positional parameters with the remaining arguments. With no arguments, print variables.
+- No arguments: print variables.
+- `--`: replace positional parameters, including clearing them with no following arguments.
+- `-`: end options and disable verbose/xtrace; replace positional parameters only when arguments follow.
+- `-e` / `+e`: enable/disable exit on untested failures. Conditions, negation and non-final AND/OR commands suppress it.
+- `-u` / `+u`: enable/disable errors for unset parameters; explicit defaults still work.
+- `-f` / `+f`: disable/enable pathname expansion.
+- `-x` / `+x`: enable/disable execution tracing.
+- `-o` / `+o` without a name: list named option states / reusable set commands.
+- Names: `errexit`, `nounset`, `noglob`, `xtrace`, `verbose`, `posix`. CLI `-v` prints initial input; incremental verbose reading is not yet implemented.
+- `-o posix`: enable compatibility mode. The fallback `ls` prints without icons or automatic directory suffixes; `lsfancy` remains decorative. External programs receive only inherited/exported variables and command-prefix assignments; pipelines and subshells still receive complete shell state. Use `+o posix` to restore the default, which passes all variables to external programs. This option is not a guarantee of complete POSIX semantics.
 
 ### Example
 
@@ -1968,6 +2303,32 @@ Output:
 ```text
 HELLO
 ```
+
+`-s SET` squeezes repeated characters in SET. With two sets, translation happens
+before squeezing SET2. `-ds SET1 SET2` deletes SET1 then squeezes SET2.
+`--` ends option parsing; unsupported options report an error.
+## trap
+
+Register shell code for EXIT (0) or a catchable signal. No operands lists handlers; ACTION - resets and an empty ACTION ignores the signal in this shell. Signal handlers are deferred to command boundaries. Background process ownership is unchanged.
+
+### Usage
+
+```sh
+trap [ACTION SIGNAL ...]
+```
+
+### Example
+
+```sh
+trap 'echo done' 0
+exit 0
+```
+
+Output:
+
+```text
+done
+```
 ## true
 
 Return success.
@@ -2091,6 +2452,33 @@ Output:
 
 ```text
 Linux 6.17.0-PRoot-Distro aarch64 aarch64
+```
+## uniq
+
+Collapse adjacent equal lines without sorting. Comparisons preserve bytes.
+
+### Usage
+
+```sh
+uniq [-cdu] [--] [INPUT [OUTPUT]]
+```
+
+`-c` prefixes counts; `-d` selects repeated groups; `-u` selects single lines.
+`-` reads standard input or writes standard output. Missing final newlines
+are added. Field/character skipping and other GNU options are unsupported.
+
+### Example
+
+```sh
+printf 'a\na\nb\na\n' | uniq
+```
+
+Output:
+
+```text
+a
+b
+a
 ```
 ## unset
 

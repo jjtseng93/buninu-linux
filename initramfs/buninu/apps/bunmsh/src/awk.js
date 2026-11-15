@@ -10,8 +10,15 @@ const unset=new InputString(''); unset.numeric=true;
 const failure=m=>{throw new Error(`awk: ${m}`);};
 function regex(s,flags='') {
   s=str(s).replaceAll('[[:space:]]','[\\s]').replaceAll('[[:digit:]]','[0-9]').replaceAll('[[:alnum:]]','[A-Za-z0-9]').replaceAll('[[:alpha:]]','[A-Za-z]').replaceAll('[[:blank:]]','[ \t]');
+  // "u" first, so "." and [...] take a whole emoji; a pattern "u" rejects keeps the old reading.
+  try {return new RegExp(s,flags+'u');}catch{}
   try {return new RegExp(s,flags);}catch(error){failure(`invalid regular expression ${JSON.stringify(s)}: ${error.message}`);}
 }
+// Lengths and positions count characters (code points), as gawk does, so an emoji is one, not two.
+const hasPairs=s=>/[\uD800-\uDFFF]/.test(s);
+const charLength=s=>{if(!hasPairs(s))return s.length;let n=0;for(const _ of s)n++;return n;};
+const charIndex=(s,at)=>at<0||!hasPairs(s)?at:charLength(s.slice(0,at));
+const charSubstr=(s,start,length)=>{if(!hasPairs(s))return s.substr(start,length);const chars=[...s];return chars.slice(start,length===undefined?undefined:start+length).join('');};
 function lex(source) {
   const out=[];let i=0,operand=true;
   const push=(kind,value)=>{out.push({kind,value});operand=!(kind==='number'||kind==='string'||kind==='regex'||kind==='name'&&!['print','printf','return','exit','getline','in','delete'].includes(value)||[')',']','++','--'].includes(value));};
@@ -136,12 +143,12 @@ export function executeAwk(program, inputs, options={}) {
   const pattern=node=>node.type==='regex'?node.value:str(evaluate(node));
   function sprintf(format,args){let at=0;return str(format).replace(/%([-+ #0]*)(\d*)(?:\.(\d+))?([%csdiouxXeEfFgG])/g,(all,flags,width,precision,kind)=>{
     if(kind==='%')return '%';const value=args[at++];let s;
-    if(kind==='s')s=str(value).slice(0,precision===undefined?undefined:Number(precision));
-    else if(kind==='c')s=numeric(value)?String.fromCharCode(num(value)):str(value).slice(0,1);
+    if(kind==='s')s=precision===undefined?str(value):charSubstr(str(value),0,Number(precision));
+    else if(kind==='c'){if(numeric(value)){const n=Math.trunc(num(value));s=Number.isFinite(n)&&n>=0&&n<=0x10ffff?String.fromCodePoint(n):String.fromCharCode(n);}else s=charSubstr(str(value),0,1);}
     else if(/[diouxX]/.test(kind)){let n=Math.trunc(num(value));if(kind==='u')n>>>=0;s=n.toString(kind==='o'?8:/[xX]/.test(kind)?16:10);if(kind==='X')s=s.toUpperCase();}
     else {const n=num(value),p=precision===undefined?6:Number(precision);s=/f/i.test(kind)?n.toFixed(p):/e/i.test(kind)?n.toExponential(p):String(Number(n.toPrecision(p||1)));if(kind===kind.toUpperCase())s=s.toUpperCase();}
     if(flags.includes('+')&&num(value)>=0&&kind!=='s')s='+'+s;
-    return flags.includes('-')?s.padEnd(Number(width),' '):s.padStart(Number(width),flags.includes('0')?'0':' ');
+    const pad=Math.max(0,Number(width)-charLength(s));return flags.includes('-')?s+' '.repeat(pad):(flags.includes('0')&&kind!=='s'&&kind!=='c'?'0':' ').repeat(pad)+s;
   });}
   function nextRecord(){while(recordIndex>=records.length){if(inputIndex>=inputs.length)return null;const entry=inputs[inputIndex++];if(entry.assignment){set(entry.assignment[0],new InputString(entry.assignment[1]));continue;}vars.set('FILENAME',entry.name);vars.set('FNR',0);const text=entry.text;const rs=str(get('RS'));records=rs===''?text.replace(/^\n+|\n+$/g,'').split(/\n\n+/):text.split(rs.length===1?rs:regex(rs));if(records.at(-1)==='')records.pop();recordIndex=0;}
     vars.set('NR',num(get('NR'))+1);vars.set('FNR',num(get('FNR'))+1);return records[recordIndex++];}
@@ -149,14 +156,14 @@ export function executeAwk(program, inputs, options={}) {
     if(name==='split'){const values=split(evaluate(args[0]),args[2]?pattern(args[2]):get('FS'));if(args[1]?.type!=='variable')failure('split requires array name');const a=array(args[1].name);a.clear();values.forEach((v,i)=>a.set(String(i+1),new InputString(v)));return values.length;}
     if(name==='sub'||name==='gsub'){const re=regex(pattern(args[0]),name==='gsub'?'g':'');const replacement=str(evaluate(args[1]));const target=args[2]?ref(args[2]):{get:()=>record,set:setRecord};let count=0;
       const text=str(target.get()).replace(re,match=>{count++;let s='';for(let i=0;i<replacement.length;i++){if(replacement[i]==='\\'&&i+1<replacement.length&&['&','\\'].includes(replacement[i+1]))s+=replacement[++i];else s+=replacement[i]==='&'?match:replacement[i];}return s;});target.set(text);return count;}
-    if(name==='match'){const s=str(evaluate(args[0])),m=regex(pattern(args[1])).exec(s);set('RSTART',m?m.index+1:0);set('RLENGTH',m?m[0].length:-1);return get('RSTART');}
+    if(name==='match'){const s=str(evaluate(args[0])),m=regex(pattern(args[1])).exec(s);set('RSTART',m?charIndex(s,m.index)+1:0);set('RLENGTH',m?charLength(m[0]):-1);return get('RSTART');}
     if(program.functions.has(name)){const fn=program.functions.get(name),scope=new Map();fn.params.forEach((p,i)=>scope.set(p,args[i]?.type==='variable'&&!locals.at(-1)?.has(args[i].name)&&arrays.has(args[i].name)?array(args[i].name):args[i]?evaluate(args[i]):unset));locals.push(scope);let value='';try{run(fn.body);if(flow?.op==='return'){value=flow.value;flow=null;}}finally{locals.pop();}return value;}
     if(name==='length'&&args[0]?.type==='variable'&&arrays.has(args[0].name))return array(args[0].name).size;
     const a=args.map(evaluate);
     switch(name){
-      case 'length':return str(a.length?a[0]:record).length;
-      case 'substr':return str(a[0]).substr(Math.max(0,num(a[1])-1),a.length>2?Math.max(0,num(a[2])):undefined);
-      case 'index':return str(a[0]).indexOf(str(a[1]))+1;
+      case 'length':return charLength(str(a.length?a[0]:record));
+      case 'substr':return charSubstr(str(a[0]),Math.trunc(Math.max(0,num(a[1])-1)),a.length>2?Math.trunc(Math.max(0,num(a[2]))):undefined);
+      case 'index':{const s=str(a[0]);return charIndex(s,s.indexOf(str(a[1])))+1;}
       case 'sprintf':return sprintf(a[0],a.slice(1));
       case 'tolower':return str(a[0]).toLowerCase();case 'toupper':return str(a[0]).toUpperCase();
       case 'int':return Math.trunc(num(a[0]));case 'sqrt':return Math.sqrt(num(a[0]));case 'log':return Math.log(num(a[0]));case 'exp':return Math.exp(num(a[0]));case 'sin':return Math.sin(num(a[0]));case 'cos':return Math.cos(num(a[0]));case 'atan2':return Math.atan2(num(a[0]),num(a[1]));
@@ -167,7 +174,7 @@ export function executeAwk(program, inputs, options={}) {
   }
   function evaluate(n){switch(n.type){
     case 'literal':return n.value;case 'regex':return Number(regex(n.value).test(record));
-    case 'variable':if(n.name==='length')return record.length;return get(n.name);
+    case 'variable':if(n.name==='length')return charLength(record);return get(n.name);
     case 'index':case 'field':return ref(n).get();case 'call':return call(n);
     case 'conditional':return evaluate(truth(evaluate(n.condition))?n.yes:n.no);
     case 'getline':{let text;if(n.file){const path=str(evaluate(n.file));try{if(!readers.has(path))readers.set(path,{lines:options.readFile(path).split('\n'),i:0});const r=readers.get(path);if(r.lines.at(-1)==='')r.lines.pop();text=r.i<r.lines.length?r.lines[r.i++]:null;}catch{return -1;}}else text=nextRecord();if(text===null)return 0;if(n.target)ref(n.target).set(new InputString(text));else setRecord(text);return 1;}

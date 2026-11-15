@@ -2,6 +2,25 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.4.3] - 2026-11-16
+
+### Added and fixed
+
+- Add builtin `du` and stream builtin `grep`, with more GNU-compatible options;
+  add unified output (`-u`, `-U`, `--label`) to builtin `diff`.
+- `du -c` prints the total whatever `--threshold` says, as GNU du does.
+- `grep` and `diff` give back bytes that are not UTF-8 exactly as they read them,
+  and `grep` error messages stream in order with its output.
+- `diff -u` headers show local time to the nanosecond, as GNU diff does.
+- `grep`, `sed` and `awk` treat an emoji as one character: `.` and `[...]` no longer
+  match half of one, and awk's `length`, `substr`, `index`, `match`, `split` and
+  `printf` widths count characters, as gawk does. `printf "%05s"` pads with spaces.
+
+### Tests
+
+- Add regression tests for Chinese and emoji through the fallback builtins, and run
+  the system-tool reference comparisons in the C locale.
+
 ## [0.4.2] - 2026-11-08
 
 ### Added and fixed
