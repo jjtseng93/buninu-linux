@@ -190,7 +190,7 @@ try {
 }
 
 const { default: repl } = await import("node:repl");
-const { mkdirSync, writeFileSync } = await import("node:fs");
+const { lstatSync, mkdirSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } = await import("node:fs");
 
 global.repl = repl;
 
@@ -434,12 +434,34 @@ const launchBunmsh = () => {
 
 let replServer = null;
 
+// npm (and bun publish) drop symlinks from a published package, so an image
+// built from it has no /bin/node. Recreate it, like /buninu/bin/init.js does
+// for its own launchers, but never replace a real file put there on purpose.
+const rebuildNodeSymlink = () => {
+  try {
+    try {
+      if (!lstatSync("/bin/node").isSymbolicLink()) return;
+      // Already right: leave it, so a repeated start() never briefly removes
+      // /bin/node from under a program still running from the last session.
+      if (readlinkSync("/bin/node") === "bun") return;
+      unlinkSync("/bin/node");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    symlinkSync("bun", "/bin/node");
+  } catch (error) {
+    console.error(`init.js: linking /bin/node: ${error?.message ?? error}`);
+  }
+};
+
 const launchBuninu = async () => {
   try {
     await Bun.write("/proc/sys/kernel/hostname", "buninu\n");
   } catch (error) {
     console.error(`init.js: setting hostname: ${error?.message ?? error}`);
   }
+
+  rebuildNodeSymlink();
 
   console.log(`
 Type bunterm in bunmsh: Graphical Terminal
