@@ -44,7 +44,7 @@ fi
 alpine_mirror=${ALPINE_MIRROR:-https://dl-cdn.alpinelinux.org/alpine}
 alpine_base="$alpine_mirror/v3.24/main/$arch"
 
-kernel_version=6.18.63
+kernel_version=6.18.64
 kernel_release="$kernel_version-0-$linux_flavor"
 linux_package="linux-$linux_flavor-$kernel_version-r0.apk"
 musl_package=musl-1.2.6-r2.apk
@@ -63,8 +63,8 @@ musl_libc="libc.musl-$arch.so.1"
 
 case $arch in
     x86_64)
-        linux_virt_sha256=3a67e6674348ecf160ba85b1aaf8419170095125b0a6b9e6a8341794d1158db1
-        linux_lts_sha256=6709cb3a85ce874efb85abd738f3232bfbc859a474f8b122e6ad1e3d5a25f99d
+        linux_virt_sha256=cdcff66a46c4c512accff5c569efa2ae44e6006d97286c0dd44775ea1d54901b
+        linux_lts_sha256=98cbbb0e382ff6d0d04816965bf02907939325fad9390b17be29180bf46ce0b1
         musl_sha256=573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71
         stub_sha256=8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9
         libstdcpp_sha256=14c987b556f5385a5db18376e788c75f37d85321b8dc1920d926ea7daac1d6f6
@@ -82,8 +82,8 @@ case $arch in
         serial_major=4
         ;;
     aarch64)
-        linux_virt_sha256=151e6d7998d8a9b3648804ef689e7e8f765ada5b7db50f579cec87e371f40bfb
-        linux_lts_sha256=92b65c40c058cfb3f8d0533d9b2020cb28e075e59654bbf4227ef9f17c24faab
+        linux_virt_sha256=cf171f51ab44d637a7758dd5a2f6a4ecd7ddbea18d61b9e37a6d39357d2fb1d5
+        linux_lts_sha256=9d380c0060d43d4929b2de6b5ae85ccdb389d4179f222b19439ff7158d645f4a
         musl_sha256=5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e
         stub_sha256=a1823d2d7082db555d528f82c1809f276c818aeb5b40f198f4565f104e055c38
         libstdcpp_sha256=2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7
