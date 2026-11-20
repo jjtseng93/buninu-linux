@@ -173,10 +173,11 @@ test.skipIf(!npmPackages.every(pkg => existsSync(join(npmDownloadsDir, pkg.archi
   expect(help.status).toBe(0);
   expect(help.stdout).toContain("Usage");
   copyFileSync(new URL("../initramfs/bin/buninu-land", import.meta.url), join(js, "bin/buninu-land"));
+  const landVersion = npmPackages.find(pkg => pkg.name === "buninu-land").version;
   for (const args of [["--help"], ["--headless", "--help"], ["--version"]]) {
     const landHelp = spawnSync(process.execPath, [join(js, "bin/buninu-land"), ...args], { encoding: "utf8", timeout: 15000 });
     expect(landHelp.status).toBe(0);
-    expect(landHelp.stdout).toContain(args[0] === "--version" ? "0.1.3" : args[0] === "--headless" ? "Wayland compositor" : "Usage");
+    expect(landHelp.stdout).toContain(args[0] === "--version" ? landVersion : args[0] === "--headless" ? "Wayland compositor" : "Usage");
   }
   const landWasm = join(js, "usr/lib/node_modules/buninu-land/vendor/canvaskit/canvaskit.wasm");
   expect(readlinkSync(landWasm).startsWith("/")).toBe(false);
