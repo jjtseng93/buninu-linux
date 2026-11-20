@@ -1417,7 +1417,7 @@ native/<arch>/            musl and the GCC runtime (committed); bun and modules 
 ```
 
 `--real` 的輸入為 Alpine v3.24 `linux-lts-6.18.64-r0`、musl
-`1.2.6-r2`、`systemd-efistub-260.2-r0`、`libstdc++`／`libgcc`
+`1.2.6-r3`、`systemd-efistub-260.2-r0`、`libstdc++`／`libgcc`
 `15.2.0-r5`，以及 Bun 1.4.2 `linux-x64-musl-baseline`。aarch64
 客體使用 Alpine aarch64 儲存庫的相同版本與 Bun 的 `linux-aarch64-musl`。
 不包含 BusyBox 或傳統原生使用者空間；命令由 Bun 與 JavaScript 的

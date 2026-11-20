@@ -1416,7 +1416,7 @@ initramfs/                init.js, commands, userspace: the same for every archi
 native/<arch>/            musl and the GCC runtime (committed); bun and modules (fetched)
 ```
 
-The `--real` inputs are Alpine v3.24 `linux-lts-6.18.64-r0`, musl `1.2.6-r2`,
+The `--real` inputs are Alpine v3.24 `linux-lts-6.18.64-r0`, musl `1.2.6-r3`,
 `systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
 `linux-x64-musl-baseline`. The aarch64 guest uses the same versions from
 Alpine's aarch64 repository and Bun's `linux-aarch64-musl`. There is no BusyBox

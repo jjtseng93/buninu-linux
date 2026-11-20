@@ -80,28 +80,28 @@ These files are committed under `native/x86_64/lib/` and
 - See: `LICENSES/musl-COPYRIGHT.txt`
 
 The musl C library and dynamic loader, version 1.2.6, as packaged by Alpine
-Linux 3.24 (package `musl`, version 1.2.6-r2, x86_64 and aarch64). The two
+Linux 3.24 (package `musl`, version 1.2.6-r3, x86_64 and aarch64). The two
 files of each architecture are byte-identical; the second is a separate copy so that `bun:ffi` can `dlopen`
 libc without touching the inode that is already acting as Bun's loader (see
 `README.md`).
 
 - Upstream source: https://musl.libc.org/releases/musl-1.2.6.tar.gz
 - Alpine build recipe (Corresponding Source), pinned to the commit shipping
-  pkgrel=2:
-  https://gitlab.alpinelinux.org/alpine/aports/-/blob/f5640d3a10f664c9119720c60515265d3d6f6d01/main/musl/APKBUILD
+  pkgrel=3 (the fix for CVE-2026-107891):
+  https://gitlab.alpinelinux.org/alpine/aports/-/blob/8f79d39391b46d6dbf1800fb68b8212a21d5ee2e/main/musl/APKBUILD
 - Packages:
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r2.apk
-  SHA-256 `573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71`
-  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r2.apk
-  SHA-256 `5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r3.apk
+  SHA-256 `e142255d0fa397f14318996bc10378093dcc069dc3dd1b6818c8f28a789c21da`
+  https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r3.apk
+  SHA-256 `2e17864102278d9049c3a56f1bceed9e8cf287065617e579325123443daed8a5`
 
 SHA-256 of the shipped files:
 
 ```text
-ld-musl-x86_64.so.1    38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
-libc.musl-x86_64.so.1  38d022ce7425ff105ccfb53598f606e6e5f5f0a34bfbc793d65e6f34c9d72806
-ld-musl-aarch64.so.1   32377e6d71725bb019e9ff6d5e9f16b4d5156d6f2c36504191c2d6a7c4d4a44d
-libc.musl-aarch64.so.1 32377e6d71725bb019e9ff6d5e9f16b4d5156d6f2c36504191c2d6a7c4d4a44d
+ld-musl-x86_64.so.1    095b047c631447e4fa50401fa7ffce01f678587040d65ba18c574981dc630de5
+libc.musl-x86_64.so.1  095b047c631447e4fa50401fa7ffce01f678587040d65ba18c574981dc630de5
+ld-musl-aarch64.so.1   53282acc2be8a08a9fdcf880334bf35bbfd0a13862b7f3616be3919fcda11793
+libc.musl-aarch64.so.1 53282acc2be8a08a9fdcf880334bf35bbfd0a13862b7f3616be3919fcda11793
 ```
 
 ### libgcc_s.so.1 and libstdc++.so.6

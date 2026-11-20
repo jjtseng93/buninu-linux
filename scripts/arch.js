@@ -18,7 +18,7 @@ const pins = {
   x86_64: {
     linuxVirtSha256: "cdcff66a46c4c512accff5c569efa2ae44e6006d97286c0dd44775ea1d54901b",
     linuxLtsSha256: "98cbbb0e382ff6d0d04816965bf02907939325fad9390b17be29180bf46ce0b1",
-    muslSha256: "573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71",
+    muslSha256: "e142255d0fa397f14318996bc10378093dcc069dc3dd1b6818c8f28a789c21da",
     stubSha256: "8e64a5a3afee5f930e6e6716be726dc6d405530ac7f8fa5be6251dae68671ec9",
     libstdcppSha256: "14c987b556f5385a5db18376e788c75f37d85321b8dc1920d926ea7daac1d6f6",
     libgccSha256: "393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637",
@@ -34,7 +34,7 @@ const pins = {
   aarch64: {
     linuxVirtSha256: "cf171f51ab44d637a7758dd5a2f6a4ecd7ddbea18d61b9e37a6d39357d2fb1d5",
     linuxLtsSha256: "9d380c0060d43d4929b2de6b5ae85ccdb389d4179f222b19439ff7158d645f4a",
-    muslSha256: "5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e",
+    muslSha256: "2e17864102278d9049c3a56f1bceed9e8cf287065617e579325123443daed8a5",
     stubSha256: "a1823d2d7082db555d528f82c1809f276c818aeb5b40f198f4565f104e055c38",
     libstdcppSha256: "2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7",
     libgccSha256: "369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403",
@@ -85,7 +85,7 @@ export const config = ({
     kernelRelease,
     linuxPackage: `linux-${flavor}-${kernelVersion}-r0.apk`,
     linuxSha256: flavor === "lts" ? pin.linuxLtsSha256 : pin.linuxVirtSha256,
-    muslPackage: "musl-1.2.6-r2.apk",
+    muslPackage: "musl-1.2.6-r3.apk",
     muslSha256: pin.muslSha256,
     stubPackage: "systemd-efistub-260.2-r0.apk",
     stubSha256: pin.stubSha256,
