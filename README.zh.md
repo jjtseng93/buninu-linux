@@ -212,7 +212,7 @@ DD／原始映像模式。此操作會覆寫所選隨身碟，不必轉成 `.iso
 
 ```text
 Welcome to Buninu Linux!
-Bun 1.4.2 is now PID 1
+Bun 1.4.5 is now PID 1
 Type start() to run buninu --local
 Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power, cfg.sound, cfg.gpu
 
@@ -278,7 +278,7 @@ Linux。`--arch` 選取客體架構：
 預設 JS 工具直接透過主機 Bun 在 macOS 建置，不需要 Docker。
 若用 `BUNINU_JS_TOOLS=0` 停用，`index.js` 會在由
 [`Dockerfile`](Dockerfile) 建立、以 Debian 為
-基礎的 `oven/bun:1.4.2` 容器內執行 shell 下載與建置階段，並綁定掛載
+基礎的 `oven/bun:1.4.5` 容器內執行 shell 下載與建置階段，並綁定掛載
 原始碼目錄。首次使用時建立容器映像，以 Dockerfile 雜湊作為標籤。在此 shell
 工具模式下，只有執行階段直接使用 Mac 本身：
 
@@ -357,7 +357,7 @@ bun ./index.js -fbr
 #### 在容器中測試主機建置流程
 
 `test/host/host-test.sh` 可在任何有 Docker 的機器
-檢查 Linux 主機路徑：它啟動指定 CPU 的全新 `oven/bun:1.4.2`
+檢查 Linux 主機路徑：它啟動指定 CPU 的全新 `oven/bun:1.4.5`
 容器，內含上述建置套件及 QEMU，複製目前原始碼已提交的 `HEAD`，
 以 Bun 和預設 JS 工具建置兩種客體（不巢狀使用 `--docker`），依序開機並用
 `test/host/boot-test.exp` 操作序列主控台：
@@ -1399,7 +1399,7 @@ bun x buninu-linux -fb --real --export
 
 ```text
 index.js                  entry point: -f / -b / -r / --arch / --docker / --export / --linux-lts / --real
-Dockerfile                Debian-based oven/bun:1.4.2 plus the shell build toolchain
+Dockerfile                Debian-based oven/bun:1.4.5 plus the shell build toolchain
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 fetch-npm.sh              [fetch]  pinned browser, land, casty, jspulse and jspinyin tarballs (download only)
@@ -1418,7 +1418,7 @@ native/<arch>/            musl and the GCC runtime (committed); bun and modules 
 
 `--real` 的輸入為 Alpine v3.24 `linux-lts-6.18.64-r0`、musl
 `1.2.6-r3`、`systemd-efistub-260.2-r0`、`libstdc++`／`libgcc`
-`15.2.0-r5`，以及 Bun 1.4.2 `linux-x64-musl-baseline`。aarch64
+`15.2.0-r5`，以及 Bun 1.4.5 `linux-x64-musl-baseline`。aarch64
 客體使用 Alpine aarch64 儲存庫的相同版本與 Bun 的 `linux-aarch64-musl`。
 不包含 BusyBox 或傳統原生使用者空間；命令由 Bun 與 JavaScript 的
 Buninu 使用者空間提供。

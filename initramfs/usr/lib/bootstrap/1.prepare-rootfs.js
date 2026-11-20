@@ -59,7 +59,7 @@ async function main(args) {
     // Otherwise fetch npm 0.9.56:
     // native/<arch>/lib -> rootfs libs
     // initramfs tools -> same paths.
-    // Fetch musl Bun 1.4.2 ZIP for
+    // Fetch musl Bun 1.4.5 ZIP for
     // the selected arch -> /bin/bun.
     // URLs + SHA-256: downloads.md,
     // parsed as YAML, like the repo's

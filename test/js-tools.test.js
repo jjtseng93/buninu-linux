@@ -99,7 +99,7 @@ describe("unzip", () => {
     expectSameBytes(readFileSync(path("js-tree/zipped/dir/bun")), readFileSync(path("gnu-tree/zipped/dir/bun")));
     expect(statSync(path("js-tree/zipped/dir/bun")).mode).toBe(statSync(path("gnu-tree/zipped/dir/bun")).mode);
   });
-  const official = join(import.meta.dir, "../downloads/x86_64/bun-linux-x64-musl-baseline-1.4.2.zip");
+  const official = join(import.meta.dir, "../downloads/x86_64/bun-linux-x64-musl-baseline-1.4.5.zip");
   test.skipIf(!have("unzip") || !(() => { try { return statSync(official).isFile(); } catch { return false; } })())(
     "the pinned Bun release zip, as fetch-bun.sh reads it", () => {
       const member = "bun-linux-x64-musl-baseline/bun";

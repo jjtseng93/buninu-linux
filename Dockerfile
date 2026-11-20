@@ -9,7 +9,7 @@
 # binutils-mingw-w64-x86-64  PE-aware objcopy/objdump for the x86_64 UKI
 # binutils-aarch64-linux-gnu PE-aware objcopy/objdump for the aarch64 UKI
 #                            (native binutils on an arm64 host, cross on amd64)
-FROM oven/bun:1.4.2
+FROM oven/bun:1.4.5
 USER root
 # These images run build scripts, not the base image's default Bun command.
 ENTRYPOINT []

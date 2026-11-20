@@ -24,7 +24,7 @@ const pins = {
     libgccSha256: "393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637",
     // Bun ships one x64 musl build; -baseline is an alias (NOTICE.md).
     bunBuild: "bun-linux-x64-musl-baseline",
-    bunSha256: "76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18",
+    bunSha256: "96fb94108eed872ff623ed39007d6b5699a83a5d0086fcfba84921c18145e3e6",
     efiStub: "linuxx64.efi.stub",
     efiBootName: "BOOTX64.EFI",
     // COM1 on q35 and on PCs.
@@ -39,7 +39,7 @@ const pins = {
     libstdcppSha256: "2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7",
     libgccSha256: "369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403",
     bunBuild: "bun-linux-aarch64-musl",
-    bunSha256: "71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df",
+    bunSha256: "d655765d3a0c0fdf707e27c7aa1a4f2c84f1bbc1f759db7e6e3d3c5be414396c",
     efiStub: "linuxaa64.efi.stub",
     efiBootName: "BOOTAA64.EFI",
     // The PL011 UART of QEMU's virt machine.
@@ -70,7 +70,7 @@ export const config = ({
   const alpineBase = `${mirror}/v3.24/main/${arch}`;
   const kernelVersion = "6.18.64";
   const kernelRelease = `${kernelVersion}-0-${flavor}`;
-  const bunVersion = "1.4.2";
+  const bunVersion = "1.4.5";
   const downloadsDir = join(rootDir, "downloads", arch);
   const kernelDir = join(rootDir, "kernel", arch);
   const nativeDir = join(rootDir, "native", arch);

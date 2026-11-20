@@ -51,7 +51,7 @@ musl_package=musl-1.2.6-r3.apk
 stub_package=systemd-efistub-260.2-r0.apk
 libstdcpp_package=libstdc++-15.2.0-r5.apk
 libgcc_package=libgcc-15.2.0-r5.apk
-bun_version=1.4.2
+bun_version=1.4.5
 
 downloads_dir="downloads/$arch"
 kernel_dir="kernel/$arch"
@@ -71,7 +71,7 @@ case $arch in
         libgcc_sha256=393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637
         # Bun ships one x64 musl build; -baseline is an alias (NOTICE.md).
         bun_build=bun-linux-x64-musl-baseline
-        bun_sha256=76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18
+        bun_sha256=96fb94108eed872ff623ed39007d6b5699a83a5d0086fcfba84921c18145e3e6
         efi_stub=linuxx64.efi.stub
         efi_boot_name=BOOTX64.EFI
         uki_objcopy=x86_64-w64-mingw32-objcopy
@@ -89,7 +89,7 @@ case $arch in
         libstdcpp_sha256=2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7
         libgcc_sha256=369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403
         bun_build=bun-linux-aarch64-musl
-        bun_sha256=71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df
+        bun_sha256=d655765d3a0c0fdf707e27c7aa1a4f2c84f1bbc1f759db7e6e3d3c5be414396c
         efi_stub=linuxaa64.efi.stub
         efi_boot_name=BOOTAA64.EFI
         # The aarch64 ELF binutils also read and write pei-aarch64-little:

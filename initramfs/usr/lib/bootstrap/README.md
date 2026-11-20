@@ -35,7 +35,7 @@ bun /usr/lib/bootstrap/1.prepare-rootfs.js ./my-root
   Bun, musl loader, libgcc, libstdc++, DNS configuration, bunmsh and extraction tools.
 - For a different target architecture, or outside Buninu Linux:
   - Fetch `buninu-linux@0.9.56` for the runtime libraries and JavaScript tools.
-  - Fetch musl Bun 1.4.2 for the target architecture (x64 uses baseline).
+  - Fetch musl Bun 1.4.5 for the target architecture (x64 uses baseline).
   - Verify SHA-256 before using either download.
 - Pins live in `downloads.md`; despite its extension, it is YAML with the same
   URL/hash pair format as `scripts/npm-packages.md`.

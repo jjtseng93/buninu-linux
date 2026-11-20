@@ -212,7 +212,7 @@ display and USB keyboard with a welcome ending like this:
 
 ```text
 Welcome to Buninu Linux!
-Bun 1.4.2 is now PID 1
+Bun 1.4.5 is now PID 1
 Type start() to run buninu --local
 Configuration getters: cfg.all, cfg.disk, cfg.net, cfg.power, cfg.sound, cfg.gpu
 
@@ -277,7 +277,7 @@ host. `--arch` picks the guest:
 
 The default JS tools build directly on macOS with host Bun, without Docker.
 If you opt out with `BUNINU_JS_TOOLS=0`, `index.js` runs the shell fetch and
-build stages in a Debian-based `oven/bun:1.4.2` container built from
+build stages in a Debian-based `oven/bun:1.4.5` container built from
 [`Dockerfile`](Dockerfile), with the checkout bind-mounted. The image is built
 on first use and tagged with a hash of the Dockerfile. Only the run stage uses
 the Mac itself in that shell-tools mode:
@@ -357,7 +357,7 @@ toolchain (including `binutils-aarch64-linux-gnu` for aarch64), or set
 #### Testing on a Linux host in Docker
 
 `test/host/host-test.sh` checks the Linux-host path from any machine with
-Docker: it starts a fresh `oven/bun:1.4.2` container of the chosen CPU with the
+Docker: it starts a fresh `oven/bun:1.4.5` container of the chosen CPU with the
 build packages above and QEMU, clones the committed `HEAD` of this checkout,
 builds both guests with Bun and the default JS tools (not nested `--docker`) and boots each one,
 driving the serial console through `test/host/boot-test.exp`:
@@ -1399,7 +1399,7 @@ its own.
 
 ```text
 index.js                  entry point: -f / -b / -r / --arch / --docker / --export / --linux-lts / --real
-Dockerfile                Debian-based oven/bun:1.4.2 plus the shell build toolchain
+Dockerfile                Debian-based oven/bun:1.4.5 plus the shell build toolchain
 fetch-alpine.sh           [fetch]  kernel, EFI stub, musl, network/input/display modules
 fetch-bun.sh              [fetch]  Bun, libstdc++, libgcc
 fetch-npm.sh              [fetch]  pinned browser, land, casty, jspulse and jspinyin tarballs (download only)
@@ -1417,7 +1417,7 @@ native/<arch>/            musl and the GCC runtime (committed); bun and modules 
 ```
 
 The `--real` inputs are Alpine v3.24 `linux-lts-6.18.64-r0`, musl `1.2.6-r3`,
-`systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.2
+`systemd-efistub-260.2-r0`, `libstdc++`/`libgcc` `15.2.0-r5`, and Bun 1.4.5
 `linux-x64-musl-baseline`. The aarch64 guest uses the same versions from
 Alpine's aarch64 repository and Bun's `linux-aarch64-musl`. There is no BusyBox
 or conventional native userland; Bun and the JavaScript-based Buninu userspace

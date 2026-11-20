@@ -43,7 +43,7 @@ __attribute__((noreturn)) void _start(void) {
             syscall6(3, console, 0, 0, 0, 0, 0);
     }
 
-    static const char starting[] = "bootstrap: mounted filesystems; exec Bun 1.4.2\n";
+    static const char starting[] = "bootstrap: mounted filesystems; exec Bun 1.4.5\n";
     syscall6(1, 2, (long)starting, sizeof(starting) - 1, 0, 0, 0);
 
     syscall6(59, (long)bun, (long)argv, (long)envp, 0, 0, 0);

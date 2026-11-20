@@ -63,7 +63,7 @@ export async function releaseSeed(arch, work) {
 
   console.log("② Extracting pinned musl-bun");
   const build = arch === "aarch64" ? "bun-linux-aarch64-musl" : "bun-linux-x64-musl-baseline";
-  const zip = await download(`${build}@1.4.2`);
+  const zip = await download(`${build}@1.4.5`);
   // unzip is a CLI with top-level process.exit; invoke it separately.
   for (const path of ["bin/unzip", "lib/crc32.js"]) write(join(work, path), files.get(path));
   await run([bun(), join(work, "bin/unzip"), zip, `${build}/bun`, "-d", work]);

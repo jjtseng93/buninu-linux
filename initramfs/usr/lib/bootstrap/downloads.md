@@ -1,18 +1,18 @@
 # YAML: [immutable download URL, SHA-256]
 # npm SHA-256 verified against registry SHA-512 integrity.
-# Bun 1.4.2 pins match scripts/arch.js.
+# Bun 1.4.5 pins match scripts/arch.js.
 
 "buninu-linux@0.9.56":
   - https://registry.npmjs.org/buninu-linux/-/buninu-linux-0.9.56.tgz
   - sha256:972b46b5f0b1caaa0e64e352de68e37b28cc6955ed4240e91f0fe358b0d6f73d
 
-"bun-linux-aarch64-musl@1.4.2":
-  - https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64-musl.zip
-  - sha256:71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df
+"bun-linux-aarch64-musl@1.4.5":
+  - https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-aarch64-musl.zip
+  - sha256:d655765d3a0c0fdf707e27c7aa1a4f2c84f1bbc1f759db7e6e3d3c5be414396c
 
-"bun-linux-x64-musl-baseline@1.4.2":
-  - https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl-baseline.zip
-  - sha256:76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18
+"bun-linux-x64-musl-baseline@1.4.5":
+  - https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64-musl-baseline.zip
+  - sha256:96fb94108eed872ff623ed39007d6b5699a83a5d0086fcfba84921c18145e3e6
 
 # Stages 5–12: fetched on demand, never bundled in the npm package.
 

@@ -2,7 +2,7 @@
 # the README's build packages for both guests, QEMU with OVMF and AAVMF, Bun
 # to run index.js, git to clone the checkout and expect to drive the serial
 # console. Built for linux/amd64 or linux/arm64, whichever host is simulated.
-FROM oven/bun:1.4.2
+FROM oven/bun:1.4.5
 USER root
 ENTRYPOINT []
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -265,28 +265,28 @@ kernel/aarch64/linuxaa64.efi.stub  939a1511162f26ef331b0b6754308b8393c79c94e5b95
 ### bun
 
 - License: MIT, with bundled components under their own licenses
-- See: `LICENSES/Bun-LICENSE.md` (Bun's `LICENSE.md` at tag `bun-v1.4.2`,
+- See: `LICENSES/Bun-LICENSE.md` (Bun's `LICENSE.md` at tag `bun-v1.4.5`,
   which lists the licenses of everything statically linked into the binary,
   including JavaScriptCore)
 
-Bun 1.4.2, the official `linux-x64-musl-baseline` release binary for
+Bun 1.4.5, the official `linux-x64-musl-baseline` release binary for
 x86_64 and `linux-aarch64-musl` for aarch64. For this release the `-baseline`
 and plain `linux-x64-musl` archives contain the same `bun` executable; Bun
 ships one x64 build and keeps the `-baseline` name as an alias.
 
-- Upstream source: https://github.com/oven-sh/bun/tree/bun-v1.4.2
+- Upstream source: https://github.com/oven-sh/bun/tree/bun-v1.4.5
 - Release archives:
-  https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl-baseline.zip
-  SHA-256 `76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18`
-  https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64-musl.zip
-  SHA-256 `71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df`
+  https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64-musl-baseline.zip
+  SHA-256 `96fb94108eed872ff623ed39007d6b5699a83a5d0086fcfba84921c18145e3e6`
+  https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-aarch64-musl.zip
+  SHA-256 `d655765d3a0c0fdf707e27c7aa1a4f2c84f1bbc1f759db7e6e3d3c5be414396c`
   (both as listed in the release's `SHASUMS256.txt`)
 
 SHA-256 of the shipped files:
 
 ```text
-native/x86_64/bin/bun    16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d
-native/aarch64/bin/bun   1101cd0aa92ea214c2aaf4bb3761ca3c76a90aae0e6f94c07efb4e8c4f18a8fc
+native/x86_64/bin/bun    cf5d285ddbe256785a5121a3c113191a6b577504976374c7cfd5aedca609b720
+native/aarch64/bin/bun   9c48986093073afec8b76a3e285303598dd2462f52748aecb65e4d94866e1ea3
 ```
 
 ## npm applications fetched and redistributed in the image
