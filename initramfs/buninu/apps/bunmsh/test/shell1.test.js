@@ -364,6 +364,31 @@ describe("completion", () => {
 });
 
 describe("execution", () => {
+  test("Windows builtin rm anchors explicit current-directory operands", () => {
+    const args = ["rm", "-r", "--", "././folder/file", "-f", "./", "./dir/..", "./../."];
+    expect(bunShellFallbackArgv(args, "C:/work/")).toEqual([
+      "rm", "-r", "C:\\work\\folder\\file", "C:\\work\\-f", "./", "./dir/..", "./../."
+    ]);
+    expect(bunShellFallbackArgv(["rm", ".\\file"], "C:/")).toEqual(["rm", "C:\\file"]);
+  });
+
+  test("Windows builtin mv anchors ./ source and destination operands", () => {
+    expect(bunShellFallbackArgv(["mv", "./a", "./b"], "C:/work"))
+      .toEqual(["mv", "C:\\work\\a", "C:\\work\\b"]);
+  });
+
+  test("builtin rm removes a ./ path relative to the shell cwd", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "bunmsh-rm-dot-"));
+    try {
+      mkdirSync(join(directory, "sub"));
+      await Bun.write(join(directory, "sub", "a b"), "fixture");
+      const output = await run("cd sub && builtin rm './a b' && builtin test ! -e './a b'", {cwd: directory});
+      expect(output).toMatchObject({status: 0, stderr: ""});
+    } finally {
+      rmSync(directory, {recursive: true, force: true});
+    }
+  });
+
   test("normalizes Bun Shell cp recursion and provides a PATH-independent cat", async () => {
     expect(bunShellFallbackArgv(["cp", "-rv", "a", "b"]))
       .toEqual(["cp", "-Rv", "a", "b"]);

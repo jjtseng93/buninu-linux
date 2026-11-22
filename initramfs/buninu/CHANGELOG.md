@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.3 - 2026-11-23
+
+- Fix local terminal startup and Ctrl-C handling:
+  * Start bunmsh directly for `buninu --local`, removing the intermediate
+    shell that could exit when interrupting a foreground command.
+  * Let the interactive terminal deliver Ctrl-C to the local shell and its
+    foreground command without forwarding a second SIGINT.
+  * Recognize `--local` as a mode selector only in the first argument.
+    Forward subsequent local-mode arguments to bunmsh.
+  * Apply remote shell and port options only to remote startup.
+- Sync bunmsh to 0.4.6:
+  * Fix builtin `rm ./xxx` on Windows.
+  * Fix builtin `mv a ./b` and `mv ./a ./b` on Windows by resolving explicit
+    current-directory operands before passing them to Bun Shell.
+
 ## 0.7.2 - 2026-11-16
 
 - Sync bunmsh to 0.4.3:

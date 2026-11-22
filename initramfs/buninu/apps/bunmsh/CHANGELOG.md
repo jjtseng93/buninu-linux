@@ -2,6 +2,14 @@
 
 All notable user-visible changes to bunmsh are documented here.
 
+## [0.4.6] - 2026-11-23
+
+- Fix mv a ./b on Windows
+
+## [0.4.5] - 2026-11-23
+
+- Fix rm ./xxx on Windows
+
 ## [0.4.3] - 2026-11-16
 
 ### Added and fixed

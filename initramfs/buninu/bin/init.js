@@ -683,9 +683,10 @@ if (isInstallArgument(process.argv[2])) {
   process.exit(await runInstall(process.argv.slice(2)));
 }
 
+const localMode = process.argv[2] === '--local';
 let startScript = pkg.scripts?.start;
 
-if(process.argv.includes('--local'))
+if(localMode)
   startScript = pkg.scripts?.local ;
 
 if (typeof startScript !== "string" || !startScript.trim()) {
@@ -711,7 +712,7 @@ if (command[0] === "bun") command[0] = process.execPath;
 const environment = await detectEnvironment();
 await runPlatformSwitch(environment);
 await rebuildNativeSymlinks(environment);
-const initArguments = readInitArguments(process.argv.slice(2));
+const initArguments = readInitArguments(localMode ? [] : process.argv.slice(2));
 const configuredShell =
   pkg.buninu?.shell?.[environment.name] ??
   pkg.buninu?.shell?.default ??
@@ -720,7 +721,7 @@ const requestedShell =
   initArguments.shell ||
   configuredShell;
 
-if (requestedShell) {
+if (!localMode && requestedShell) {
   const resolvedShell = await findCommand(requestedShell);
   if (!resolvedShell) {
     fail(`configured shell does not exist: ${requestedShell}`);
@@ -744,11 +745,11 @@ const hasExplicitPort = forwardedArguments.some((argument) =>
   argument === "--port" ||
   argument.startsWith("--port=")
 );
-const portArguments = hasExplicitPort ? [] : ["-p", String(getFreePort())];
+const portArguments = localMode || hasExplicitPort ? [] : ["-p", String(getFreePort())];
 const childEnvironment = await createChildEnvironment(environment);
 
 const infoSuffix = 
-  process.argv.includes('--local') ? 
+  localMode ?
   'bunmsh' :
   `port=${portArguments[1] || "user-defined"}, shell=${environment.shell}` ;
 
@@ -759,9 +760,9 @@ console.error(
 const child = Bun.spawn(
   [
     ...command,
-    ...portArguments,
-    ...forwardedArguments,
-    ...shellCommandArguments(environment.shell, startupCommand, exitAfterCmd),
+    ...(localMode
+      ? process.argv.slice(3)
+      : [...portArguments, ...forwardedArguments, ...shellCommandArguments(environment.shell, startupCommand, exitAfterCmd)]),
   ],
   {
     cwd: rootDir,
@@ -773,7 +774,10 @@ const child = Bun.spawn(
 );
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => child.kill(signal));
+  process.on(signal, () => {
+    if (localMode && signal === "SIGINT" && process.stdin.isTTY) return;
+    child.kill(signal);
+  });
 }
 
 process.exit(await child.exited);

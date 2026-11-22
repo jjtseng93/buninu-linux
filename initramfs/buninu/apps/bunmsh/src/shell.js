@@ -1037,7 +1037,7 @@ function result(status = 0, stdout = "", stderr = "") {
 
 function quoteShellWord(value) {
   return `'${String(value).replaceAll("'", `'\\''`)}'`;
-}
+} // `
 
 function findExecutable(name, state, defaultPath = false) {
   if (!state.pathSearch) return null;
@@ -1938,7 +1938,7 @@ if (findIsRegularBuiltin()) builtins.find = runFindBuiltin;
 
 // These are used only when PATH does not provide an executable of the same
 // name. `builtin name` can still select them explicitly.
-export function bunShellFallbackArgv(argv) {
+export function bunShellFallbackArgv(argv, windowsCwd) {
   let commandArgv = argv;
   if (argv[0] === "ls")
     commandArgv = commandArgv.filter((value, index) => index === 0 || value !== "--color=auto");
@@ -1948,6 +1948,17 @@ export function bunShellFallbackArgv(argv) {
     // removing the delimiter, so a filename cannot become an option.
     commandArgv = [...argv.slice(0, end), ...argv.slice(end + 1).map(value =>
       value.startsWith("-") ? `./${value}` : value)];
+  }
+  if (["rm", "mv"].includes(argv[0]) && windowsCwd) {
+    // Bun passes the leading dot component to NtCreateFile. Anchor an explicit
+    // current-directory operand to the shell cwd; "./-f" must stay an operand.
+    const base = windowsCwd.replaceAll("/", "\\").replace(/[\\]+$/, "");
+    commandArgv = commandArgv.map(arg => {
+      if (!/^\.[\\/]/.test(arg)) return arg;
+      const tail = arg.replace(/^(?:\.[\\/]+)+/, "");
+      if (!tail || /(?:^|[\\/])\.{1,2}[\\/]*$/.test(tail)) return arg;
+      return base + "\\" + tail.replaceAll("/", "\\");
+    });
   }
   if (argv[0] === "cp")
     commandArgv = commandArgv.map((value, index) =>
@@ -1983,7 +1994,8 @@ async function runBunShellFallback(argv, state) {
   const rmFlags = argv.at(-1) === "--" ? argv.slice(1, -1) : argv.slice(1);
   if (argv[0] === "rm" && rmFlags.every(arg => /^-[frRi]+$/.test(arg)) &&
       rmFlags.join("").lastIndexOf("f") > rmFlags.join("").lastIndexOf("i")) return result();
-  const shell = Bun.$`${bunShellFallbackArgv(argv)}`
+  const windowsCwd = process.platform === "win32" ? state.cwd : undefined;
+  const shell = Bun.$`${bunShellFallbackArgv(argv, windowsCwd)}`
     .cwd(nativePath(state.cwd))
     .env(externalEnvironment(state))
     .nothrow();
