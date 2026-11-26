@@ -23,14 +23,8 @@ package="buninu-linux-$version.tgz"
 for file in "$image" "$package"; do
   [ -s "$file" ] || { echo "Missing or empty release asset: $file" >&2; exit 1; }
 done
-# Include legacy release layouts and any extra source archives prepared for them.
-# This release ships these three source archives as separate downloads.
-if [ "$version" = 0.18.65 ]; then
-  for file in alpine-sources-0.18.65.tar bun-1.4.5-source.tar.gz webkit-d6375c72-build-source.tar.gz; do
-    [ -s "$file" ] || { echo "Missing or empty release asset: $file" >&2; exit 1; }
-  done
-fi
 # Check package identity without extracting files onto disk.
+printf 'Checking npm package name and version: %s\n' "$package" >&2
 tar -xOzf "$package" package/package.json |
   bun -e 'const p=await Bun.stdin.json(); if(p.name!=="buninu-linux" || p.version!==process.argv[1]) throw Error("npm package name/version mismatch")' "$version"
 
@@ -39,6 +33,7 @@ checks=$(mktemp .SHA256SUMS.XXXXXX)
 trap 'rm -f "$checks"' EXIT
 for file in *; do
   [ "$file" != SHA256SUMS ] && [ -f "$file" ] || continue
+  printf 'Computing SHA-256: %s\n' "$file" >&2
   sha256sum "$file" >> "$checks"
 done
 mv "$checks" SHA256SUMS
@@ -47,8 +42,31 @@ mv "$checks" SHA256SUMS
 dir=$(pwd -P | sed "s/'/'\\\\''/g")
 repo=jjtseng93/buninu-linux
 if [ "$mode" = --upload ]; then
-  printf "(cd '%s' && gh release upload 'v%s' ./* --repo %s)\n" "$dir" "$version" "$repo"
+  printf '\n' >&2
+  printf "gh release upload 'v%s' '%s'/* --repo %s\n" "$version" "$dir" "$repo"
 else
-  target=$(git rev-parse HEAD)
-  printf "(cd '%s' && gh release create 'v%s' ./* --repo %s --target %s --title 'Buninu Linux %s' --notes 'x86_64 OS image, npm package, build sources and SHA-256 checksums.')\n" "$dir" "$version" "$repo" "$target" "$version"
+  printf 'Computing normalized image content checksum: %s\n' "$image" >&2
+  content=$(bun ../../check_build.js "$image")
+  digest=${content%% *}
+  sed "s/@RELEASE_TAG@/v$version/g" > .release-notes.md <<'NOTES'
+x86_64 OS image, npm package, build sources and SHA-256 checksums.
+
+**Downloaded files:** Verify the release assets against `SHA256SUMS` (use `sha256sum -c SHA256SUMS` after downloading all assets).
+
+**Local builds**
+
+With Git and Bun installed, run these commands to fetch the pinned dependencies, build the x86_64 image, and print its content checksum before booting it.
+
+```sh
+git clone --branch @RELEASE_TAG@ --depth 1 https://github.com/jjtseng93/buninu-linux.git
+cd buninu-linux
+bun ./index.js -fb --arch x86_64 --real
+bun ./index.js --check vda.img
+```
+
+Compare the first column of the last command’s output with the image content checksum below. GPT GUIDs, FAT metadata and build timestamps can change the SHA-256 of the entire image between builds.
+NOTES
+  printf '\nImage content checksum: `%s`\n' "$digest" >> .release-notes.md
+  printf '\n' >&2
+  printf "gh release create 'v%s' '%s'/* --repo %s --title 'Buninu Linux %s' --notes-file '%s/.release-notes.md'\n" "$version" "$dir" "$repo" "$version" "$dir"
 fi
