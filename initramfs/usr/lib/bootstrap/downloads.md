@@ -2,9 +2,9 @@
 # npm SHA-256 verified against registry SHA-512 integrity.
 # Bun 1.4.5 pins match scripts/arch.js.
 
-"buninu-linux@0.9.56":
-  - https://registry.npmjs.org/buninu-linux/-/buninu-linux-0.9.56.tgz
-  - sha256:972b46b5f0b1caaa0e64e352de68e37b28cc6955ed4240e91f0fe358b0d6f73d
+"buninu-linux@0.18.64":
+  - https://registry.npmjs.org/buninu-linux/-/buninu-linux-0.18.64.tgz
+  - sha256:723541d6dedca5a5b3aa29e6fde95be4aaa30bf41b306059d953dd949711ff98
 
 "bun-linux-aarch64-musl@1.4.5":
   - https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-aarch64-musl.zip

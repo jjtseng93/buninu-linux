@@ -52,11 +52,11 @@ test("a corrupt cached tarball is rejected before extraction or refetch", async 
   const old = process.env.XDG_CACHE_HOME;
   process.env.XDG_CACHE_HOME = work;
   try {
-    const [url, pin] = Bun.YAML.parse(readFileSync(join(bootstrap, "downloads.md"), "utf8"))["buninu-linux@0.9.56"];
+    const [url, pin] = Bun.YAML.parse(readFileSync(join(bootstrap, "downloads.md"), "utf8"))["buninu-linux@0.18.64"];
     const cache = join(work, "buninu-bootstrap");
     mkdirSync(cache);
     writeFileSync(join(cache, pin.slice(7) + "-" + new URL(url).pathname.split("/").at(-1)), "corrupt");
-    await expect(download("buninu-linux@0.9.56")).rejects.toThrow("Cached file hash mismatch");
+    await expect(download("buninu-linux@0.18.64")).rejects.toThrow("Cached file hash mismatch");
     await expect(download("unlisted@version")).rejects.toThrow("Missing or invalid download pin");
   } finally {
     if (old === undefined) delete process.env.XDG_CACHE_HOME;

@@ -40,7 +40,7 @@ export function localSeed(arch) {
 }
 
 export async function releaseSeed(arch, work) {
-  const tarball = await download("buninu-linux@0.9.56");
+  const tarball = await download("buninu-linux@0.18.64");
   // Bun's archive reader works in-process; no host tar is required.
   const entries = await new Bun.Archive(readFileSync(tarball)).files();
   const get = async name => {

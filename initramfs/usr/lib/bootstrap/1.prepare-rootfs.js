@@ -53,10 +53,10 @@ async function main(args) {
     console.log(
       "① Preparing runtime and tools " +
       (local ? "from this Buninu Linux"
-        : "from buninu-linux@0.9.56")
+        : "from buninu-linux@0.18.64")
     );
 
-    // Otherwise fetch npm 0.9.56:
+    // Otherwise fetch npm 0.18.64:
     // native/<arch>/lib -> rootfs libs
     // initramfs tools -> same paths.
     // Fetch musl Bun 1.4.5 ZIP for
@@ -73,7 +73,7 @@ async function main(args) {
     validateSeed(files, arch);
     writeSeed(
       rootfs, arch, files,
-      local ? "local" : "npm@0.9.56"
+      local ? "local" : "npm@0.18.64"
     );
 
     // Extract musl and TinyCC into
