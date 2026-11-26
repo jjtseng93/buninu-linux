@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.5 - 2026-11-24
+
+- Fix standard-stream inheritance in the Windows x64 and ARM64 EXE launchers:
+  * Duplicate valid stdin, stdout and stderr handles as inheritable handles,
+    preserving terminal access when the caller's handles are not inheritable.
+  * Keep the original handles' flags unchanged and close the launcher's
+    duplicates after spawning, so redirected pipes can reach EOF normally.
+  * Add a Windows console/ConPTY regression test for nested launches with
+    non-inheritable standard handles.
+- Windows runtime compatibility: Bun 1.4.5 can exit before running the Promise
+  rejection handlers of a failed `Bun.file(...).text()` read. This can stop
+  jsmdcui startup when its history file does not exist. Use a Bun version with
+  the upstream fix; `1.4.6-canary.1+bfda77855` was verified on LiberNT ARM64.
+  Buninu does not automatically upgrade Bun or modify jsmdcui to work around
+  this runtime issue.
+
 ## 0.7.3 - 2026-11-23
 
 - Fix local terminal startup and Ctrl-C handling:

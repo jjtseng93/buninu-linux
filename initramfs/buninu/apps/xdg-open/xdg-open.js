@@ -131,9 +131,8 @@ try {
   } else if (process.platform === "darwin") {
     ok = await runCommand(["open", target])
   } else if (process.platform === "win32") {
-    // start is a cmd builtin, not a real executable, and needs an empty ""
-    // title argument first or it treats a quoted target as the title.
-    ok = await runCommand(["cmd", "/c", "start", "", target])
+    const { windowsOpenCommand } = await import("./windows-command.js")
+    ok = (await Bun.spawn(windowsOpenCommand(target)).exited) === 0
   } else {
     const real = findSystemXdgOpen()
     if (!real) throw new Error("no system xdg-open found on PATH")

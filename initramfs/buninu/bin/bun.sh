@@ -15,7 +15,10 @@ if [ -f /system/bin/linker64 ] ; then
     bunBin="$sd"/bun-lx
   fi
 elif [ -d "$WINDIR" ] ; then
-  bunBin="$sd"/bun-wx.exe
+  case "${PROCESSOR_ARCHITEW6432-}:${PROCESSOR_ARCHITECTURE-}" in
+    *ARM64*|*arm64*) bunBin="$sd"/bun-wa.exe ;;
+    *) bunBin="$sd"/bun-wx.exe ;;
+  esac
 elif uname -m | grep -q aarch64 ; then
   bunBin="$sd"/bun-la
 else

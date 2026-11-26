@@ -165,7 +165,9 @@ if (!fs.existsSync(target)) {
 // "bin" is a real native executable (not a JS/bun script) won't run this
 // way -- accepted, since that's the rarer case and this is what makes the
 // common (JS-script bin) case work on Android at all.
-const run = Bun.spawnSync(["bun", target, ...forwarded], {
+// Windows installs a native EXE shim; Bun must not parse it as JavaScript.
+const command = process.platform === "win32" ? [target, ...forwarded] : ["bun", target, ...forwarded];
+const run = Bun.spawnSync(command, {
   env: childEnv(),
   stdio: ["inherit", "inherit", "inherit"],
 });

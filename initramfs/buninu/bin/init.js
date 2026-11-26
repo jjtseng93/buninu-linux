@@ -442,6 +442,11 @@ async function runPlatformSwitch(environment) {
 }
 
 async function rebuildNativeSymlinks(environment) {
+  if (process.platform === "win32") {
+    const { prepareWindowsLaunchers } = await import("../apps/win32-shloader/prepare.js");
+    prepareWindowsLaunchers(rootDir);
+    return;
+  }
   if (environment.name === "windows") return;
 
   const platformLinks = environment.name === "android"
@@ -581,13 +586,14 @@ const directAppTargets = {
 
 async function runDirectApp(name, forwardedArgs, environment) {
   const isWindows = environment.name === "windows";
-  const launcherPath = resolve(binDir, isWindows ? `${name}.bat` : name);
+  const nativeWindows = process.platform === "win32";
+  const launcherPath = resolve(binDir, nativeWindows ? `${name}.exe` : isWindows ? `${name}.bat` : name);
   if (!await pathExists(launcherPath)) {
     fail(`${name} is not available on ${environment.name}: ${launcherPath}`);
   }
 
   const childEnvironment = await createChildEnvironment(environment);
-  const argv = isWindows
+  const argv = isWindows && !nativeWindows
     ? [process.env.ComSpec || "cmd.exe", "/c", launcherPath, ...forwardedArgs]
     : [launcherPath, ...forwardedArgs];
 

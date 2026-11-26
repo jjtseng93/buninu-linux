@@ -11,15 +11,16 @@ Download Bun release binaries from oven-sh/bun and create:
   $sd/bunBin.tgz
 
 Accepted version formats:
-  1.3.14
-  v1.3.14
-  bun-v1.3.14
+  1.4.5
+  v1.4.5
+  bun-v1.4.5
   canary
 
 Archive contents:
   bun-la      Linux aarch64
   bun-lx      Linux x64
   bun-wx.exe  Windows x64
+  bun-wa.exe  Windows ARM64
 
 The archive is consumed by ../../bin/bun.sh and extracted into
 no_backup/bin when it is newer than the selected Bun executable.
@@ -83,9 +84,10 @@ download_bun() {
 download_bun bun-linux-aarch64 bun bun-la
 download_bun bun-linux-x64 bun bun-lx
 download_bun bun-windows-x64 bun.exe bun-wx.exe
+download_bun bun-windows-aarch64 bun.exe bun-wa.exe
 
 # bun.sh extracts this archive directly into no_backup/bin.
-if ! tar -czf "$tmp/bunBin.tgz" -C "$tmp" bun-la bun-lx bun-wx.exe; then
+if ! tar -czf "$tmp/bunBin.tgz" -C "$tmp" bun-la bun-lx bun-wx.exe bun-wa.exe; then
   cleanup
   exit 1
 fi

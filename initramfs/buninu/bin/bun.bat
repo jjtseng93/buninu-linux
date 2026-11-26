@@ -2,14 +2,16 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "BUNINU_BUN_ARCHIVE=%~dp0..\apps\bun\bunBin.tgz"
-set "BUNINU_BUN_WX=%~dp0bun-wx.exe"
+set "BUNINU_BUN_EXE=%~dp0bun-wx.exe"
+if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "BUNINU_BUN_EXE=%~dp0bun-wa.exe"
+if /I "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "BUNINU_BUN_EXE=%~dp0bun-wa.exe"
 set "BUNINU_EXTRACT_BUN="
 
 if exist "%BUNINU_BUN_ARCHIVE%" (
-  if not exist "%BUNINU_BUN_WX%" set "BUNINU_EXTRACT_BUN=1"
+  if not exist "%BUNINU_BUN_EXE%" set "BUNINU_EXTRACT_BUN=1"
 
-  if exist "%BUNINU_BUN_WX%" if exist "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" (
-    for /f "delims=" %%U in ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -Command "if ((Get-Item -LiteralPath $env:BUNINU_BUN_ARCHIVE).LastWriteTimeUtc -gt (Get-Item -LiteralPath $env:BUNINU_BUN_WX).LastWriteTimeUtc) { '1' }"') do set "BUNINU_EXTRACT_BUN=%%U"
+  if exist "%BUNINU_BUN_EXE%" if exist "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" (
+    for /f "delims=" %%U in ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -Command "if ((Get-Item -LiteralPath $env:BUNINU_BUN_ARCHIVE).LastWriteTimeUtc -gt (Get-Item -LiteralPath $env:BUNINU_BUN_EXE).LastWriteTimeUtc) { '1' }"') do set "BUNINU_EXTRACT_BUN=%%U"
   )
 )
 
@@ -21,8 +23,8 @@ if defined BUNINU_EXTRACT_BUN (
   )
 )
 
-if exist "%~dp0bun-wx.exe" (
-  "%~dp0bun-wx.exe" %*
+if exist "%BUNINU_BUN_EXE%" (
+  "%BUNINU_BUN_EXE%" %*
   exit /b !ERRORLEVEL!
 )
 
@@ -33,5 +35,5 @@ for /f "delims=" %%B in ('where bun.exe 2^>nul') do (
   )
 )
 
-echo Bun Binary not found: %~dp0bun-wx.exe ^(and no external bun.exe found in PATH^) 1>&2
+echo Bun Binary not found: %BUNINU_BUN_EXE% ^(and no external bun.exe found in PATH^) 1>&2
 exit /b 127
