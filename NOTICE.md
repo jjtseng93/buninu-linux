@@ -15,8 +15,11 @@ resources. The Buninu userspace under `initramfs/buninu/`
 carries its own third-party notices; see the last section.
 
 Alpine's CDN serves only the current pkgrel of each branch, so the package
-URLs below stop working once a build is superseded. The pinned aports commits
-are permanent and are the Corresponding Source for each exact build.
+URLs below stop working once a build is superseded. The pinned aports commits identify the recipes, configurations and local
+patches. The upstream source archives are separate build inputs. For the
+0.18.65 image and npm package, the [release assets](https://github.com/jjtseng93/buninu-linux/releases/tag/v0.18.65)
+provide the Alpine sources and recipes, Bun and its pinned JavaScriptCore
+build sources, alongside SHA256SUMS. See SOURCES.md in the Alpine source archive.
 
 ## Optional GPU firmware
 
@@ -86,7 +89,7 @@ libc without touching the inode that is already acting as Bun's loader (see
 `README.md`).
 
 - Upstream source: https://musl.libc.org/releases/musl-1.2.6.tar.gz
-- Alpine build recipe (Corresponding Source), pinned to the commit shipping
+- Alpine build recipe, pinned to the commit shipping
   pkgrel=3 (the fix for CVE-2026-107891):
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/8f79d39391b46d6dbf1800fb68b8212a21d5ee2e/main/musl/APKBUILD
 - Packages:
@@ -121,7 +124,7 @@ LGPL-2.1-or-later`; the license stated above is the one carried by the runtime
 libraries' own sources.
 
 - Upstream source: https://gcc.gnu.org/pub/gcc/releases/gcc-15.2.0/gcc-15.2.0.tar.xz
-- Alpine build recipe and patches (Corresponding Source), pinned to the commit
+- Alpine build recipe and patches, pinned to the commit
   the packages record in their `.PKGINFO` (`commit = 423a8ad…`; the follow-up
   `fd4fecac…` keeps pkgrel=5 and changes only packaging metadata):
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/423a8ad043d07f2c7546c8ec3e2b0384cda360ae/main/gcc/APKBUILD
@@ -164,7 +167,7 @@ listed modules are the selected package's `.ko.gz` files decompressed without
 modification.
 
 - Upstream source: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.65.tar.xz
-- Alpine build recipe, configuration and patches (Corresponding Source),
+- Alpine build recipe, configuration and patches,
   pinned to the commit shipping 6.18.65-r0 (the same for both architectures):
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/2559e452e8d4712c964e6f35c3fd7605dc4b28e4/main/linux-lts/APKBUILD
 - Packages:
@@ -246,7 +249,7 @@ systemd's UEFI boot stub, version 260.2, as packaged by Alpine Linux 3.24
 `os-release` appended as PE sections.
 
 - Upstream source: https://github.com/systemd/systemd/archive/refs/tags/v260.2.tar.gz
-- Alpine build recipe (Corresponding Source), pinned to the commit shipping
+- Alpine build recipe, pinned to the commit shipping
   260.2-r0:
   https://gitlab.alpinelinux.org/alpine/aports/-/blob/c329463d3dbe6b28360180706f843e605c97575b/main/systemd-boot/APKBUILD
 - Packages:
@@ -301,11 +304,11 @@ committed source files, but their contents are redistributed in the image.
 
 | Package | Version | Package license | Project / package page | Installed license and notices (relative to `/usr/lib/node_modules/`) |
 |---|---|---|---|---|
-| `buninu-browser` | 0.2.3 | MIT for the browser's own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-browser | `buninu-browser/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/` and vendor notices within that package |
-| `buninu-land` | 0.1.3 | MIT for its own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-land | `buninu-land/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `SOURCES.md`, protocol XML notices and vendor notices |
-| `@drxiaozhi/casty` | 1.3.7 | MIT | https://github.com/jjtseng93/casty | `@drxiaozhi/casty/LICENSE` |
-| `@drxiaozhi/jspulse` | 0.2.1 | LGPL-2.1-or-later, with additional component notices | https://github.com/jjtseng93/jspulse | `@drxiaozhi/jspulse/LICENSE`, `NOTICE.md`, `LICENSES/` and source-file notices within that package |
-| `@drxiaozhi/jspinyin` | 0.1.1 | MIT; hanzipinyin material under the Unlicense | https://www.npmjs.com/package/@drxiaozhi/jspinyin | `@drxiaozhi/jspinyin/LICENSE` and `@drxiaozhi/jspinyin/LICENSE-hanzipinyin.md` |
+| `buninu-browser` | 0.12.0 | MIT for the browser's own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-browser | `buninu-browser/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/` and vendor notices within that package |
+| `buninu-land` | 0.4.1 | MIT for its own code; bundled components retain their own terms | https://github.com/jjtseng93/buninu-land | `buninu-land/LICENSE`, `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `SOURCES.md`, protocol XML notices and vendor notices |
+| `@drxiaozhi/casty` | 1.6.7 | MIT | https://github.com/jjtseng93/casty | `@drxiaozhi/casty/LICENSE` |
+| `@drxiaozhi/jspulse` | 0.2.3 | LGPL-2.1-or-later, with additional component notices | https://github.com/jjtseng93/jspulse | `@drxiaozhi/jspulse/LICENSE`, `NOTICE.md`, `LICENSES/` and source-file notices within that package |
+| `@drxiaozhi/jspinyin` | 0.2.0 | MIT; hanzipinyin material under the Unlicense | https://www.npmjs.com/package/@drxiaozhi/jspinyin | `@drxiaozhi/jspinyin/LICENSE` and `@drxiaozhi/jspinyin/LICENSE-hanzipinyin.md` |
 
 The upstream links identify the projects; the pinned registry archives
 identify the exact releases used by this build. Preserve the packages'
@@ -383,7 +386,7 @@ its license text next to it inside the image.
 
 ## Buninu userspace
 
-`initramfs/buninu/` is the Buninu userspace (version 0.4.15, MIT; see
+`initramfs/buninu/` is the Buninu userspace (version 0.7.5, MIT; see
 `initramfs/buninu/LICENSE`), copied verbatim from
 https://github.com/jjtseng93/buninu and packed whole into the initramfs. It
 bundles third-party material that is documented next to the files that use

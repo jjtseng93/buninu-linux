@@ -25,6 +25,8 @@ trap 'rm -rf "$staging"; rm -f "$archive"' EXIT
 cp -a --reflink=auto initramfs/. "$staging/"
 rm -rf "$staging/bin/bun" "$staging/lib/modules"
 cp -a --reflink=auto "$native_dir/." "$staging/"
+# Git and npm omit empty directories from source archives.
+mkdir -p "$staging"/{dev,proc,sys,tmp}
 bash scripts/stage-npm.sh "$staging"
 # Only this kernel's modules: native/<arch>/ keeps every release fetched so
 # far (an older pin, the other flavor), and none of those can load.

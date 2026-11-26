@@ -139,6 +139,8 @@ const packStaging = (cfg) => {
     rmSync(join(staging, "bin", "bun"), { force: true });
     rmSync(join(staging, "lib", "modules"), { recursive: true, force: true });
     copyTree(cfg.nativeDir, staging);
+    // Git and npm omit empty directories from source archives.
+    for (const dir of ["dev", "proc", "sys", "tmp"]) mkdirSync(join(staging, dir), { recursive: true });
     stageNpm(staging);
     // Only this kernel's modules: native/<arch>/ keeps every release fetched
     // so far (an older pin, the other flavor), and none of those can load.
